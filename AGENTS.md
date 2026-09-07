@@ -6,7 +6,7 @@ These instructions apply throughout this repository. They provide shared context
 
 1. [README.md](README.md) — purpose and current project state.
 2. [docs/STATUS.md](docs/STATUS.md) — what exists and pending decisions.
-3. [plan.md](plan.md) — agreed scope and deferred roadmap.
+3. [plan.md](plan.md) — approved software-first phases and completion checkpoints.
 4. [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — design proposals and technical limits.
 5. [CONTRIBUTING.md](CONTRIBUTING.md) — collaboration and platform expectations.
 
@@ -20,7 +20,7 @@ Read the relevant code and check the working tree before making changes. Treat t
 - Support macOS and Windows. Avoid hardcoded device paths and platform-specific scripts where portable alternatives suffice.
 - Keep computation and visualization on the laptop. Keep node memory, message sizes, retries, and caches bounded.
 - AI must not be required for routing, failure detection, or the offline demonstration.
-- The detailed roadmap is deferred. Do not create `ROADMAP.md` or `docs/ROADMAP.md` unless requested.
+- The approved phased plan lives in `plan.md`. Do not create a separate `ROADMAP.md` or `docs/ROADMAP.md` unless requested. Plan approval is not implementation authorization; wait for the owner's explicit instruction to begin.
 
 ## How to contribute
 

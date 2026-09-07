@@ -1,6 +1,6 @@
 # Architecture
 
-This document separates the agreed system shape from mechanisms that still need implementation and hardware validation. Nothing described here is currently running.
+This document separates the agreed system shape from mechanisms that still need implementation and hardware validation. Nothing described here is currently running. The approved phases and technical defaults in [plan.md](../plan.md) govern upcoming work; implementation is awaiting the owner's instruction.
 
 ## Connections and responsibilities
 
@@ -86,16 +86,16 @@ The laptop can timestamp observations consistently, but those include reporting 
 
 The intended dashboard shows node reachability, permitted and observed links, calculated and confirmed routes, sensor values, packet counts, RTT, available RSSI, history charts, and a failure/recovery timeline. Planned failure controls must label software-injected events separately from real disconnections. Show telemetry freshness so stale state does not look live.
 
-A simulator is planned for development on separate laptops and larger virtual topologies. It should reuse protocol definitions and controller behavior where practical. Simulation cannot validate ESP8266 radio performance, physical RSSI, power stability, or USB drivers. It must not be a prerequisite for postponing every hardware experiment.
+A simulator is planned for development on separate laptops and larger virtual topologies. It should reuse protocol definitions and controller behavior where practical. Simulation cannot validate ESP8266 radio performance, physical RSSI, power stability, or USB drivers. The approved transition to hardware follows the working simulated demo in Phase 5, before dashboard polish and adaptive routing.
 
-## Software candidates, not installed dependencies
+## Selected stack, not installed dependencies
 
 - Firmware: C++ with the Arduino framework through PlatformIO.
-- Controller: Python; FastAPI/WebSockets are candidates for browser communication.
+- Controller and simulator: Python; FastAPI/WebSockets for browser communication.
 - Storage: SQLite.
-- Dashboard: a browser application; React and Cytoscape.js were suggested, but selection is pending.
+- Dashboard: React, TypeScript, Vite, and Cytoscape.js.
 
-Avoid creating package files, selecting versions, or claiming run commands until the relevant implementation task is authorized. Use an early radio/serial experiment to validate hardware assumptions before building a large software stack.
+Avoid creating package files, selecting versions, or claiming run commands until the relevant implementation task is authorized. Phase 6 validates radio/serial hardware assumptions before four-board integration, adaptive routing, and final polish.
 
 ## Boundaries
 

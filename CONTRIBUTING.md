@@ -6,7 +6,7 @@ Two owners are collaborating from macOS and Windows, with coding assistants. Con
 
 Read [README.md](README.md), [docs/STATUS.md](docs/STATUS.md), [plan.md](plan.md), and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Coding assistants must also read [AGENTS.md](AGENTS.md); Claude has [CLAUDE.md](CLAUDE.md) as an entry point.
 
-The repository currently contains documentation only. No application dependencies or hardware drivers need installing just to review it. The detailed roadmap is awaiting a separate discussion.
+The repository currently contains documentation only. No application dependencies or hardware drivers need installing just to review it. The phased plan in `plan.md` is approved; implementation is waiting for the owner's explicit instruction to start.
 
 ## Shared Git workflow
 

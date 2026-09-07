@@ -2,7 +2,7 @@
 
 A college project about keeping sensor data moving when a wireless relay fails, using four inexpensive ESP8266 NodeMCU boards and a laptop.
 
-**Status: documentation and design only. No firmware, controller, dashboard, or simulator has been implemented or tested.** The detailed roadmap will be reviewed separately with the project owners.
+**Status: documentation and design only. No firmware, controller, dashboard, or simulator has been implemented or tested.** The software-first phased plan is approved in [plan.md](plan.md). Implementation is waiting for the owner's explicit instruction to start.
 
 ## What we are building
 
@@ -47,6 +47,7 @@ The lines between boards represent wireless links. Each board also needs electri
 - A local dashboard showing node state, links, intended and observed routes, readings, and failure/recovery events.
 - Delivery counts, packet loss, RTT, and recovery measurements; RSSI where reliable ESP8266 measurement is validated.
 - Performance history and clearly labeled simulated failure testing.
+- Adaptive routing with a measured comparison of lowest-delay and highest-reliability policies after the hardware core works.
 - A real sensor after communication works. Software simulation is planned to support development without all boards present.
 
 These are intended outcomes, not completed functionality. Timing values and performance claims require measurements on hardware.
@@ -68,7 +69,7 @@ Healing requires a surviving path. Failure of C, the laptop, or both relay paths
 
 | Document | What it answers |
 | --- | --- |
-| [plan.md](plan.md) | Agreed scope, project priorities, and completion criteria |
+| [plan.md](plan.md) | Approved software-first phases, technical choices, and completion checkpoints |
 | [Architecture](docs/ARCHITECTURE.md) | Connections, responsibilities, proposed mechanisms, and limitations |
 | [Status](docs/STATUS.md) | What actually exists, pending decisions, and the next discussion |
 | [Contributing](CONTRIBUTING.md) | How to collaborate from macOS and Windows |
