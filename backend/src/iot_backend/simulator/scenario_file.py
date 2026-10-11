@@ -36,8 +36,18 @@ _SETTING_KEYS = {
     "ttl",
     "queue_capacity",
     "service_ms",
+    "discovery",
+    "ack_delivery",
+    "hello_interval_ms",
+    "hello_jitter_ms",
+    "neighbor_timeout_ms",
+    "report_interval_ms",
+    "report_coalesce_ms",
+    "flood_cache_size",
 }
-_LINK_KEYS = {"delay_ms", "loss", "drop_frames", "down"}
+_BOOL_SETTINGS = {"discovery"}
+_STRING_SETTINGS = {"ack_delivery"}
+_LINK_KEYS = {"delay_ms", "loss", "drop_frames", "drop_msg", "down"}
 _ACTION_KEYS = {
     "stop_node": {"node"},
     "start_node": {"node"},
@@ -96,7 +106,13 @@ def parse_scenario(raw: dict[str, Any]) -> ScenarioSpec:
     settings = raw.get("settings", {})
     _check_keys("settings", set(settings), _SETTING_KEYS)
     for key, value in settings.items():
-        setattr(config, key, int(value))
+        if key in _BOOL_SETTINGS:
+            value = bool(value)
+        elif key in _STRING_SETTINGS:
+            value = str(value)
+        else:
+            value = int(value)
+        setattr(config, key, value)
 
     reading = raw.get("reading", {})
     _check_keys("reading", set(reading), {"from", "to"})
@@ -115,6 +131,7 @@ def parse_scenario(raw: dict[str, Any]) -> ScenarioSpec:
             delay_ms=int(link.get("delay_ms", 20)),
             loss=float(link.get("loss", 0.0)),
             drop_frames=frozenset(int(n) for n in link.get("drop_frames", [])),
+            drop_msg=link.get("drop_msg"),
             down=bool(link.get("down", False)),
         )
 

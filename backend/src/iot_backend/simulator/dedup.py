@@ -75,3 +75,33 @@ class DuplicateFilter:
             return Verdict.DUPLICATE
         state.bits |= bit  # late but never seen before
         return Verdict.NEW
+
+
+class FloodCache:
+    """Bounded memory of management frame identities already handled by this node.
+
+    A node forwards a given management frame at most once: a second arrival (by another
+    path) finds the identity here and is dropped. The cache holds `size` identities; the
+    oldest is forgotten first. Forgetting can allow a re-forward, but the frame's TTL still
+    ends the flood, so the bound on memory does not become an unbounded storm.
+    """
+
+    def __init__(self, size: int = 64, evictions: int = 0) -> None:
+        if size < 1:
+            raise ValueError("size must be positive")
+        self._size = size
+        self._identities: OrderedDict[tuple[int, int, int], None] = OrderedDict()
+        self.evictions = evictions
+
+    def __len__(self) -> int:
+        return len(self._identities)
+
+    def seen(self, identity: tuple[int, int, int]) -> bool:
+        """Return True if `identity` was already handled; otherwise remember it."""
+        if identity in self._identities:
+            return True
+        self._identities[identity] = None
+        if len(self._identities) > self._size:
+            self._identities.popitem(last=False)
+            self.evictions += 1
+        return False

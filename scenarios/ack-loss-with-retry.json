@@ -3,7 +3,15 @@
   "description": "The 2nd frame on link B->A is the ACK for reading #2 and is dropped. A retries with the same identity; C counts the reading once and acknowledges again.",
   "seed": 42,
   "duration_s": 12,
+  "settings": {
+    "discovery": false,
+    "ack_delivery": "routed"
+  },
   "links": {
-    "B->A": { "drop_frames": [2] }
+    "B->A": {
+      "drop_frames": [
+        2
+      ]
+    }
   }
 }

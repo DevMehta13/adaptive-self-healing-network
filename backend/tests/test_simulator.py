@@ -24,8 +24,13 @@ from iot_backend.simulator.trace import (
 TWENTY_ONE_S = 21_000  # readings at 2, 4, ..., 20 s; the last ACK is back by 20.1 s
 
 
+# These tests isolate the Phase 2 data plane: no HELLOs or reports, and ACKs routed through the
+# manual tables. Discovery and flooding have their own tests (test_discovery.py, ...).
+PHASE2 = {"discovery": False, "ack_delivery": "routed"}
+
+
 def make_sim(seed=1, links=None, **kwargs) -> Simulation:
-    return Simulation(ScenarioConfig(seed=seed, links=links or {}, **kwargs))
+    return Simulation(ScenarioConfig(seed=seed, links=links or {}, **{**PHASE2, **kwargs}))
 
 
 def data_identities(sim):
@@ -114,7 +119,7 @@ def test_missing_route_drops_with_no_route_and_counts_it():
 
 
 def test_a_misconfigured_to_send_directly_to_c_is_rejected_by_c():
-    config = ScenarioConfig(seed=1)
+    config = ScenarioConfig(seed=1, **PHASE2)
     config.permitted["A"] = {"B", "C", "D"}  # A believes C is a neighbor ...
     config.routes["A"] = {"C": "C"}  # ... and routes straight to it
     sim = Simulation(config)
@@ -132,7 +137,7 @@ def test_a_misconfigured_to_send_directly_to_c_is_rejected_by_c():
 
 
 def test_a_cannot_send_to_a_non_permitted_neighbor_even_if_routed():
-    config = ScenarioConfig(seed=1)
+    config = ScenarioConfig(seed=1, **PHASE2)
     config.routes["A"] = {"C": "C"}  # route says C, but A's permitted list does not include C
     sim = Simulation(config)
     sim.run(5_000)
@@ -231,7 +236,7 @@ def test_late_ack_after_giving_up_is_ignored_not_double_counted():
 
 
 def test_routing_loop_ends_by_ttl_and_run_terminates():
-    config = ScenarioConfig(seed=1)
+    config = ScenarioConfig(seed=1, **PHASE2)
     config.routes["B"] = {"C": "A"}  # B hands frames for C back to A
     sim = Simulation(config)
     sim.run(10_000)
@@ -245,7 +250,7 @@ def test_routing_loop_ends_by_ttl_and_run_terminates():
 
 
 def test_ttl_rule_frame_arriving_with_ttl_1_is_not_forwarded():
-    config = ScenarioConfig(seed=1, ttl=3, max_attempts=1)
+    config = ScenarioConfig(seed=1, ttl=3, max_attempts=1, **PHASE2)
     config.routes["B"] = {"C": "A"}
     sim = Simulation(config)
     sim.run(2_500)
@@ -391,6 +396,7 @@ def test_same_seed_gives_identical_trace_and_different_seed_differs():
 def test_duplicate_detection_survives_sequence_wraparound_in_simulation():
     config = ScenarioConfig(
         seed=1,
+        **PHASE2,
         initial_seq={"A": 2**32 - 2},
         links={("B", "A"): LinkConfig(drop_frames=frozenset({3}))},  # ACK for the 3rd reading
     )
@@ -442,9 +448,9 @@ def test_stopped_node_ignores_frames_and_forgets_pending_readings():
 
 def test_unknown_names_in_config_are_refused():
     with pytest.raises(ValueError):
-        Simulation(ScenarioConfig(links={("A", "Z"): LinkConfig()}))
+        Simulation(ScenarioConfig(links={("A", "Z"): LinkConfig()}, **PHASE2))
     with pytest.raises(ValueError):
-        Simulation(ScenarioConfig(routes={"A": {"C": "Q"}}))
+        Simulation(ScenarioConfig(routes={"A": {"C": "Q"}}, **PHASE2))
 
 
 def test_link_config_validation():

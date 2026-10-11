@@ -3,7 +3,13 @@
   "description": "B's route to C wrongly points back to A, so A and B pass each reading to each other. TTL ends the loop; readings are retried and lost.",
   "seed": 42,
   "duration_s": 10,
+  "settings": {
+    "discovery": false,
+    "ack_delivery": "routed"
+  },
   "routes": {
-    "B": { "C": "A" }
+    "B": {
+      "C": "A"
+    }
   }
 }

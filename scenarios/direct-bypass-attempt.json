@@ -3,13 +3,32 @@
   "description": "A is misconfigured to send straight to C (permitted list and route). All boards can hear each other, but C only permits B and D as neighbors and rejects every frame from A.",
   "seed": 42,
   "duration_s": 10,
+  "settings": {
+    "discovery": false,
+    "ack_delivery": "routed"
+  },
   "permitted": {
-    "A": ["B", "C", "D"],
-    "B": ["A", "C"],
-    "C": ["B", "D"],
-    "D": ["A", "C"]
+    "A": [
+      "B",
+      "C",
+      "D"
+    ],
+    "B": [
+      "A",
+      "C"
+    ],
+    "C": [
+      "B",
+      "D"
+    ],
+    "D": [
+      "A",
+      "C"
+    ]
   },
   "routes": {
-    "A": { "C": "C" }
+    "A": {
+      "C": "C"
+    }
   }
 }

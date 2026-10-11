@@ -10,6 +10,8 @@ from iot_backend.protocol import NODE_NAMES, PacketIdentity
 # Event names
 NODE_BOOTED = "node_booted"
 NODE_STOPPED = "node_stopped"
+NEIGHBOR_CHANGED = "neighbor_changed"  # a neighbor-table state changed (HELLO / timeout)
+NEIGHBOR_RESTARTED = "neighbor_restarted"  # a neighbor's session changed
 FRAME_SENT = "frame_sent"  # a node transmitted a frame it created
 FRAME_FORWARDED = "frame_forwarded"  # a relay transmitted a frame it received for someone else
 FRAME_DROPPED_BY_LINK = "frame_dropped_by_link"

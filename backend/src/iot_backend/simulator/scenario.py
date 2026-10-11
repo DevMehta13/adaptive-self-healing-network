@@ -12,8 +12,9 @@ from dataclasses import dataclass, field, replace
 
 from iot_backend.protocol import DEFAULT_TTL, NODE_IDS, NODE_NAMES, PacketIdentity
 from iot_backend.simulator.engine import Engine
+from iot_backend.simulator.gateway import SimulatedGateway
 from iot_backend.simulator.link import Link, LinkConfig
-from iot_backend.simulator.nodes import Node, NodeSettings
+from iot_backend.simulator.nodes import ACK_FLOODING, ACK_ROUTED, Node, NodeSettings
 from iot_backend.simulator.trace import FRAME_DROPPED, Trace
 
 NODE_LETTERS = tuple(sorted(NODE_IDS))  # ("A", "B", "C", "D")
@@ -36,6 +37,17 @@ class ScenarioConfig:
     queue_capacity: int = 16
     service_ms: int = 5
     trace_max_events: int = 100_000
+    # Phase 3 discovery and management traffic. Set discovery=False and
+    # ack_delivery="routed" for the plain Phase 2 data-plane behaviour.
+    discovery: bool = True
+    ack_delivery: str = ACK_FLOODING
+    hello_interval_ms: int = 1000
+    hello_jitter_ms: int = 100
+    neighbor_timeout_ms: int = 3000
+    report_interval_ms: int = 5000
+    report_coalesce_ms: int = 50
+    flood_cache_size: int = 64
+    gateway: str = "C"  # node whose USB link carries events to the controller
     reading_src: str = "A"
     reading_dst: str = "C"
     # Permitted neighbors per node (default: the diamond). Override to model a misconfiguration.
@@ -63,6 +75,9 @@ class Summary:
     acknowledged: int  # readings whose ACK reached the source
     lost: int  # readings the source gave up on after its last attempt
     unresolved: int  # still waiting at the end, or forgotten when the source stopped
+    hellos: int  # HELLO frames created
+    reports: int  # TOPOLOGY_REPORT frames created
+    flood_cache_evictions: int  # management identities forgotten because the cache was full
     drops: dict[str, int]  # discarded or rejected frames by reason
 
 
@@ -84,7 +99,17 @@ class Simulation:
             reading_interval_ms=self.config.reading_interval_ms,
             ack_timeout_ms=self.config.ack_timeout_ms,
             max_attempts=self.config.max_attempts,
+            discovery=self.config.discovery,
+            ack_delivery=self.config.ack_delivery,
+            hello_interval_ms=self.config.hello_interval_ms,
+            hello_jitter_ms=self.config.hello_jitter_ms,
+            neighbor_timeout_ms=self.config.neighbor_timeout_ms,
+            report_interval_ms=self.config.report_interval_ms,
+            report_coalesce_ms=self.config.report_coalesce_ms,
+            flood_cache_size=self.config.flood_cache_size,
+            gateway_id=NODE_IDS[self.config.gateway],
         )
+        self._gateway = SimulatedGateway(self._engine)
         for letter in NODE_LETTERS:
             permitted = {NODE_IDS[n] for n in self.config.permitted.get(letter, set())}
             routes = {NODE_IDS[n]: NODE_IDS[n] for n in DIAMOND[letter]}  # direct neighbors
@@ -116,6 +141,8 @@ class Simulation:
                 deliver=self._make_delivery(self._nodes[dst], NODE_IDS[src]),
             )
 
+        self._nodes[self.config.gateway].gateway_sink = self._gateway.deliver
+
         for letter in NODE_LETTERS:
             self._nodes[letter].boot()
 
@@ -127,6 +154,10 @@ class Simulation:
         for name in (self.config.reading_src, self.config.reading_dst):
             if name not in letters:
                 raise ValueError(f"unknown node {name!r}")
+        if self.config.gateway not in letters:
+            raise ValueError(f"unknown gateway {self.config.gateway!r}")
+        if self.config.ack_delivery not in (ACK_FLOODING, ACK_ROUTED):
+            raise ValueError("ack_delivery must be 'flooding' or 'routed'")
         if self.config.reading_src == self.config.reading_dst:
             raise ValueError("reading source and destination must differ")
         for table in (self.config.permitted, self.config.initial_seq):
@@ -144,6 +175,11 @@ class Simulation:
     @property
     def now_ms(self) -> int:
         return self._engine.now_ms
+
+    @property
+    def gateway(self) -> SimulatedGateway:
+        """The only door the controller may use to learn about the network."""
+        return self._gateway
 
     def run(self, duration_ms: int) -> None:
         """Advance the virtual clock by `duration_ms`, processing everything due."""
@@ -242,6 +278,9 @@ class Simulation:
             acknowledged=acknowledged,
             lost=lost,
             unresolved=created - acknowledged - lost,
+            hellos=sum(c.hellos for c in counters),
+            reports=sum(c.reports for c in counters),
+            flood_cache_evictions=sum(n.flood_cache_evictions for n in self._nodes.values()),
             drops=dict(sorted(drops.items())),
         )
 
@@ -251,7 +290,9 @@ class Simulation:
     def _make_delivery(node: Node, from_id: int) -> Callable[[bytes], None]:
         return lambda data: node.receive(data, from_id)
 
-    def _transmit(self, from_id: int, to_id: int, data: bytes, identity: PacketIdentity) -> None:
+    def _transmit(
+        self, from_id: int, to_id: int, data: bytes, identity: PacketIdentity, msg: str
+    ) -> None:
         src, dst = NODE_NAMES.get(from_id), NODE_NAMES.get(to_id)
         link = self._links.get((src, dst)) if src and dst else None
         if link is None:  # no such board
@@ -264,4 +305,4 @@ class Simulation:
                 reason="no_link",
             )
             return
-        link.transmit(data, identity)
+        link.transmit(data, identity, msg)

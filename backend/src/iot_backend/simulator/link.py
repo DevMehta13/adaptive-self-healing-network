@@ -15,6 +15,9 @@ class LinkConfig:
     delay_ms: int = 20
     loss: float = 0.0  # probability 0..1 that a frame is lost
     drop_frames: frozenset[int] = frozenset()  # 1-based ordinals of frames to drop
+    # If set (e.g. "DATA", "DELIVERY_ACK"), only frames of that message type are
+    # counted for `drop_frames`; HELLOs and reports then do not shift the ordinals.
+    drop_msg: str | None = None
     down: bool = False  # a down link loses every frame
 
     def __post_init__(self) -> None:
@@ -59,12 +62,14 @@ class Link:
         """Change delay, loss, drop list or up/down state from now on."""
         self.config = replace(self.config, **changes)  # type: ignore[arg-type]
 
-    def transmit(self, data: bytes, identity: PacketIdentity | None) -> None:
-        self._offered += 1
+    def transmit(self, data: bytes, identity: PacketIdentity | None, msg: str = "") -> None:
+        counted = self.config.drop_msg is None or self.config.drop_msg == msg
+        if counted:
+            self._offered += 1
         reason = None
         if self.config.down:
             reason = "link_down"
-        elif self._offered in self.config.drop_frames:
+        elif counted and self._offered in self.config.drop_frames:
             reason = "scripted"
         elif self.config.loss > 0 and self._rng.random() < self.config.loss:
             reason = "random"
