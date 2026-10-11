@@ -46,7 +46,7 @@ def test_normal_delivery_every_reading_once_and_acknowledged():
     assert acked == readings
     assert sim.trace.of_type(ACK_TIMEOUT) == []
     s = sim.summary()
-    assert (s.readings_sent, s.delivered, s.acknowledged, s.unacknowledged) == (10, 10, 10, 0)
+    assert (s.readings_created, s.delivered, s.acknowledged, s.unacknowledged) == (10, 10, 10, 0)
     assert s.unresolved == 0
 
 
@@ -113,7 +113,8 @@ def test_malformed_frames_are_rejected_recorded_and_do_not_stop_the_simulation()
     assert rejected == [("B", "truncated"), ("B", "bad_version"), ("A", "truncated")]
     # readings before and after the garbage are still delivered and acknowledged
     s = sim.summary()
-    assert s.readings_sent == 5
+    assert s.readings_created == 5
+    assert s.frames_sent == 5
     assert s.acknowledged == 5
     assert s.frames_rejected == 3
 
@@ -248,7 +249,7 @@ def test_cli_prints_trace_and_summary(capsys):
     out = capsys.readouterr().out
     assert "frame_dropped_by_link" in out
     assert "Summary" in out
-    assert "readings sent by A ........ 2" in out
+    assert "readings created by A ..... 2" in out
 
 
 def test_receive_reports_the_link_layer_sender():
@@ -256,3 +257,11 @@ def test_receive_reports_the_link_layer_sender():
     sim.run(3_000)
     received = sim.trace.of_type(FRAME_RECEIVED)
     assert [(e.node, e.info["sender"]) for e in received] == [("B", "A"), ("A", "B")]
+
+
+def test_summary_counts_survive_a_trace_that_overflowed():
+    sim = make_sim(trace_max_events=5)  # tiny trace: most events are dropped
+    sim.run(21_000)
+    assert sim.trace.dropped > 0
+    s = sim.summary()
+    assert (s.readings_created, s.frames_sent, s.acknowledged) == (10, 10, 10)

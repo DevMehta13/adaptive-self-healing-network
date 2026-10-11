@@ -42,7 +42,8 @@ SendFunction = Callable[[int, int, bytes, PacketIdentity], None]
 @dataclass
 class NodeCounters:
     boots: int = 0
-    sent: int = 0
+    created: int = 0  # readings created by this node
+    sent: int = 0  # frames this node transmitted
     delivered: int = 0
     acknowledged: int = 0
     unacknowledged: int = 0
@@ -191,6 +192,7 @@ class SourceNode(_Node):
     def _create_reading(self, epoch: int) -> None:
         if epoch != self._epoch:
             return
+        self.counters.created += 1
         value = 2000 + self._rng.randint(-50, 50)
         frame = self._new_frame(self._dst, self._ttl, DataPayload(value))
         if len(self._pending) >= self._max_pending:

@@ -23,13 +23,15 @@ class ScenarioConfig:
     reading_interval_ms: int = 2000
     ack_timeout_ms: int = 1000
     ttl: int = DEFAULT_TTL
+    trace_max_events: int = 100_000
     # Keyed by ("A", "B") for A->B and ("B", "A") for B->A. Missing keys use defaults.
     links: dict[tuple[str, str], LinkConfig] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
 class Summary:
-    readings_sent: int
+    readings_created: int  # readings A created
+    frames_sent: int  # frames A transmitted (equals readings until retries exist)
     delivered: int  # B accepted the reading
     acknowledged: int  # A received the ACK
     unacknowledged: int  # A gave up waiting
@@ -46,7 +48,7 @@ class Simulation:
             raise ValueError(f"unknown links {sorted(unknown)}; Phase 1 has only A->B and B->A")
 
         self._engine = Engine()
-        self.trace = Trace()
+        self.trace = Trace(self.config.trace_max_events)
         self._nodes: dict[str, SourceNode | ReceiverNode] = {}
         self._links: dict[tuple[int, int], Link] = {}
 
@@ -106,15 +108,16 @@ class Simulation:
 
     def summary(self) -> Summary:
         source, receiver = self._nodes["A"], self._nodes["B"]
-        sent = source.counters.sent
+        sent = source.counters.created
         done = source.counters.acknowledged + source.counters.unacknowledged
         return Summary(
-            readings_sent=sent,
+            readings_created=source.counters.created,
+            frames_sent=sent,
             delivered=receiver.counters.delivered,
             acknowledged=source.counters.acknowledged,
             unacknowledged=source.counters.unacknowledged,
             unresolved=sent - done,
-            frames_dropped_by_link=len(self.trace.of_type(FRAME_DROPPED_BY_LINK)),
+            frames_dropped_by_link=sum(link.dropped for link in self._links.values()),
             frames_rejected=source.counters.rejected + receiver.counters.rejected,
         )
 

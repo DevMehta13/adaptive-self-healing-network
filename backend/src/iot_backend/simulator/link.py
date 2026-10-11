@@ -47,6 +47,7 @@ class Link:
         # the random choices made on another.
         self._rng = random.Random(f"{seed}:link:{self.name}")
         self._offered = 0
+        self.dropped = 0  # frames this link has lost (scripted or random)
 
     def transmit(self, data: bytes, identity: PacketIdentity | None) -> None:
         self._offered += 1
@@ -56,6 +57,7 @@ class Link:
         elif self._config.loss > 0 and self._rng.random() < self._config.loss:
             reason = "random"
         if reason is not None:
+            self.dropped += 1
             self._trace.record(
                 self._engine.now_ms,
                 self._src,
