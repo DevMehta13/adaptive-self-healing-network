@@ -329,13 +329,21 @@ def test_data_direction_down_means_c_receives_nothing_new():
     assert len(delivered(sim)) == 2  # only the readings sent before 5 s
 
 
+def test_delivery_time_counts_from_the_first_attempt_not_the_last():
+    sim = make_sim(links={("B", "A"): LinkConfig(drop_frames=frozenset({1}))})
+    sim.run(5_000)
+    (first,) = [e for e in sim.trace.of_type(ACK_RECEIVED) if e.info["attempts"] == 2]
+    assert first.info["delivery_time_ms"] >= 1_000  # waited a full ACK timeout before retrying
+    assert "rtt_ms" not in first.info
+
+
 def test_link_delay_can_change_at_runtime():
     sim = make_sim()
     sim.configure_link("B", "C", at_ms=5_000, delay_ms=300)
     sim.run(8_000)
-    rtts = [e.info["rtt_ms"] for e in sim.trace.of_type(ACK_RECEIVED)]
-    assert rtts[0] == rtts[1] == 100  # readings at 2 s and 4 s
-    assert rtts[2] == 100 + 280  # reading at 6 s: B->C is 280 ms slower
+    times = [e.info["delivery_time_ms"] for e in sim.trace.of_type(ACK_RECEIVED)]
+    assert times[0] == times[1] == 100  # readings at 2 s and 4 s (single attempt each)
+    assert times[2] == 100 + 280  # reading at 6 s: B->C is 280 ms slower
 
 
 # ---- queues ----

@@ -84,7 +84,7 @@ class NodeCounters:
 class _Pending:
     frame: Frame
     attempts: int = 0
-    first_sent_ms: int = 0
+    first_attempt_ms: int = 0
 
 
 @dataclass
@@ -363,7 +363,7 @@ class Node:
             self._trace.record(
                 self._engine.now_ms, self.name, READING_LOST, oldest, reason="pending_overflow"
             )
-        self._pending[frame.identity] = _Pending(frame, first_sent_ms=self._engine.now_ms)
+        self._pending[frame.identity] = _Pending(frame, first_attempt_ms=self._engine.now_ms)
         self._attempt(frame.identity, epoch)
         self._engine.schedule(
             self._settings.reading_interval_ms, lambda: self._create_reading(epoch)
@@ -417,7 +417,7 @@ class Node:
             self.name,
             ACK_RECEIVED,
             acked,
-            rtt_ms=self._engine.now_ms - pending.first_sent_ms,
+            delivery_time_ms=self._engine.now_ms - pending.first_attempt_ms,
             attempts=pending.attempts,
             acked_by=frame.src,
         )
