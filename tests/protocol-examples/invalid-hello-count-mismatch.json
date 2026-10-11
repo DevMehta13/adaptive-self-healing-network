@@ -1,0 +1,7 @@
+{
+  "name": "hello-count-mismatch",
+  "description": "HELLO says 2 neighbors but carries bytes for 1.",
+  "valid": false,
+  "hex": "011001020d0c0b0a010000000106020222222222",
+  "reject_reason": "bad_payload_length"
+}

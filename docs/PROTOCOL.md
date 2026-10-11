@@ -1,6 +1,6 @@
 # Node protocol
 
-**Draft — pending Dev's review.** Written by Harshal (backend owner) for Dev, who will implement the same format in C++ on the ESP8266. Scope so far: the frame header, DATA, DELIVERY_ACK (Phase 1), and forwarding/delivery behaviour (Phase 2; no format change). The Python implementation is `backend/src/iot_backend/protocol/`; the shared reference examples are in [tests/protocol-examples/](../tests/protocol-examples/). If this document and the examples disagree, tell Harshal — they are meant to agree exactly.
+**Draft — pending Dev's review.** Written by Harshal (backend owner) for Dev, who will implement the same format in C++ on the ESP8266. Scope so far: the frame header, DATA, DELIVERY_ACK (Phase 1), forwarding/delivery behaviour (Phase 2; no format change), and HELLO / TOPOLOGY_REPORT payloads with management-traffic behaviour (Phase 3). The Python implementation is `backend/src/iot_backend/protocol/`; the shared reference examples are in [tests/protocol-examples/](../tests/protocol-examples/). If this document and the examples disagree, tell Harshal — they are meant to agree exactly.
 
 ## Why a compact binary format
 
@@ -51,15 +51,15 @@ The whole encoded frame must be **≤ 250 bytes** (ESP-NOW v1). That leaves a **
 | --- | --- | --- |
 | `0x01` | DATA | Implemented |
 | `0x02` | DELIVERY_ACK | Implemented |
-| `0x10` | HELLO | Reserved |
-| `0x11` | TOPOLOGY_REPORT | Reserved |
+| `0x10` | HELLO | Implemented (Phase 3, pending Dev's review) |
+| `0x11` | TOPOLOGY_REPORT | Implemented (Phase 3, pending Dev's review) |
 | `0x12` | ROUTE_UPDATE | Reserved |
 | `0x13` | ROUTE_INSTALL_ACK | Reserved |
 | `0x14` | PROBE | Reserved |
 | `0x15` | PROBE_REPLY | Reserved |
 | `0x16` | LOCAL_FAILOVER_REPORT | Reserved |
 
-Codes `0x01–0x0F` are the data plane; `0x10` and above are management. Reserved types have no payload definition yet and **are rejected** by a Phase 1 decoder.
+Codes `0x01–0x0F` are the data plane; `0x10` and above are management. Reserved types have no payload definition yet and **are rejected** (`reserved_type`) by the decoder.
 
 ### DATA (`0x01`) — payload 4 bytes
 
@@ -79,6 +79,34 @@ Created by the node that accepted a reading, addressed (`dst`) to the reading's 
 
 An ACK means *the destination node accepted the frame and built a valid acknowledgement for it*. It says nothing about what the application did with the reading afterwards, and the ACK itself can be lost even when the reading arrived.
 
+### HELLO (`0x10`) — payload 1 + 5n bytes, n ≤ 8 (Phase 3, pending Dev's review)
+
+A local keep-alive sent to **one** neighbor (`dst` is that neighbor, `ttl` 1). The sender's own `session` is in the header. The payload lists the neighbors the sender currently hears, so the receiver can check that the sender hears *it* (two-way confirmation).
+
+| Offset | Size | Field | Meaning |
+| --- | --- | --- | --- |
+| 0 | 1 | `count` | Number of entries, 0 to 8. |
+| 1 + 5i | 1 | `node` | Id of a neighbor the sender hears. |
+| 2 + 5i | 4 | `session` | The session that neighbor had in the last HELLO the sender heard from it. |
+
+The payload length must be exactly `1 + 5 × count`. An empty list is the single byte `00`.
+
+### TOPOLOGY_REPORT (`0x11`) — payload 1 + 8n bytes, n ≤ 8 (Phase 3, pending Dev's review)
+
+A node's current neighbor observations, addressed to C (`dst`) and carried by bounded flooding (see *Management traffic* below).
+
+| Offset | Size | Field | Meaning |
+| --- | --- | --- | --- |
+| 0 | 1 | `count` | Number of entries, 0 to 8. |
+| 1 + 8i | 1 | `neighbor` | The observed neighbor's node id. |
+| 2 + 8i | 1 | `state` | `1` one-way, `2` two-way, `3` lost. `0` and values above 3 are invalid. A neighbor never heard is simply absent. |
+| 3 + 8i | 4 | `session` | The neighbor's session from its latest HELLO; a changed value means it restarted. |
+| 7 + 8i | 2 | `age_ms` | Milliseconds since that neighbor's last HELLO on the reporter's clock, saturating at 65535. Ages let the controller use its own clock without synchronised clocks. |
+
+The payload length must be exactly `1 + 8 × count`. Maximum payload is 65 bytes, 79 with the header.
+
+States: **one-way** means the reporter hears the neighbor's HELLOs but the neighbor's HELLOs do not list the reporter's current session; **two-way** means both directions are confirmed; **lost** means the neighbor was heard before but not within the neighbor timeout (default 3 s). Lost is "no HELLO heard", not proof that the neighbor lost power.
+
 ## Decoding rules
 
 A receiver must validate in this order and stop at the first failure. The frame is dropped and the reason recorded (the simulator traces `frame_rejected`; firmware should count by reason). Rejection never changes node state and never stops the node.
@@ -93,9 +121,10 @@ A receiver must validate in this order and stop at the first failure. The frame 
 | 6 | `src` or `dst` is 0 or 255 | `bad_node_id` |
 | 7 | `session` is 0 | `bad_session` |
 | 8 | `payload_len` ≠ total length − 14 | `length_mismatch` |
-| 9 | Payload size is wrong for the type (DATA ≠ 4, DELIVERY_ACK ≠ 9) | `bad_payload_length` |
-| 10 | (DELIVERY_ACK) `origin` is 0 or 255 | `bad_node_id` |
-| 11 | (DELIVERY_ACK) acknowledged `session` is 0 | `bad_session` |
+| 9 | Payload size is wrong for the type (DATA ≠ 4, DELIVERY_ACK ≠ 9); HELLO or TOPOLOGY_REPORT payload empty, `count` above 8, or length ≠ 1 + entry size × `count` | `bad_payload_length` |
+| 10 | (DELIVERY_ACK `origin`, HELLO `node`, report `neighbor`) is 0 or 255 | `bad_node_id` |
+| 11 | (DELIVERY_ACK, HELLO entry, report entry) session is 0 | `bad_session` |
+| 12 | (report entry) `state` is not 1, 2 or 3 | `bad_value` |
 
 Whether a valid frame is *for this node*, from a *permitted neighbor*, or an *expected type* is behaviour, not decoding; see the next section.
 
@@ -183,6 +212,10 @@ Each file in `tests/protocol-examples/` holds one case:
 - `valid: false` files have `hex` and `reject_reason`: decoding must fail with that reason (and must not crash).
 
 File names start with `valid-` or `invalid-`. The Python tests load every file in the directory, so adding a case there tests it automatically.
+
+### Change to an existing example (Phase 3)
+
+Defining HELLO made one Phase 1 example wrong by construction: `invalid-reserved-type-hello.json` expected HELLO (0x10) to be rejected as `reserved_type`. Its bytes are unchanged, but HELLO is now a defined type, so the same frame (header only, no `count` byte) is rejected as `bad_payload_length`. The file was renamed `invalid-hello-empty-payload.json` and its `reject_reason` changed; `invalid-reserved-type-route-update.json` takes over the "still reserved" case. All other Phase 1 and Phase 2 examples are untouched.
 
 ## Open for Dev's review
 

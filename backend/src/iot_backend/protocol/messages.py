@@ -1,4 +1,4 @@
-"""Message classes for the node protocol (Phase 1: DATA and DELIVERY_ACK)."""
+"""Message classes for the node protocol."""
 
 from dataclasses import dataclass
 from typing import NamedTuple
@@ -38,7 +38,43 @@ class DeliveryAckPayload:
         return PacketIdentity(self.origin, self.session, self.seq)
 
 
-Payload = DataPayload | DeliveryAckPayload
+@dataclass(frozen=True)
+class HelloNeighbor:
+    """A neighbor the HELLO's sender currently hears, with the session it heard it in."""
+
+    node: int
+    session: int
+
+
+@dataclass(frozen=True)
+class HelloPayload:
+    """Local keep-alive listing the neighbors the sender hears (lets a receiver confirm 2-way)."""
+
+    neighbors: tuple[HelloNeighbor, ...] = ()
+
+    msg_type = MessageType.HELLO
+
+
+@dataclass(frozen=True)
+class ReportEntry:
+    """One neighbor observation: its id, state (NeighborCode), session, ms since last heard."""
+
+    neighbor: int
+    state: int
+    session: int
+    age_ms: int
+
+
+@dataclass(frozen=True)
+class TopologyReportPayload:
+    """A node's current neighbor observations."""
+
+    entries: tuple[ReportEntry, ...] = ()
+
+    msg_type = MessageType.TOPOLOGY_REPORT
+
+
+Payload = DataPayload | DeliveryAckPayload | HelloPayload | TopologyReportPayload
 
 
 @dataclass(frozen=True)

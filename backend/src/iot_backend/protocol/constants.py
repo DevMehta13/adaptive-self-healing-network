@@ -29,9 +29,9 @@ INVALID_NODE_IDS = frozenset({0, 255})
 class MessageType(IntEnum):
     DATA = 0x01
     DELIVERY_ACK = 0x02
-    # Reserved for later phases; not accepted by the Phase 1 decoder.
     HELLO = 0x10
     TOPOLOGY_REPORT = 0x11
+    # Reserved for later phases; rejected by the decoder until their payloads are defined.
     ROUTE_UPDATE = 0x12
     ROUTE_INSTALL_ACK = 0x13
     PROBE = 0x14
@@ -39,10 +39,33 @@ class MessageType(IntEnum):
     LOCAL_FAILOVER_REPORT = 0x16
 
 
-IMPLEMENTED_TYPES = frozenset({MessageType.DATA, MessageType.DELIVERY_ACK})
+IMPLEMENTED_TYPES = frozenset(
+    {
+        MessageType.DATA,
+        MessageType.DELIVERY_ACK,
+        MessageType.HELLO,
+        MessageType.TOPOLOGY_REPORT,
+    }
+)
 
 DATA_PAYLOAD_SIZE = 4  # int32 value
 DELIVERY_ACK_PAYLOAD_SIZE = 9  # origin u8, session u32, seq u32
+
+# HELLO payload: count u8, then count x (node u8, session u32).
+# TOPOLOGY_REPORT payload: count u8, then count x (neighbor u8, state u8, session u32, age u16).
+MAX_HELLO_NEIGHBORS = 8
+MAX_REPORT_ENTRIES = 8
+HELLO_ENTRY_SIZE = 5
+REPORT_ENTRY_SIZE = 8
+AGE_MAX_MS = 0xFFFF  # "last heard" ages saturate here
+
+
+class NeighborCode(IntEnum):
+    """A neighbor's state as carried in TOPOLOGY_REPORT. 0 is invalid; unknown is absence."""
+
+    ONE_WAY = 1  # we hear its HELLOs, but it does not report hearing ours
+    TWO_WAY = 2  # we hear it and it reports hearing us
+    LOST = 3  # heard before, nothing within the timeout
 
 
 class RejectReason(StrEnum):
@@ -57,3 +80,4 @@ class RejectReason(StrEnum):
     BAD_SESSION = "bad_session"
     LENGTH_MISMATCH = "length_mismatch"
     BAD_PAYLOAD_LENGTH = "bad_payload_length"
+    BAD_VALUE = "bad_value"
