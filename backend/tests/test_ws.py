@@ -1,3 +1,5 @@
+import time
+
 import pytest
 from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
@@ -46,6 +48,20 @@ def test_foreign_origin_is_rejected():
 def test_allowed_origin_is_accepted():
     with make_client().websocket_connect("/ws", headers={"Origin": "http://localhost:5173"}) as ws:
         assert ws.receive_json()["type"] == "status"
+
+
+def test_client_messages_do_not_speed_up_heartbeats():
+    interval = 0.3
+    client = TestClient(create_app(Settings(_env_file=None, heartbeat_interval_seconds=interval)))
+    with client.websocket_connect("/ws") as ws:
+        ws.receive_json()  # status
+        started = time.monotonic()
+        for _ in range(5):
+            ws.send_text("ping")
+        heartbeat = ws.receive_json()
+        elapsed = time.monotonic() - started
+    assert heartbeat["type"] == "heartbeat"
+    assert elapsed >= interval * 0.8
 
 
 def test_seq_restarts_on_new_connection_and_asks_for_snapshot():

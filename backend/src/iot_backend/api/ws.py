@@ -40,15 +40,21 @@ async def events(websocket: WebSocket) -> None:
         )
     )
 
+    loop = asyncio.get_running_loop()
+    next_beat = loop.time() + interval
     try:
         while True:
-            # Waiting on the client doubles as the sleep between heartbeats and lets us
-            # notice a disconnect promptly. Anything the client sends is ignored.
-            try:
-                await asyncio.wait_for(websocket.receive_text(), timeout=interval)
-            except TimeoutError:
-                pass
+            # Heartbeats are paced by the clock alone. Waiting on the client lets us notice
+            # a disconnect promptly; whatever it sends is ignored and does not shorten the wait.
+            remaining = next_beat - loop.time()
+            if remaining > 0:
+                try:
+                    await asyncio.wait_for(websocket.receive_text(), timeout=remaining)
+                except TimeoutError:
+                    pass
+                continue
             seq += 1
             await websocket.send_json(make_envelope(seq, "heartbeat", {"interval_s": interval}))
+            next_beat = loop.time() + interval
     except WebSocketDisconnect:
         return
