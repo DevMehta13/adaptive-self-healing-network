@@ -75,13 +75,16 @@ Nodes cannot reliably distinguish an unplugged device from an unreachable radio 
 
 ## Packet and reliability requirements
 
-Proposed message families: HELLO, neighbor/topology report, route update, route-install acknowledgement, sensor data, delivery acknowledgement, probe request/response, and local-failover report. A controller heartbeat travels only over the gateway interface between the laptop and C. The radio frame is a compact binary format with a fixed 14-byte little-endian header (decision made in Phase 1, chosen over JSON for the 250-byte ESP-NOW limit and ESP8266 memory); the draft layout, decoding rules and reference examples are in [PROTOCOL.md](PROTOCOL.md) and are pending Dev's review. Only DATA and DELIVERY_ACK are specified so far; the other message families are reserved codes.
+Proposed message families: HELLO, neighbor/topology report, route update, route-install acknowledgement, sensor data, delivery acknowledgement, probe request/response, and local-failover report. A controller heartbeat travels only over the gateway interface between the laptop and C. The radio frame is a compact binary format with a fixed 14-byte little-endian header (decision made in Phase 1, chosen over JSON for the 250-byte ESP-NOW limit and ESP8266 memory); the draft layout, decoding rules and reference examples are in [PROTOCOL.md](PROTOCOL.md) and are pending Dev's review. Only DATA and DELIVERY_ACK are specified so far; the other message families are reserved codes. Forwarding, TTL, retry and duplicate rules (Phase 2) are in the same document and add no header fields.
 
 Protocol design must include a version, type, source/destination, restart/session identity, sequence number, hop limit, route generation where applicable, and a bounded payload. Do not assume a sequence number stays unique after a node restarts.
 
 - A final application acknowledgement means C accepted a reading. Radio send success alone does not prove end-to-end delivery.
 - Retries and queues are bounded so a disconnected network does not exhaust node memory.
-- Duplicate readings must not be counted twice. A duplicate caused by a lost acknowledgement should be acknowledged again when appropriate.
+- Duplicate readings must not be counted twice. A duplicate caused by a lost acknowledgement should be acknowledged again when appropriate. *Decision (Phase 2):* the destination keeps, per (source, session), the highest sequence number and a 64-bit sliding-window bitmap, compared with wrap-safe arithmetic, for at most 8 sessions; a duplicate is counted once and re-acknowledged, and a number older than the window is refused without an ACK.
+- *Decision (Phase 2):* retries are end to end from the origin, reuse the identical frame (same source, session and sequence), and stop after 3 transmissions. Relays never acknowledge or retry.
+- *Decision (Phase 2):* TTL is checked by forwarders only, before the route lookup: a frame arriving with TTL 1 or 0 is dropped, otherwise it is forwarded with TTL minus one. The destination does not check TTL.
+- *Decision (Phase 2):* the logical topology is enforced by each node's permitted-neighbor list (no sending to, and rejection of frames from, non-permitted neighbors), not by the absence of a link, so a misconfigured node cannot bypass a relay even though the radios can hear each other.
 - TTL is decremented on forwarding; exhausted packets are dropped and counted.
 - Clearly define what happens when no route exists: report the condition and use a documented bounded drop/buffer policy.
 
