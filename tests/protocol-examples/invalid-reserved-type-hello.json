@@ -1,0 +1,7 @@
+{
+  "name": "reserved-type-hello",
+  "description": "HELLO (0x10) is reserved and not accepted in Phase 1.",
+  "valid": false,
+  "hex": "011001020d0c0b0a070000000800",
+  "reject_reason": "reserved_type"
+}

@@ -1,0 +1,7 @@
+{
+  "name": "truncated-header",
+  "description": "Only 5 bytes: the header is incomplete.",
+  "valid": false,
+  "hex": "010101020d",
+  "reject_reason": "truncated"
+}

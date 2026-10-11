@@ -1,0 +1,7 @@
+{
+  "name": "unknown-type",
+  "description": "Type code 0x7f is not defined.",
+  "valid": false,
+  "hex": "017f01020d0c0b0a070000000800",
+  "reject_reason": "unknown_type"
+}
