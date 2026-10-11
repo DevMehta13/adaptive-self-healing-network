@@ -1,0 +1,7 @@
+{
+  "name": "one-way-link",
+  "description": "Only A->B fails, at 8 s. B stops hearing A but A still hears B, so the A-B link is reported one-way and is not usable. Neither node is lost.",
+  "seed": 42,
+  "duration_s": 20,
+  "actions": [{ "at_ms": 8000, "action": "link_down", "link": "A->B", "down": true }]
+}
