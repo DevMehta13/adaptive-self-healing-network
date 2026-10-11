@@ -1,20 +1,29 @@
-"""The Phase 1 scenario: virtual A sends readings to virtual B over two directional links.
+"""The Phase 2 scenario: four virtual nodes A, B, C, D that can all physically hear each other,
+restricted to the diamond A-B, B-C, A-D, D-C by each node's own permitted-neighbor list.
 
 `Simulation` is the public face. Its nodes, links and counters are private: anything
 that later needs to learn about the network (the controller) must do so through a
 gateway interface fed by events, never by reading these objects.
 """
 
+from collections import Counter
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
-from iot_backend.protocol import DEFAULT_TTL, NODE_IDS, PacketIdentity
+from iot_backend.protocol import DEFAULT_TTL, NODE_IDS, NODE_NAMES, PacketIdentity
 from iot_backend.simulator.engine import Engine
 from iot_backend.simulator.link import Link, LinkConfig
-from iot_backend.simulator.nodes import ReceiverNode, SourceNode
-from iot_backend.simulator.trace import FRAME_DROPPED_BY_LINK, Trace
+from iot_backend.simulator.nodes import Node, NodeSettings
+from iot_backend.simulator.trace import FRAME_DROPPED, Trace
 
-LINK_KEYS = (("A", "B"), ("B", "A"))
+NODE_LETTERS = tuple(sorted(NODE_IDS))  # ("A", "B", "C", "D")
+LINK_KEYS = tuple((s, d) for s in NODE_LETTERS for d in NODE_LETTERS if s != d)
+
+# The classroom topology. Physically every board hears every other; this is the *logical* rule.
+DIAMOND = {"A": {"B", "D"}, "B": {"A", "C"}, "C": {"B", "D"}, "D": {"A", "C"}}
+# Default manual routes: the normal path goes through B in both directions. Direct neighbors
+# are always reachable directly (added automatically).
+DEFAULT_ROUTES = {"A": {"C": "B"}, "C": {"A": "B"}}
 
 
 @dataclass
@@ -22,67 +31,113 @@ class ScenarioConfig:
     seed: int = 0
     reading_interval_ms: int = 2000
     ack_timeout_ms: int = 1000
+    max_attempts: int = 3
     ttl: int = DEFAULT_TTL
+    queue_capacity: int = 16
+    service_ms: int = 5
     trace_max_events: int = 100_000
-    # Keyed by ("A", "B") for A->B and ("B", "A") for B->A. Missing keys use defaults.
+    reading_src: str = "A"
+    reading_dst: str = "C"
+    # Permitted neighbors per node (default: the diamond). Override to model a misconfiguration.
+    permitted: dict[str, set[str]] = field(
+        default_factory=lambda: {k: set(v) for k, v in DIAMOND.items()}
+    )
+    # Extra or overriding routes: node -> {destination: next hop}.
+    routes: dict[str, dict[str, str]] = field(
+        default_factory=lambda: {k: dict(v) for k, v in DEFAULT_ROUTES.items()}
+    )
+    # Keyed by ("A", "B") for the A->B direction. Missing keys use defaults.
     links: dict[tuple[str, str], LinkConfig] = field(default_factory=dict)
+    # Testing aid: first sequence number after boot, per node (e.g. near the 2**32 wrap).
+    initial_seq: dict[str, int] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
 class Summary:
-    readings_created: int  # readings A created
-    frames_sent: int  # frames A transmitted (equals readings until retries exist)
-    delivered: int  # B accepted the reading
-    acknowledged: int  # A received the ACK
-    unacknowledged: int  # A gave up waiting
-    unresolved: int  # still waiting at the end, or forgotten in a restart
-    frames_dropped_by_link: int
-    frames_rejected: int
-    frames_dropped_while_stopped: int
+    readings_created: int  # readings the source made
+    attempts: int  # DATA transmissions attempted for them (first tries plus retries)
+    frames_sent: int  # every frame put on the air by any node (created or forwarded)
+    forwarded: int  # of those, frames relayed for someone else
+    delivered_unique: int  # readings accepted at the destination, each counted once
+    duplicates: int  # repeat copies received (and re-acknowledged) at the destination
+    acknowledged: int  # readings whose ACK reached the source
+    lost: int  # readings the source gave up on after its last attempt
+    unresolved: int  # still waiting at the end, or forgotten when the source stopped
+    drops: dict[str, int]  # discarded or rejected frames by reason
 
 
 class Simulation:
     def __init__(self, config: ScenarioConfig | None = None) -> None:
         self.config = config or ScenarioConfig()
-        unknown = set(self.config.links) - set(LINK_KEYS)
-        if unknown:
-            raise ValueError(f"unknown links {sorted(unknown)}; Phase 1 has only A->B and B->A")
+        self._validate()
 
         self._engine = Engine()
         self.trace = Trace(self.config.trace_max_events)
-        self._nodes: dict[str, SourceNode | ReceiverNode] = {}
-        self._links: dict[tuple[int, int], Link] = {}
+        self._nodes: dict[str, Node] = {}
+        self._links: dict[tuple[str, str], Link] = {}
+        self._no_link_drops: Counter[str] = Counter()
 
-        seed = self.config.seed
-        a_id, b_id = NODE_IDS["A"], NODE_IDS["B"]
-        self._nodes["A"] = SourceNode(
-            a_id,
-            "A",
-            self._engine,
-            self.trace,
-            self._send,
-            seed,
-            dst=b_id,
+        settings = NodeSettings(
+            ttl=self.config.ttl,
+            queue_capacity=self.config.queue_capacity,
+            service_ms=self.config.service_ms,
             reading_interval_ms=self.config.reading_interval_ms,
             ack_timeout_ms=self.config.ack_timeout_ms,
-            ttl=self.config.ttl,
+            max_attempts=self.config.max_attempts,
         )
-        self._nodes["B"] = ReceiverNode(b_id, "B", self._engine, self.trace, self._send, seed)
+        for letter in NODE_LETTERS:
+            permitted = {NODE_IDS[n] for n in self.config.permitted.get(letter, set())}
+            routes = {NODE_IDS[n]: NODE_IDS[n] for n in DIAMOND[letter]}  # direct neighbors
+            for dst, hop in self.config.routes.get(letter, {}).items():
+                routes[NODE_IDS[dst]] = NODE_IDS[hop]
+            is_source = letter == self.config.reading_src
+            self._nodes[letter] = Node(
+                NODE_IDS[letter],
+                self._engine,
+                self.trace,
+                self._transmit,
+                self.config.seed,
+                permitted=permitted,
+                routes=routes,
+                settings=settings,
+                reading_dst=NODE_IDS[self.config.reading_dst] if is_source else None,
+                initial_seq=self.config.initial_seq.get(letter, 1),
+            )
 
+        # Physically, every board can reach every other.
         for src, dst in LINK_KEYS:
-            link = Link(
+            self._links[(src, dst)] = Link(
                 src,
                 dst,
                 self.config.links.get((src, dst), LinkConfig()),
-                seed,
+                self.config.seed,
                 self._engine,
                 self.trace,
                 deliver=self._make_delivery(self._nodes[dst], NODE_IDS[src]),
             )
-            self._links[(NODE_IDS[src], NODE_IDS[dst])] = link
 
-        self._nodes["A"].boot()
-        self._nodes["B"].boot()
+        for letter in NODE_LETTERS:
+            self._nodes[letter].boot()
+
+    def _validate(self) -> None:
+        letters = set(NODE_LETTERS)
+        unknown = set(self.config.links) - set(LINK_KEYS)
+        if unknown:
+            raise ValueError(f"unknown links {sorted(unknown)}")
+        for name in (self.config.reading_src, self.config.reading_dst):
+            if name not in letters:
+                raise ValueError(f"unknown node {name!r}")
+        if self.config.reading_src == self.config.reading_dst:
+            raise ValueError("reading source and destination must differ")
+        for table in (self.config.permitted, self.config.initial_seq):
+            if set(table) - letters:
+                raise ValueError(f"unknown nodes in {sorted(set(table) - letters)}")
+        for node, table in self.config.routes.items():
+            if node not in letters or set(table) - letters or set(table.values()) - letters:
+                raise ValueError(f"bad routing table for {node!r}")
+        for node, neighbors in self.config.permitted.items():
+            if set(neighbors) - letters:
+                raise ValueError(f"unknown neighbors for {node!r}")
 
     # ---- public API ----
 
@@ -94,20 +149,69 @@ class Simulation:
         """Advance the virtual clock by `duration_ms`, processing everything due."""
         self._engine.run_until(self._engine.now_ms + duration_ms)
 
-    def stop_node(self, name: str, at_ms: int) -> None:
-        """Power a node off at an absolute simulated time."""
-        node = self._nodes[name]
-        self._engine.schedule(max(0, at_ms - self._engine.now_ms), node.stop)
+    def _at(self, at_ms: int | None, action: Callable[[], None]) -> None:
+        if at_ms is None:
+            action()
+        else:
+            self._engine.schedule(max(0, at_ms - self._engine.now_ms), action)
 
-    def start_node(self, name: str, at_ms: int) -> None:
+    def stop_node(self, name: str, at_ms: int | None = None) -> None:
+        """Power a node off (now, or at an absolute simulated time)."""
+        self._at(at_ms, self._nodes[name].stop)
+
+    def start_node(self, name: str, at_ms: int | None = None) -> None:
         """Power a stopped node on: it boots with a new session and empty RAM."""
-        node = self._nodes[name]
-        self._engine.schedule(max(0, at_ms - self._engine.now_ms), node.boot)
+        self._at(at_ms, self._nodes[name].boot)
 
-    def restart_node(self, name: str, at_ms: int) -> None:
-        """Convenience: stop and immediately start a node at the same simulated time."""
+    def restart_node(self, name: str, at_ms: int | None = None) -> None:
+        """Convenience: stop and immediately start a node."""
         self.stop_node(name, at_ms)
         self.start_node(name, at_ms)
+
+    def set_route(
+        self, node: str, dst: str, next_hop: str | None, at_ms: int | None = None
+    ) -> None:
+        """Manually set (or, with next_hop=None, remove) one routing-table entry."""
+        target = self._nodes[node]
+        dst_id = NODE_IDS[dst]
+        hop_id = NODE_IDS[next_hop] if next_hop is not None else None
+
+        def apply() -> None:
+            if hop_id is None:
+                target.routes.pop(dst_id, None)
+            else:
+                target.routes[dst_id] = hop_id
+
+        self._at(at_ms, apply)
+
+    def set_permitted(self, node: str, neighbors: set[str], at_ms: int | None = None) -> None:
+        """Replace a node's permitted-neighbor list (to model a misconfiguration)."""
+        target = self._nodes[node]
+        ids = {NODE_IDS[n] for n in neighbors}
+        self._at(at_ms, lambda: setattr(target, "permitted", ids))
+
+    def set_link_down(self, src: str, dst: str, down: bool, at_ms: int | None = None) -> None:
+        """Fail or restore one direction of a link. The reverse direction is unaffected."""
+        link = self._links[(src, dst)]
+        self._at(at_ms, lambda: link.reconfigure(down=down))
+
+    def configure_link(
+        self,
+        src: str,
+        dst: str,
+        at_ms: int | None = None,
+        delay_ms: int | None = None,
+        loss: float | None = None,
+    ) -> None:
+        """Change a link's delay and/or loss probability from the given time on."""
+        link = self._links[(src, dst)]
+        changes: dict[str, object] = {}
+        if delay_ms is not None:
+            changes["delay_ms"] = delay_ms
+        if loss is not None:
+            changes["loss"] = loss
+        replace(link.config, **changes)  # validate now, so a bad value fails immediately
+        self._at(at_ms, lambda: link.reconfigure(**changes))
 
     def inject_frame(self, to_name: str, data: bytes, at_ms: int, from_name: str) -> None:
         """Make raw bytes appear at a node's radio at an absolute time (e.g. a corrupted frame)."""
@@ -118,38 +222,44 @@ class Simulation:
         )
 
     def summary(self) -> Summary:
-        source, receiver = self._nodes["A"], self._nodes["B"]
-        sent = source.counters.created
-        done = source.counters.acknowledged + source.counters.unacknowledged
+        """Totals taken from node and link counters (not from the bounded trace)."""
+        counters = [node.counters for node in self._nodes.values()]
+        drops: Counter[str] = Counter(self._no_link_drops)
+        for node in self._nodes.values():
+            drops.update(node.drops)
+        for link in self._links.values():
+            drops.update(link.dropped)
+        created = sum(c.created for c in counters)
+        acknowledged = sum(c.acknowledged for c in counters)
+        lost = sum(c.lost for c in counters)
         return Summary(
-            readings_created=source.counters.created,
-            frames_sent=sent,
-            delivered=receiver.counters.delivered,
-            acknowledged=source.counters.acknowledged,
-            unacknowledged=source.counters.unacknowledged,
-            unresolved=sent - done,
-            frames_dropped_by_link=sum(link.dropped for link in self._links.values()),
-            frames_rejected=source.counters.rejected + receiver.counters.rejected,
-            frames_dropped_while_stopped=(
-                source.counters.dropped_while_stopped + receiver.counters.dropped_while_stopped
-            ),
+            readings_created=created,
+            attempts=sum(c.attempts for c in counters),
+            frames_sent=sum(c.sent for c in counters),
+            forwarded=sum(c.forwarded for c in counters),
+            delivered_unique=sum(c.delivered_unique for c in counters),
+            duplicates=sum(c.duplicates for c in counters),
+            acknowledged=acknowledged,
+            lost=lost,
+            unresolved=created - acknowledged - lost,
+            drops=dict(sorted(drops.items())),
         )
 
     # ---- internals ----
 
     @staticmethod
-    def _make_delivery(node: SourceNode | ReceiverNode, from_id: int) -> Callable[[bytes], None]:
+    def _make_delivery(node: Node, from_id: int) -> Callable[[bytes], None]:
         return lambda data: node.receive(data, from_id)
 
-    def _send(self, from_id: int, to_id: int, data: bytes, identity: PacketIdentity) -> None:
-        link = self._links.get((from_id, to_id))
-        if link is None:  # no permitted link between these nodes
-            from iot_backend.protocol import NODE_NAMES
-
+    def _transmit(self, from_id: int, to_id: int, data: bytes, identity: PacketIdentity) -> None:
+        src, dst = NODE_NAMES.get(from_id), NODE_NAMES.get(to_id)
+        link = self._links.get((src, dst)) if src and dst else None
+        if link is None:  # no such board
+            self._no_link_drops["no_link"] += 1
             self.trace.record(
                 self._engine.now_ms,
-                NODE_NAMES[from_id],
-                FRAME_DROPPED_BY_LINK,
+                src or str(from_id),
+                FRAME_DROPPED,
                 identity,
                 reason="no_link",
             )

@@ -1,7 +1,7 @@
 """Structured event trace: the simulator's observable record of what happened."""
 
 from collections import deque
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -9,16 +9,19 @@ from iot_backend.protocol import NODE_NAMES, PacketIdentity
 
 # Event names
 NODE_BOOTED = "node_booted"
-FRAME_SENT = "frame_sent"
-FRAME_DROPPED_BY_LINK = "frame_dropped_by_link"
-FRAME_RECEIVED = "frame_received"
-FRAME_REJECTED = "frame_rejected"
-FRAME_DROPPED = "frame_dropped"
 NODE_STOPPED = "node_stopped"
-READING_DELIVERED = "reading_delivered"
+FRAME_SENT = "frame_sent"  # a node transmitted a frame it created
+FRAME_FORWARDED = "frame_forwarded"  # a relay transmitted a frame it received for someone else
+FRAME_DROPPED_BY_LINK = "frame_dropped_by_link"
+FRAME_RECEIVED = "frame_received"  # intact bytes reached a node's radio
+FRAME_REJECTED = "frame_rejected"  # a node refused a received frame
+FRAME_DROPPED = "frame_dropped"  # a node discarded a frame (no route, TTL, queue, stopped)
+READING_DELIVERED = "reading_delivered"  # first receipt at the destination
+DUPLICATE_RECEIVED = "duplicate_received"
+READING_LOST = "reading_lost"  # the source gave up after its last attempt
 ACK_RECEIVED = "ack_received"
 ACK_IGNORED = "ack_ignored"
-ACK_TIMEOUT = "ack_timeout"
+ACK_TIMEOUT = "ack_timeout"  # one attempt went unacknowledged
 
 
 @dataclass(frozen=True)
@@ -55,6 +58,30 @@ class Trace:
 
     def of_type(self, event: str) -> list[TraceEvent]:
         return [e for e in self._events if e.event == event]
+
+
+def observed_paths(events: Iterable[TraceEvent], identity: PacketIdentity) -> list[list[str]]:
+    """Reconstruct where a packet actually went, from received-frame evidence only.
+
+    Returns one path per transmission attempt, e.g. [["A", "B", "C"]]. A path ends where the
+    frame was last received: a frame that was lost on a link, or reached a stopped node, shows
+    as a path that stops early. This reads what happened; it never consults routing tables.
+    """
+    paths: list[list[str]] = []
+    for event in events:
+        if event.identity != identity:
+            continue
+        if event.event == FRAME_SENT:
+            paths.append([event.node])
+        elif event.event == FRAME_RECEIVED:
+            sender = event.info["sender"]
+            for path in reversed(paths):
+                if path[-1] == sender:
+                    path.append(event.node)
+                    break
+            else:
+                paths.append([sender, event.node])
+    return paths
 
 
 def format_identity(identity: PacketIdentity | None) -> str:

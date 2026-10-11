@@ -1,8 +1,9 @@
 """A one-directional simulated wireless link with delay, random loss and scripted drops."""
 
 import random
+from collections import Counter
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from iot_backend.protocol import PacketIdentity
 from iot_backend.simulator.engine import Engine
@@ -14,6 +15,7 @@ class LinkConfig:
     delay_ms: int = 20
     loss: float = 0.0  # probability 0..1 that a frame is lost
     drop_frames: frozenset[int] = frozenset()  # 1-based ordinals of frames to drop
+    down: bool = False  # a down link loses every frame
 
     def __post_init__(self) -> None:
         if self.delay_ms < 0:
@@ -25,7 +27,11 @@ class LinkConfig:
 
 
 class Link:
-    """Carries bytes from one node to another. Frames are counted as they are offered."""
+    """Carries bytes from one node to another. Frames are counted as they are offered.
+
+    Physically every pair of boards can hear each other, so the scenario creates a link for
+    every ordered pair. Which neighbors a node *may* use is the nodes' own rule, not the link's.
+    """
 
     def __init__(
         self,
@@ -39,7 +45,7 @@ class Link:
     ) -> None:
         self.name = f"{src}->{dst}"
         self._src = src
-        self._config = config
+        self.config = config
         self._engine = engine
         self._trace = trace
         self._deliver = deliver
@@ -47,17 +53,23 @@ class Link:
         # the random choices made on another.
         self._rng = random.Random(f"{seed}:link:{self.name}")
         self._offered = 0
-        self.dropped = 0  # frames this link has lost (scripted or random)
+        self.dropped: Counter[str] = Counter()  # drops by reason
+
+    def reconfigure(self, **changes: object) -> None:
+        """Change delay, loss, drop list or up/down state from now on."""
+        self.config = replace(self.config, **changes)  # type: ignore[arg-type]
 
     def transmit(self, data: bytes, identity: PacketIdentity | None) -> None:
         self._offered += 1
         reason = None
-        if self._offered in self._config.drop_frames:
+        if self.config.down:
+            reason = "link_down"
+        elif self._offered in self.config.drop_frames:
             reason = "scripted"
-        elif self._config.loss > 0 and self._rng.random() < self._config.loss:
+        elif self.config.loss > 0 and self._rng.random() < self.config.loss:
             reason = "random"
         if reason is not None:
-            self.dropped += 1
+            self.dropped[reason] += 1
             self._trace.record(
                 self._engine.now_ms,
                 self._src,
@@ -68,4 +80,4 @@ class Link:
                 reason=reason,
             )
             return
-        self._engine.schedule(self._config.delay_ms, lambda: self._deliver(data))
+        self._engine.schedule(self.config.delay_ms, lambda: self._deliver(data))
