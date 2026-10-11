@@ -11,6 +11,8 @@ Desktop.ini
 venv/
 __pycache__/
 *.py[cod]
+.pytest_cache/
+.ruff_cache/
 
 # Build and dependency output (when components are introduced)
 .pio/
