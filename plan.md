@@ -2,6 +2,8 @@
 
 **Approved plan. Implementation has not started.** The owner authorized saving this plan only and will explicitly say when to begin. All phases below are pending. This file is the canonical phased plan; do not create a separate roadmap unless requested.
 
+**Amendment, 2026-10-11:** Both owners approved two resilience additions: controller-computed backup next hops with local fast-failover, and fail-static forwarding with bounded buffering at C while the controller is unreachable. They are folded into Phases 4, 5, 6, 7 and 9, the interfaces, and the test scenarios below. This amendment changes the plan only; it does not authorize implementation.
+
 ## 1. What we will finish
 
 Build a working simulation first, connect four real ESP8266 NodeMCU boards next, then add the sensor, adaptive routing, and presentation polish.
@@ -10,6 +12,7 @@ The finished project will demonstrate:
 
 - Sensor data travelling through A → B → C.
 - Automatic recovery through A → D → C after B fails.
+- Local failover to a pre-installed backup relay without waiting for the laptop, and bounded buffering at C while the controller is unreachable.
 - A dashboard showing actual delivery, routes, failures, and recovery measurements.
 - A comparison between routes selected for low delay and high reliability.
 - The same controller and dashboard working with either simulated nodes or real hardware.
@@ -116,11 +119,13 @@ These are initial experiment settings, not hardware performance guarantees.
 
 Install relay entries before enabling the new route at A. Carry route updates through the independent management path so B's failure does not prevent instructions reaching A through D.
 
+Each route version also carries a **backup next hop** computed by the controller (for A: primary B, backup D). The controller installs and confirms the backup relay's forwarding entry before the route version becomes active, so the backup can be used without further instructions. When a node's primary neighbor goes stale (HELLO timeout), the node switches to its backup locally and reports the switch through management flooding. Nodes never calculate routes. A backup must not lead back through the node using it, and a node does not switch back locally when its primary returns; the controller decides that by policy.
+
 Use measured probe RTT as the initial route cost. For repeatable simulation, configure lower link delays through B and label them as simulated settings.
 
-**Complete when:** A → B → C automatically changes to A → D → C without manually selecting D. Removing both relays produces “No available route.”
+**Complete when:** A → B → C automatically changes to A → D → C without manually selecting D. Removing both relays produces “No available route.” When B stops, A moves to D through its pre-installed backup before the controller's replacement route arrives, and the controller then confirms or replaces that choice.
 
-**Learn:** How the controller chooses a route and safely communicates that choice.
+**Learn:** How the controller chooses a route and safely communicates that choice, and why reacting locally with a precomputed backup is faster than waiting for the controller.
 
 ### Phase 5 — Usable simulation dashboard
 
@@ -131,10 +136,12 @@ Use measured probe RTT as the initial route cost. For repeatable simulation, con
 - Sensor readings, delivered/pending/lost counts, RTT, and event history.
 - Controls to stop/restart virtual nodes and change simulated links.
 - A recovery timeline showing detection, route installation, and restored delivery.
+- Recovery events labeled as either local failover or controller reroute.
+- A simulated gateway-disconnect control. The controller sends C a heartbeat; after 3 seconds without one, C treats the controller as unreachable. Nodes keep their last confirmed routes and backups (fail-static), and C keeps readings and node events in a bounded ring buffer (initial default: 50 entries). When full, the oldest entry is dropped and counted. On reconnection, C replays the buffer; the controller counts each reading once by source, session and sequence, and the dashboard labels replayed readings as delayed.
 
 Animations must come from packet events. Clicking “Stop B” changes the simulated environment; it must not directly tell the controller to reroute.
 
-**Complete when:** Either contributor can perform the complete simulated unplug-and-recover demonstration from the browser.
+**Complete when:** Either contributor can perform the complete simulated unplug-and-recover demonstration from the browser, including B failing while the gateway is disconnected, followed by buffered replay on reconnection.
 
 **This is the hardware transition checkpoint.** The software works end to end; visual polish can wait.
 
@@ -148,17 +155,19 @@ Compare encoded firmware packets against the reference examples from Phase 1. Ke
 
 **Complete when:** Two real boards exchange verified packets and C's gateway connection works with the laptop.
 
-Record macOS and Windows checks separately. Verify peer RSSI feasibility here; show unavailable if reliable collection is unsupported.
+Record macOS and Windows checks separately. Verify peer RSSI feasibility here; show unavailable if reliable collection is unsupported. Measure free heap to size C's buffer and the node tables.
 
 ### Phase 7 — Four-board self-healing network
 
-**Build:** Port the tested node behavior to all four boards: forwarding, discovery, management traffic, route installation, retries, and telemetry.
+**Build:** Port the tested node behavior to all four boards: forwarding, discovery, management traffic, route installation, backup next hops and local failover, fail-static behavior with C's buffer, retries, and telemetry.
 
 Connect C through USB and switch the controller's gateway connection from simulation to serial. Keep the controller and dashboard behavior shared.
 
 **Complete when:** Physically unplugging the active relay restores delivery through the alternative relay. Packet evidence confirms both paths, and no prohibited direct link is used.
 
 Repeat the test at least 10 times and record delivery gaps, loss, and restoration results. Exact recovery targets will follow these measurements.
+
+Also stop the controller software, then unplug B. Do not unplug C's USB cable for this test, because it also powers C. Confirm local failover to D, bounded buffering at C, and replay without double counting once the controller restarts. Record local failover time separately from controller-driven recovery.
 
 **Learn:** Which assumptions survived real radio timing and which required adjustment.
 
@@ -181,7 +190,7 @@ The exact sensor and wiring are selected at purchase time; they do not change th
 
 Use a rolling window of 20 completed probes for reliability and EWMA smoothing with an initial factor of 0.2 for RTT. Translate reliability into non-negative costs so Dijkstra remains usable.
 
-Require a candidate route to remain better for three evaluations before switching. A confirmed broken route bypasses that waiting period.
+Require a candidate route to remain better for three evaluations before switching. A confirmed broken route bypasses that waiting period. Local failover is not delayed by this rule; the controller then evaluates whether the backup should remain in use.
 
 **Complete when:** A repeatable scenario with a fast-but-lossy path and a slower reliable path produces different route choices. Compare delivery rate, RTT, and route-change count under the same scenario.
 
@@ -202,7 +211,7 @@ AI explanations, cloud hosting, and larger physical networks remain optional fut
 Freeze these boundaries before building dependent components:
 
 - **Node protocol:** Versioned, size-bounded messages with shared encoding examples for Python and C++.
-- **Gateway interface:** Send management commands and receive node events through either simulation or USB serial.
+- **Gateway interface:** Send management commands and receive node events through either simulation or USB serial. Include a periodic controller heartbeat so C can detect an unreachable controller and start buffering.
 - **Serial interface:** Versioned newline-delimited JSON between C and the laptop; keep diagnostic output separate from structured messages.
 - **Dashboard interface:** HTTP for snapshots and commands; WebSockets for ordered live events. Reconnecting fetches a fresh snapshot.
 - **Experiment record:** Run identifier, simulation/hardware mode, configuration, packet identities, events, and metric definitions.
@@ -221,7 +230,11 @@ Required test scenarios across the phases:
 | One direction of a link fails | Link is not falsely treated as healthy both ways |
 | Route update is lost or delayed | Unconfirmed route is not presented as installed |
 | Dashboard or USB disconnects | Stale/disconnected state appears honestly |
-| C or controller fails | Limitation is reported; recovery is not falsely claimed |
+| Active relay fails while the controller is unreachable | A switches locally to its confirmed backup; the switch is reported when the controller returns |
+| Controller or gateway connection is lost | Nodes keep their last confirmed routes; C buffers within its bound and counts overflow |
+| Buffered readings are replayed | Each reading is counted once and labeled delayed |
+| Primary relay returns after local failover | No local switch-back; the controller decides by policy |
+| C fails | Limitation is reported; recovery is not falsely claimed |
 | Repeated identical simulation | Reproducible event sequence and results |
 
 Use automated macOS/Windows checks for software and real manual checks for USB, radio, and sensor behavior.
@@ -233,6 +246,8 @@ Use automated macOS/Windows checks for software and real manual checks for USB, 
 - Simulation validates protocol behavior, not radio range, RSSI, power quality, or hardware recovery time.
 - A short delivery interruption and some loss are acceptable; there is no zero-loss promise.
 - Either relay may be preferred under real measurements. A scripted B-first hardware demo must label any configured cost or injected delay.
+- C is powered through its USB connection to the laptop, so unplugging that cable removes C entirely. C's buffer is RAM-only and does not survive power loss.
+- C (the only gateway) and A (the only source) remain single points of failure. Dual gateways, a Wi-Fi backup link to the laptop, a standby controller, and distributed routing are possible future work, not planned phases.
 - Before splitting development between contributors, agree on the interface involved. Each contribution includes relevant tests, a simple explanation, and an updated status handoff.
 - At the owner's request, keep the approved phases here in `plan.md` rather than creating a separate `docs/ROADMAP.md`.
 - Plan approval and documentation publication do not authorize implementation. Wait for the owner's explicit instruction to start.

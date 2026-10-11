@@ -41,7 +41,7 @@ Read the relevant code and check the working tree before making changes. Treat t
 - Handle duplicates, sequence-number reuse after restart, stale topology, unreachable destinations, and bounded retries explicitly when implementing those behaviors.
 - RTT is not one-way delay; clocks on different boards are not assumed synchronized.
 - Verify ESP8266-specific APIs. Never fabricate peer RSSI or substitute access-point RSSI.
-- C/controller failures and complete network partitions are not covered by the initial healing guarantee.
+- C failure and complete network partitions are not covered by the initial healing guarantee. During controller loss, nodes may use only confirmed, controller-installed backup next hops; they must not calculate routes themselves.
 - Do not promise zero packet loss, a fixed recovery time, or a route through B regardless of policy.
 
 ## Keep context synchronized

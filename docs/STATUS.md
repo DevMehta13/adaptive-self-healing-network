@@ -1,6 +1,6 @@
 # Current status
 
-Last updated: 2026-09-07
+Last updated: 2026-10-11
 
 ## Project state
 
@@ -14,10 +14,11 @@ Last updated: 2026-09-07
 - Recorded the budget preference and macOS/Windows collaboration requirement.
 - Added scope, architecture, contribution guidance, and common coding-agent instructions.
 - Reviewed and approved the software-first phased plan in `plan.md`: working simulation through Phase 5, hardware integration next, then sensor, adaptive routing, and final polish.
+- 2026-10-11: Both owners approved two resilience additions after reviewing single points of failure: controller-computed backup next hops with local fast-failover, and fail-static forwarding with bounded buffering at C while the controller is unreachable. Updated `plan.md` (amendment note, Phases 4–7 and 9, gateway interface, test scenarios, assumptions), `docs/ARCHITECTURE.md` (new *Local failover and controller loss* section, workflow, measurements, boundaries), `README.md`, and `AGENTS.md`.
 
 ## Current authorization and next step
 
-The owner approved the phased plan and requested that it be saved in `plan.md`, with no implementation. All phases, including Phase 0, remain pending. No separate roadmap file is required.
+The owner approved the phased plan and requested that it be saved in `plan.md`, with no implementation. All phases, including Phase 0, remain pending. No separate roadmap file is required. The 2026-10-11 resilience amendment is likewise a documentation change only.
 
 Wait for the owner's explicit instruction to start. The first planned implementation task is Phase 0, the runnable foundation. Do not scaffold applications, install project dependencies, or purchase hardware merely because the plan is approved.
 
@@ -34,10 +35,14 @@ Wait for the owner's explicit instruction to start. The first planned implementa
 | Route installation | Versioned updates with relay installation before activation at A are planned; failure handling still requires specification and tests |
 | Demonstration route policy | Need repeatable selection of B without misrepresenting measured costs |
 | Timers and metrics | Initial HELLO, timeout, traffic, TTL, retry, and adaptive-policy settings are recorded in the plan; hardware validation and remaining evaluation details are pending |
+| Local failover trigger | Initial trigger is the primary neighbor's HELLO timeout; whether missed delivery acknowledgements should also trigger it needs simulation results |
+| C buffer and controller heartbeat | The 50-entry buffer and 3-second controller timeout are proposals; buffer size must fit measured ESP8266 free heap |
+| Remaining single points of failure | C (only gateway) and A (only source) remain. Dual gateways, a Wi-Fi backup link, a standby controller, and distributed routing are future work |
 | Application libraries | Stack is selected in `plan.md`; dependency versions, installation, and validation await implementation |
 
 ## Verification record
 
+- 2026-10-11, Linux shell against the Windows checkout: after the resilience amendment, checked all Markdown files for valid local links, balanced code fences, consistent table columns, trailing whitespace, and LF line endings; `git diff --check` passed. Documentation checks only; no behavior was implemented or tested.
 - Approved-plan handoff, macOS: verified all 11 phases (0–10), local Markdown links, code fences, and diff whitespace. Confirmed that no application scaffolding or separate roadmap was created.
 - 2026-09-07, macOS: checked all seven Markdown files for valid local links, balanced code fences, and trailing whitespace; checks passed. Confirmed that no deferred roadmap file exists.
 - Reviewed the documents for consistent ESP8266 hardware selection, budget wording, implementation status, and honest measurement/recovery limits.

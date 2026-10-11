@@ -43,6 +43,8 @@ The lines between boards represent wireless links. Each board also needs electri
 - HELLO/heartbeat messages to discover permitted neighbors and detect missing links.
 - A laptop topology graph and Dijkstra route calculation.
 - Automatic rerouting when an alternative path exists, and detection when a node returns.
+- Local failover: the controller pre-installs a backup next hop, so a node can move away from a failed relay without waiting for the laptop.
+- Fail-static forwarding while the laptop is unreachable, with bounded buffering of readings at C and replay on reconnection.
 - Packet identifiers, bounded retries, delivery acknowledgements, duplicate detection, and TTL to limit forwarding.
 - A local dashboard showing node state, links, intended and observed routes, readings, and failure/recovery events.
 - Delivery counts, packet loss, RTT, and recovery measurements; RSSI where reliable ESP8266 measurement is validated.
@@ -63,7 +65,7 @@ These are intended outcomes, not completed functionality. Timing values and perf
 
 The classroom topology deliberately permits only A–B, B–C, A–D, and D–C, even if all radios can hear each other. This is a **configured logical topology**, not proof that A and C are physically out of radio range. Forwarding and the unplugged-node failure still occur on real hardware.
 
-Healing requires a surviving path. Failure of C, the laptop, or both relay paths is outside the first version's recovery guarantee. A short interruption and some packet loss are possible; zero-loss delivery is not promised.
+Healing requires a surviving path. Failure of C or of both relay paths is outside the first version's recovery guarantee. If the laptop is unreachable, nodes keep forwarding, can switch to a pre-installed backup relay, and C buffers a bounded number of readings, but no new routes are calculated until the laptop returns. A short interruption and some packet loss are possible; zero-loss delivery is not promised.
 
 ## Start here
 
