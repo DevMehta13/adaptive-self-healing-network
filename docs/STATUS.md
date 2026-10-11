@@ -24,7 +24,6 @@ The two sides meet only through written contracts. The first is [docs/DASHBOARD_
 - Added scope, architecture, contribution guidance, and common coding-agent instructions.
 - Reviewed and approved the software-first phased plan in `plan.md`: working simulation through Phase 5, hardware integration next, then sensor, adaptive routing, and final polish.
 - 2026-10-11: Both owners approved two resilience additions after reviewing single points of failure: controller-computed backup next hops with local fast-failover, and fail-static forwarding with bounded buffering at C while the controller is unreachable. Updated `plan.md` (amendment note, Phases 4–7 and 9, gateway interface, test scenarios, assumptions), `docs/ARCHITECTURE.md` (new *Local failover and controller loss* section, workflow, measurements, boundaries), `README.md`, and `AGENTS.md`.
-
 - 2026-10-11: **Phase 0, backend half** (authorized by Harshal, branch `harshal-dev`). Added `backend/` (FastAPI, uv with a committed `uv.lock`, env-var configuration with `.env.example`), `GET /health`, `GET /api/snapshot`, WebSocket `/ws` with a versioned envelope (status event on connect, then heartbeats), the draft contract `docs/DASHBOARD_API.md`, pytest and ruff checks, a GitHub Actions workflow for Windows and macOS, and `backend/README.md`.
 
 ## Current authorization and next step
