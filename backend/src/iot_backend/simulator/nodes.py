@@ -27,10 +27,12 @@ from iot_backend.simulator.trace import (
     ACK_IGNORED,
     ACK_RECEIVED,
     ACK_TIMEOUT,
+    FRAME_DROPPED,
     FRAME_RECEIVED,
     FRAME_REJECTED,
     FRAME_SENT,
     NODE_BOOTED,
+    NODE_STOPPED,
     READING_DELIVERED,
     Trace,
 )
@@ -48,6 +50,7 @@ class NodeCounters:
     acknowledged: int = 0
     unacknowledged: int = 0
     rejected: int = 0
+    dropped_while_stopped: int = 0
 
 
 class _Node:
@@ -69,6 +72,7 @@ class _Node:
         self._epoch = 0  # incremented per boot so timers from an old boot do nothing
         self._session = 0
         self._next_seq = 1
+        self.running = False
         self.counters = NodeCounters()
 
     def boot(self) -> None:
@@ -79,6 +83,7 @@ class _Node:
             if session != previous:
                 break
         self._epoch += 1
+        self.running = True
         self._session = session
         self._next_seq = 1
         self.counters.boots += 1
@@ -92,8 +97,20 @@ class _Node:
             boot=self.counters.boots,
         )
 
+    def stop(self) -> None:
+        """Power off: incoming frames are ignored and every pending timer becomes a no-op."""
+        if not self.running:
+            return
+        self._epoch += 1  # invalidates timers scheduled before the stop
+        self.running = False
+        self._on_stop()
+        self._trace.record(self._engine.now_ms, self.name, NODE_STOPPED)
+
     def _on_boot(self) -> None:
         """Hook: reset per-boot state."""
+
+    def _on_stop(self) -> None:
+        """Hook: forget RAM state."""
 
     def _new_frame(self, dst: int, ttl: int, payload: DataPayload | DeliveryAckPayload) -> Frame:
         frame = Frame(self.id, dst, self._session, self._next_seq, ttl, payload)
@@ -122,6 +139,10 @@ class _Node:
         MAC). It is not necessarily the frame's origin (`src`).
         """
         now = self._engine.now_ms
+        if not self.running:
+            self.counters.dropped_while_stopped += 1
+            self._trace.record(now, self.name, FRAME_DROPPED, None, reason="node_stopped")
+            return
         self._trace.record(
             now,
             self.name,
@@ -176,16 +197,17 @@ class SourceNode(_Node):
         self._max_pending = max_pending
         # identity -> time sent. Insertion-ordered and capped by max_pending.
         self._pending: dict[PacketIdentity, int] = {}
-        self.last_discarded_pending = 0
 
     @property
     def pending_count(self) -> int:
         return len(self._pending)
 
-    def _on_boot(self) -> None:
-        # RAM is lost on restart: readings still waiting for an ACK are forgotten.
-        self.last_discarded_pending = len(self._pending)
+    def _on_stop(self) -> None:
+        # RAM is lost: readings still waiting for an ACK are forgotten, neither acknowledged
+        # nor timed out. The summary reports them as unresolved.
         self._pending.clear()
+
+    def _on_boot(self) -> None:
         epoch = self._epoch
         self._engine.schedule(self._interval_ms, lambda: self._create_reading(epoch))
 

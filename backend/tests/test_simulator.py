@@ -10,6 +10,7 @@ from iot_backend.simulator.trace import (
     ACK_IGNORED,
     ACK_RECEIVED,
     ACK_TIMEOUT,
+    FRAME_DROPPED,
     FRAME_DROPPED_BY_LINK,
     FRAME_RECEIVED,
     FRAME_REJECTED,
@@ -265,3 +266,31 @@ def test_summary_counts_survive_a_trace_that_overflowed():
     assert sim.trace.dropped > 0
     s = sim.summary()
     assert (s.readings_created, s.frames_sent, s.acknowledged) == (10, 10, 10)
+
+
+def test_stopped_node_ignores_frames_and_forgets_pending_readings():
+    sim = make_sim()
+    sim.stop_node("B", at_ms=3_000)  # reading #1 was acknowledged at 2.04 s
+    sim.run(9_000)
+    dropped = sim.trace.of_type(FRAME_DROPPED)
+    assert {e.node for e in dropped} == {"B"}
+    assert {e.info["reason"] for e in dropped} == {"node_stopped"}
+    s = sim.summary()
+    assert s.acknowledged == 1  # only the first reading, before B stopped
+    assert s.frames_dropped_while_stopped == 3  # readings at 4, 6, 8 s
+    assert s.unacknowledged == 3
+
+
+def test_stopping_a_forgets_its_pending_timers_and_start_boots_a_new_session():
+    sim = make_sim(b_to_a=LinkConfig(delay_ms=900))  # ACKs arrive at 2.92 s
+    sim.stop_node("A", at_ms=2_500)  # reading #1 pending; its timeout would fire at 3.0 s
+    sim.start_node("A", at_ms=6_500)
+    sim.run(10_000)
+    assert sim.trace.of_type(ACK_TIMEOUT) == []  # the old timer did nothing
+    boots = [e.info["session"] for e in sim.trace.of_type(NODE_BOOTED) if e.node == "A"]
+    assert len(boots) == 2 and boots[0] != boots[1]
+    # the first reading of the new session is created one interval after the start
+    new_session = int(boots[1], 16)
+    first_new = [r for r in sent_readings(sim) if r.session == new_session][0]
+    assert first_new.seq == 1
+    assert sim.summary().unresolved >= 1  # reading #1 was forgotten, not "resolved"

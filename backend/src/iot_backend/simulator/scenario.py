@@ -38,6 +38,7 @@ class Summary:
     unresolved: int  # still waiting at the end, or forgotten in a restart
     frames_dropped_by_link: int
     frames_rejected: int
+    frames_dropped_while_stopped: int
 
 
 class Simulation:
@@ -93,10 +94,20 @@ class Simulation:
         """Advance the virtual clock by `duration_ms`, processing everything due."""
         self._engine.run_until(self._engine.now_ms + duration_ms)
 
-    def restart_node(self, name: str, at_ms: int) -> None:
-        """Power-cycle a node at an absolute simulated time."""
+    def stop_node(self, name: str, at_ms: int) -> None:
+        """Power a node off at an absolute simulated time."""
+        node = self._nodes[name]
+        self._engine.schedule(max(0, at_ms - self._engine.now_ms), node.stop)
+
+    def start_node(self, name: str, at_ms: int) -> None:
+        """Power a stopped node on: it boots with a new session and empty RAM."""
         node = self._nodes[name]
         self._engine.schedule(max(0, at_ms - self._engine.now_ms), node.boot)
+
+    def restart_node(self, name: str, at_ms: int) -> None:
+        """Convenience: stop and immediately start a node at the same simulated time."""
+        self.stop_node(name, at_ms)
+        self.start_node(name, at_ms)
 
     def inject_frame(self, to_name: str, data: bytes, at_ms: int, from_name: str) -> None:
         """Make raw bytes appear at a node's radio at an absolute time (e.g. a corrupted frame)."""
@@ -119,6 +130,9 @@ class Simulation:
             unresolved=sent - done,
             frames_dropped_by_link=sum(link.dropped for link in self._links.values()),
             frames_rejected=source.counters.rejected + receiver.counters.rejected,
+            frames_dropped_while_stopped=(
+                source.counters.dropped_while_stopped + receiver.counters.dropped_while_stopped
+            ),
         )
 
     # ---- internals ----
