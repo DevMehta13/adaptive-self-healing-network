@@ -4,7 +4,7 @@ Last updated: 2026-10-11
 
 ## Project state
 
-**Phase 0 is half done: the backend half exists; the dashboard half is Dev's and has not started.** The agreed project uses four ESP8266 NodeMCU boards. Hardware has not been purchased; no radio, USB, sensor, controller, dashboard, simulator, or routing test has been performed. The only running code is the status-only backend under `backend/`.
+**Phase 0 is half done (the backend half exists; the dashboard half is Dev's and has not started). Phase 1's backend side is done.** The agreed project uses four ESP8266 NodeMCU boards. Hardware has not been purchased; no radio, USB, sensor, dashboard, controller, or routing test has been performed. The running code is the backend under `backend/`: a status-only API, the protocol codec, and a two-node simulator.
 
 ### Ownership split (agreed between the owners)
 
@@ -26,19 +26,34 @@ The two sides meet only through written contracts. The first is [docs/DASHBOARD_
 - 2026-10-11: Both owners approved two resilience additions after reviewing single points of failure: controller-computed backup next hops with local fast-failover, and fail-static forwarding with bounded buffering at C while the controller is unreachable. Updated `plan.md` (amendment note, Phases 4–7 and 9, gateway interface, test scenarios, assumptions), `docs/ARCHITECTURE.md` (new *Local failover and controller loss* section, workflow, measurements, boundaries), `README.md`, and `AGENTS.md`.
 - 2026-10-11: **Phase 0, backend half** (authorized by Harshal, branch `harshal-dev`). Added `backend/` (FastAPI, uv with a committed `uv.lock`, env-var configuration with `.env.example`), `GET /health`, `GET /api/snapshot`, WebSocket `/ws` with a versioned envelope (status event on connect, then heartbeats), the draft contract `docs/DASHBOARD_API.md`, pytest and ruff checks, a GitHub Actions workflow for Windows and macOS, and `backend/README.md`.
 
+- 2026-10-11: **Phase 0 follow-ups** (authorized by Harshal): `/ws` rejects disallowed browser origins; heartbeats are paced by time only; `docs/DASHBOARD_API.md` gained `event_id` / `last_event_id` ordering (and `last_event_id` is in `/api/snapshot`); stale phase-specific wording removed from `plan.md`.
+- 2026-10-11: **Phase 1, backend side** (authorized by Harshal):
+  - `docs/PROTOCOL.md` (draft): compact binary frame, 14-byte little-endian header, 250-byte limit, DATA and DELIVERY_ACK, reserved management codes, ordered decoding rules.
+  - `tests/protocol-examples/`: 20 shared reference cases (hex plus fields) for Python now and the firmware later.
+  - `backend/src/iot_backend/protocol/`: message classes, `encode()`/`decode()`, rejection reasons.
+  - `backend/src/iot_backend/simulator/`: virtual clock, seeded directional links (delay, random loss, scripted drops), virtual A and B exchanging encoded bytes, event trace, CLI demo.
+  - 64 new tests covering the required scenarios (see Verification record).
+
 ## Current authorization and next step
 
-Harshal authorized **Phase 0, backend half only**. Nothing beyond Phase 0 is authorized; plan approval is not implementation authorization.
+Harshal authorized **Phase 0 (backend half), its follow-ups, and Phase 1 (backend side)**. Nothing beyond that is authorized. Phase 2 (four nodes, forwarding, retries, duplicate suppression, routing) has **not** been started; plan approval is not implementation authorization.
+
+**Needs Dev's review (nothing here is frozen until he approves):**
+
+- [docs/DASHBOARD_API.md](DASHBOARD_API.md): new `event_id` / `last_event_id` rule, Origin check, 3-interval stale rule.
+- [docs/PROTOCOL.md](PROTOCOL.md) and `tests/protocol-examples/`: header size, 32-bit session/sequence, `value` encoding, rejection-reason names and order. The firmware encoder must reproduce every `valid-*` example and reject every `invalid-*` one.
 
 **Phase 0 remaining:**
 
-- Dev reviews [docs/DASHBOARD_API.md](DASHBOARD_API.md) and builds the dashboard shell (Simulation mode label, backend connection status) against it.
+- Dev builds the dashboard shell (Simulation mode label, backend connection status) against the reviewed API contract.
 - Phase 0 is complete only when Dev's shell connects to the backend from a fresh checkout on both operating systems.
-- macOS verification of the backend is pending until CI runs after push.
+- macOS verification of the backend (including the simulator and protocol tests) is pending until CI runs after push.
 
-**Next step after Phase 0:** Phase 1 — the shared protocol contract and a two-node simulator (virtual A and B, numbered readings, acknowledgement, a deliberately dropped packet).
+**Next step:** Phase 2 — four virtual nodes with manually configured routes, TTL handling, duplicate detection, bounded queues and limited retransmission, once Harshal authorizes it.
 
-**Layout note:** `plan.md` lists a top-level `tests/` folder. Backend tests live in `backend/tests/` so the backend can be tested on its own; top-level `tests/` is left for shared protocol examples when Phase 1 introduces them.
+**Layout note:** `plan.md` lists a top-level `tests/` folder. Backend tests live in `backend/tests/` so the backend can be tested on its own; the top-level `tests/protocol-examples/` holds the shared protocol examples that both Python and firmware check.
+
+**Design decisions recorded in Phase 1:** radio encoding is binary (not JSON); a session id is random per boot and `0` is reserved; packet identity is (`src`, `session`, `seq`); simulator time is integer milliseconds with a per-link seeded generator, so scripting a drop does not disturb other random choices; the simulator keeps its internals private, so the later controller must use a gateway interface fed by events.
 
 ## Open items
 
@@ -49,7 +64,8 @@ Harshal authorized **Phase 0, backend half only**. Nothing beyond Phase 0 is aut
 | Physical hardware sharing | Need to arrange access to all four boards for integration; simulation is planned for independent software work |
 | Firmware/toolchain versions | Must validate ESP8266 ESP-NOW and serial behavior on actual boards |
 | Peer RSSI | Reliable measurement method on the chosen ESP8266 framework is unverified |
-| Wire protocol and control transport | Bounded management flooding is planned; encoding and bounds must be specified and tested in the relevant phases |
+| Wire protocol and control transport | Frame header, DATA and DELIVERY_ACK are specified (draft, pending Dev's review). Management messages (HELLO, reports, route updates, probes, failover reports) and bounded flooding are reserved codes only; specify them in Phases 3–4 |
+| Phase 1 simulator limits | B counts every valid frame it receives (no duplicate suppression yet), A does not retry, late ACKs after the timeout are ignored (traced as `ack_ignored`), and only A and B exist; all are Phase 2 work |
 | Route installation | Versioned updates with relay installation before activation at A are planned; failure handling still requires specification and tests |
 | Demonstration route policy | Need repeatable selection of B without misrepresenting measured costs |
 | Timers and metrics | Initial HELLO, timeout, traffic, TTL, retry, and adaptive-policy settings are recorded in the plan; hardware validation and remaining evaluation details are pending |
@@ -57,10 +73,12 @@ Harshal authorized **Phase 0, backend half only**. Nothing beyond Phase 0 is aut
 | C buffer and controller heartbeat | The 50-entry buffer and 3-second controller timeout are proposals; buffer size must fit measured ESP8266 free heap |
 | Remaining single points of failure | C (only gateway) and A (only source) remain. Dual gateways, a Wi-Fi backup link, a standby controller, and distributed routing are future work |
 | Application libraries | Backend dependencies are locked in `backend/uv.lock`; dashboard and firmware libraries are not yet chosen or locked (Dev) |
-| Dashboard API contract | Draft pending Dev's review; snapshot/event ordering marker and WebSocket origin check are open (see the draft's known limits) |
+| Dashboard API contract | Draft pending Dev's review. `event_id` is not persisted across backend restarts (see the draft's known limits) |
 | Test-client warning | Starlette's test client warns that `httpx` is deprecated in favor of `httpx2`; harmless, revisit when dependencies are updated |
 
 ## Verification record
+
+- 2026-10-11, **Windows 11, Python 3.11.0, uv 0.13.0** (Phase 0 follow-ups and Phase 1; macOS **not** run; CI not run, nothing pushed): `uv run ruff check .` and `uv run ruff format --check .` passed; `uv run pytest` passed **74 tests**. These cover the Origin check and time-only heartbeats; every file in `tests/protocol-examples/` (encode equals bytes, decode equals fields, invalid files rejected with the stated reason); round-trip, boundary and reserved-type tests; and the simulator scenarios: normal delivery, dropped DATA, dropped ACK (delivered but unacknowledged), same-seed identical trace and different-seed different losses, malformed frames rejected while the run continues, and an A restart with a new session and restarted sequence numbers. The CLI demo (`uv run python -m iot_backend.simulator --seed 42 --duration 12 --drop A-B:2 --drop B-A:4 --malformed-at 5 --restart-a 9`) was also run and read by hand. These are simulation and codec results only; they say nothing about radio behavior or the firmware, which does not exist. The reference examples were generated with an independent hand-written packer and their hex checked against the codec, but no second implementation (C++) has yet confirmed the format.
 
 - 2026-10-11, **Windows 11, Python 3.11.0, uv 0.13.0** (backend only; no macOS run): `uv sync`; `uv run ruff check .` and `ruff format --check .` passed; `uv run pytest` passed 7 tests (health, snapshot, CORS, WebSocket status event, envelope shape, increasing `seq`, heartbeat, `seq` restart on reconnect). Started the real server with `uv run python -m iot_backend` and a separate Python `websockets` client received `/health`, `/api/snapshot`, the `status` event and two heartbeats about 2 s apart. The CI workflow has **not** run yet (not pushed); macOS is unverified. Simulation-mode status plumbing only; nothing network-related is measured.
 

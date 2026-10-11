@@ -75,7 +75,7 @@ Nodes cannot reliably distinguish an unplugged device from an unreachable radio 
 
 ## Packet and reliability requirements
 
-Proposed message families: HELLO, neighbor/topology report, route update, route-install acknowledgement, sensor data, delivery acknowledgement, probe request/response, and local-failover report. A controller heartbeat travels only over the gateway interface between the laptop and C. The exact binary layout is not finalized.
+Proposed message families: HELLO, neighbor/topology report, route update, route-install acknowledgement, sensor data, delivery acknowledgement, probe request/response, and local-failover report. A controller heartbeat travels only over the gateway interface between the laptop and C. The radio frame is a compact binary format with a fixed 14-byte little-endian header (decision made in Phase 1, chosen over JSON for the 250-byte ESP-NOW limit and ESP8266 memory); the draft layout, decoding rules and reference examples are in [PROTOCOL.md](PROTOCOL.md) and are pending Dev's review. Only DATA and DELIVERY_ACK are specified so far; the other message families are reserved codes.
 
 Protocol design must include a version, type, source/destination, restart/session identity, sequence number, hop limit, route generation where applicable, and a bounded payload. Do not assume a sequence number stays unique after a node restarts.
 
@@ -107,7 +107,7 @@ The laptop can timestamp observations consistently, but those include reporting 
 
 The intended dashboard shows node reachability, permitted and observed links, calculated and confirmed routes, sensor values, packet counts, RTT, available RSSI, history charts, and a failure/recovery timeline. Planned failure controls must label software-injected events separately from real disconnections. Recovery events state whether they came from local failover or a controller reroute, and replayed readings are labeled as delayed. Show telemetry freshness so stale state does not look live.
 
-A simulator is planned for development on separate laptops and larger virtual topologies. It should reuse protocol definitions and controller behavior where practical. Simulation cannot validate ESP8266 radio performance, physical RSSI, power stability, or USB drivers. The approved transition to hardware follows the working simulated demo in Phase 5, before dashboard polish and adaptive routing.
+A deterministic simulator exists for two virtual nodes (a virtual clock, seeded links, and nodes that exchange encoded protocol frames); the four-node topology, controller and gateway interface are later phases. It reuses the protocol module and should reuse controller behavior where practical. Simulation cannot validate ESP8266 radio performance, physical RSSI, power stability, or USB drivers. The approved transition to hardware follows the working simulated demo in Phase 5, before dashboard polish and adaptive routing.
 
 ## Selected stack, not installed dependencies
 

@@ -2,7 +2,7 @@
 
 A college project about keeping sensor data moving when a wireless relay fails, using four inexpensive ESP8266 NodeMCU boards and a laptop.
 
-**Status: design plus the Phase 0 backend foundation (a status-only HTTP/WebSocket server). No firmware, controller, dashboard, or simulator has been implemented or tested.** The software-first phased plan is approved in [plan.md](plan.md); see [docs/STATUS.md](docs/STATUS.md) for what exists.
+**Status: design plus the Phase 0 backend foundation (a status-only HTTP/WebSocket server) and a Phase 1 protocol contract with a two-node simulator. No firmware, controller, dashboard, or four-node simulation has been implemented or tested.** The software-first phased plan is approved in [plan.md](plan.md); see [docs/STATUS.md](docs/STATUS.md) for what exists.
 
 ## What we are building
 
@@ -76,6 +76,7 @@ Healing requires a surviving path. Failure of C or of both relay paths is outsid
 | [Status](docs/STATUS.md) | What actually exists, pending decisions, and the next discussion |
 | [Backend README](backend/README.md) | Install, run, and test the backend on Windows and macOS |
 | [Dashboard API](docs/DASHBOARD_API.md) | Draft contract between backend and dashboard (pending Dev's review) |
+| [Node protocol](docs/PROTOCOL.md) | Draft radio frame format shared with the firmware (pending Dev's review) |
 | [Contributing](CONTRIBUTING.md) | How to collaborate from macOS and Windows |
 | [AGENTS.md](AGENTS.md) | Shared working instructions for coding agents |
 | [CLAUDE.md](CLAUDE.md) | Claude entry point to the same shared context |
