@@ -11,6 +11,7 @@ from iot_backend.simulator.trace import (
     ACK_RECEIVED,
     ACK_TIMEOUT,
     FRAME_DROPPED_BY_LINK,
+    FRAME_RECEIVED,
     FRAME_REJECTED,
     FRAME_SENT,
     NODE_BOOTED,
@@ -104,9 +105,9 @@ def test_malformed_frames_are_rejected_recorded_and_do_not_stop_the_simulation()
     sim = make_sim()
     bad_version = bytearray(encode(Frame(1, 2, 5, 1, 8, DataPayload(1))))
     bad_version[0] = 9
-    sim.inject_frame("B", b"\x01\x02\x03", at_ms=3_000)
-    sim.inject_frame("B", bytes(bad_version), at_ms=3_500)
-    sim.inject_frame("A", b"", at_ms=3_600)
+    sim.inject_frame("B", b"\x01\x02\x03", at_ms=3_000, from_name="A")
+    sim.inject_frame("B", bytes(bad_version), at_ms=3_500, from_name="A")
+    sim.inject_frame("A", b"", at_ms=3_600, from_name="B")
     sim.run(11_000)
     rejected = [(e.node, e.info["reason"]) for e in sim.trace.of_type(FRAME_REJECTED)]
     assert rejected == [("B", "truncated"), ("B", "bad_version"), ("A", "truncated")]
@@ -120,7 +121,7 @@ def test_malformed_frames_are_rejected_recorded_and_do_not_stop_the_simulation()
 def test_valid_frame_for_another_node_is_rejected_as_wrong_destination():
     sim = make_sim()
     frame = Frame(src=3, dst=4, session=9, seq=1, ttl=8, payload=DataPayload(5))
-    sim.inject_frame("B", encode(frame), at_ms=1_000)
+    sim.inject_frame("B", encode(frame), at_ms=1_000, from_name="A")
     sim.run(1_500)
     (event,) = sim.trace.of_type(FRAME_REJECTED)
     assert event.info["reason"] == "wrong_destination"
@@ -248,3 +249,10 @@ def test_cli_prints_trace_and_summary(capsys):
     assert "frame_dropped_by_link" in out
     assert "Summary" in out
     assert "readings sent by A ........ 2" in out
+
+
+def test_receive_reports_the_link_layer_sender():
+    sim = make_sim()
+    sim.run(3_000)
+    received = sim.trace.of_type(FRAME_RECEIVED)
+    assert [(e.node, e.info["sender"]) for e in received] == [("B", "A"), ("A", "B")]

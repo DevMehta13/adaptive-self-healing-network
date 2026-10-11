@@ -12,6 +12,7 @@ from dataclasses import dataclass
 
 from iot_backend.protocol import (
     DEFAULT_TTL,
+    NODE_NAMES,
     DataPayload,
     DecodeError,
     DeliveryAckPayload,
@@ -113,10 +114,21 @@ class _Node:
         )
         self._send(self.id, frame.dst, data, frame.identity)
 
-    def receive(self, data: bytes) -> None:
-        """A frame's bytes arrived at this node's radio."""
+    def receive(self, data: bytes, from_node: int) -> None:
+        """A frame's bytes arrived at this node's radio from neighbor `from_node`.
+
+        The sender is the previous hop, as reported by the radio (ESP-NOW gives the sender's
+        MAC). It is not necessarily the frame's origin (`src`).
+        """
         now = self._engine.now_ms
-        self._trace.record(now, self.name, FRAME_RECEIVED, None, size=len(data))
+        self._trace.record(
+            now,
+            self.name,
+            FRAME_RECEIVED,
+            None,
+            size=len(data),
+            sender=NODE_NAMES.get(from_node, str(from_node)),
+        )
         try:
             frame = decode(data)
         except DecodeError as error:

@@ -5,6 +5,7 @@ that later needs to learn about the network (the controller) must do so through 
 gateway interface fed by events, never by reading these objects.
 """
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from iot_backend.protocol import DEFAULT_TTL, NODE_IDS, PacketIdentity
@@ -73,7 +74,7 @@ class Simulation:
                 seed,
                 self._engine,
                 self.trace,
-                deliver=self._nodes[dst].receive,
+                deliver=self._make_delivery(self._nodes[dst], NODE_IDS[src]),
             )
             self._links[(NODE_IDS[src], NODE_IDS[dst])] = link
 
@@ -95,10 +96,13 @@ class Simulation:
         node = self._nodes[name]
         self._engine.schedule(max(0, at_ms - self._engine.now_ms), node.boot)
 
-    def inject_frame(self, to_name: str, data: bytes, at_ms: int) -> None:
+    def inject_frame(self, to_name: str, data: bytes, at_ms: int, from_name: str) -> None:
         """Make raw bytes appear at a node's radio at an absolute time (e.g. a corrupted frame)."""
         node = self._nodes[to_name]
-        self._engine.schedule(max(0, at_ms - self._engine.now_ms), lambda: node.receive(data))
+        sender = NODE_IDS[from_name]
+        self._engine.schedule(
+            max(0, at_ms - self._engine.now_ms), lambda: node.receive(data, sender)
+        )
 
     def summary(self) -> Summary:
         source, receiver = self._nodes["A"], self._nodes["B"]
@@ -115,6 +119,10 @@ class Simulation:
         )
 
     # ---- internals ----
+
+    @staticmethod
+    def _make_delivery(node: SourceNode | ReceiverNode, from_id: int) -> Callable[[bytes], None]:
+        return lambda data: node.receive(data, from_id)
 
     def _send(self, from_id: int, to_id: int, data: bytes, identity: PacketIdentity) -> None:
         link = self._links.get((from_id, to_id))
