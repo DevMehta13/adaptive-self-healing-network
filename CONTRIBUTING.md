@@ -6,7 +6,7 @@ Two owners are collaborating from macOS and Windows, with coding assistants. Con
 
 Read [README.md](README.md), [docs/STATUS.md](docs/STATUS.md), [plan.md](plan.md), and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Coding assistants must also read [AGENTS.md](AGENTS.md); Claude has [CLAUDE.md](CLAUDE.md) as an entry point.
 
-The repository currently contains documentation only. No application dependencies or hardware drivers need installing just to review it. The phased plan in `plan.md` is approved; implementation is waiting for the owner's explicit instruction to start.
+The repository contains documentation and, under `backend/`, the Phase 0 backend foundation (setup in [backend/README.md](backend/README.md)). No dependencies or hardware drivers need installing just to review the documents. The phased plan in `plan.md` is approved; implement only what an owner explicitly authorizes. `backend/` belongs to Harshal and `dashboard/` and `firmware/` to Dev; the two sides meet through written contracts such as [docs/DASHBOARD_API.md](docs/DASHBOARD_API.md).
 
 ## Shared Git workflow
 

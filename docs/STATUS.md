@@ -4,7 +4,16 @@ Last updated: 2026-10-11
 
 ## Project state
 
-**Documentation only.** The agreed project uses four ESP8266 NodeMCU boards. Hardware has not been purchased; no radio, USB, sensor, controller, dashboard, simulator, or routing test has been performed.
+**Phase 0 is half done: the backend half exists; the dashboard half is Dev's and has not started.** The agreed project uses four ESP8266 NodeMCU boards. Hardware has not been purchased; no radio, USB, sensor, controller, dashboard, simulator, or routing test has been performed. The only running code is the status-only backend under `backend/`.
+
+### Ownership split (agreed between the owners)
+
+| Owner | Area |
+| --- | --- |
+| Harshal | `backend/` (protocol, simulator, controller, transports, api, storage) and backend tests |
+| Dev | `dashboard/` (React, TypeScript, Vite, Cytoscape) and `firmware/` (ESP8266) |
+
+The two sides meet only through written contracts. The first is [docs/DASHBOARD_API.md](DASHBOARD_API.md), currently **Draft — pending Dev's review**.
 
 ## Completed
 
@@ -16,11 +25,21 @@ Last updated: 2026-10-11
 - Reviewed and approved the software-first phased plan in `plan.md`: working simulation through Phase 5, hardware integration next, then sensor, adaptive routing, and final polish.
 - 2026-10-11: Both owners approved two resilience additions after reviewing single points of failure: controller-computed backup next hops with local fast-failover, and fail-static forwarding with bounded buffering at C while the controller is unreachable. Updated `plan.md` (amendment note, Phases 4–7 and 9, gateway interface, test scenarios, assumptions), `docs/ARCHITECTURE.md` (new *Local failover and controller loss* section, workflow, measurements, boundaries), `README.md`, and `AGENTS.md`.
 
+- 2026-10-11: **Phase 0, backend half** (authorized by Harshal, branch `harshal-dev`). Added `backend/` (FastAPI, uv with a committed `uv.lock`, env-var configuration with `.env.example`), `GET /health`, `GET /api/snapshot`, WebSocket `/ws` with a versioned envelope (status event on connect, then heartbeats), the draft contract `docs/DASHBOARD_API.md`, pytest and ruff checks, a GitHub Actions workflow for Windows and macOS, and `backend/README.md`.
+
 ## Current authorization and next step
 
-The owner approved the phased plan and requested that it be saved in `plan.md`, with no implementation. All phases, including Phase 0, remain pending. No separate roadmap file is required. The 2026-10-11 resilience amendment is likewise a documentation change only.
+Harshal authorized **Phase 0, backend half only**. Nothing beyond Phase 0 is authorized; plan approval is not implementation authorization.
 
-Wait for the owner's explicit instruction to start. The first planned implementation task is Phase 0, the runnable foundation. Do not scaffold applications, install project dependencies, or purchase hardware merely because the plan is approved.
+**Phase 0 remaining:**
+
+- Dev reviews [docs/DASHBOARD_API.md](DASHBOARD_API.md) and builds the dashboard shell (Simulation mode label, backend connection status) against it.
+- Phase 0 is complete only when Dev's shell connects to the backend from a fresh checkout on both operating systems.
+- macOS verification of the backend is pending until CI runs after push.
+
+**Next step after Phase 0:** Phase 1 — the shared protocol contract and a two-node simulator (virtual A and B, numbered readings, acknowledgement, a deliberately dropped packet).
+
+**Layout note:** `plan.md` lists a top-level `tests/` folder. Backend tests live in `backend/tests/` so the backend can be tested on its own; top-level `tests/` is left for shared protocol examples when Phase 1 introduces them.
 
 ## Open items
 
@@ -38,9 +57,13 @@ Wait for the owner's explicit instruction to start. The first planned implementa
 | Local failover trigger | Initial trigger is the primary neighbor's HELLO timeout; whether missed delivery acknowledgements should also trigger it needs simulation results |
 | C buffer and controller heartbeat | The 50-entry buffer and 3-second controller timeout are proposals; buffer size must fit measured ESP8266 free heap |
 | Remaining single points of failure | C (only gateway) and A (only source) remain. Dual gateways, a Wi-Fi backup link, a standby controller, and distributed routing are future work |
-| Application libraries | Stack is selected in `plan.md`; dependency versions, installation, and validation await implementation |
+| Application libraries | Backend dependencies are locked in `backend/uv.lock`; dashboard and firmware libraries are not yet chosen or locked (Dev) |
+| Dashboard API contract | Draft pending Dev's review; snapshot/event ordering marker and WebSocket origin check are open (see the draft's known limits) |
+| Test-client warning | Starlette's test client warns that `httpx` is deprecated in favor of `httpx2`; harmless, revisit when dependencies are updated |
 
 ## Verification record
+
+- 2026-10-11, **Windows 11, Python 3.11.0, uv 0.13.0** (backend only; no macOS run): `uv sync`; `uv run ruff check .` and `ruff format --check .` passed; `uv run pytest` passed 7 tests (health, snapshot, CORS, WebSocket status event, envelope shape, increasing `seq`, heartbeat, `seq` restart on reconnect). Started the real server with `uv run python -m iot_backend` and a separate Python `websockets` client received `/health`, `/api/snapshot`, the `status` event and two heartbeats about 2 s apart. The CI workflow has **not** run yet (not pushed); macOS is unverified. Simulation-mode status plumbing only; nothing network-related is measured.
 
 - 2026-10-11, Linux shell against the Windows checkout: after the resilience amendment, checked all Markdown files for valid local links, balanced code fences, consistent table columns, trailing whitespace, and LF line endings; `git diff --check` passed. Documentation checks only; no behavior was implemented or tested.
 - Approved-plan handoff, macOS: verified all 11 phases (0–10), local Markdown links, code fences, and diff whitespace. Confirmed that no application scaffolding or separate roadmap was created.

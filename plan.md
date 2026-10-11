@@ -1,6 +1,6 @@
 # Software-first plan for the Adaptive Self-Healing IoT Network
 
-**Approved plan. Implementation has not started.** The owner authorized saving this plan only and will explicitly say when to begin. All phases below are pending. This file is the canonical phased plan; do not create a separate roadmap unless requested.
+**Approved plan. Implementation is authorized one step at a time by the owners; see [docs/STATUS.md](docs/STATUS.md) for what exists.** Only the backend half of Phase 0 has been built. This file is the canonical phased plan; do not create a separate roadmap unless requested.
 
 **Amendment, 2026-10-11:** Both owners approved two resilience additions: controller-computed backup next hops with local fast-failover, and fail-static forwarding with bounded buffering at C while the controller is unreachable. They are folded into Phases 4, 5, 6, 7 and 9, the interfaces, and the test scenarios below. This amendment changes the plan only; it does not authorize implementation.
 
