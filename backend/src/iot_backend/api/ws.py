@@ -2,7 +2,7 @@
 
 import asyncio
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, status
 
 from iot_backend import __version__
 from iot_backend.envelope import make_envelope
@@ -14,6 +14,14 @@ router = APIRouter()
 async def events(websocket: WebSocket) -> None:
     settings = websocket.app.state.settings
     interval = settings.heartbeat_interval_seconds
+
+    # Browsers do not apply CORS to WebSockets, so check the Origin header ourselves.
+    # A missing Origin (non-browser client, tests) is allowed.
+    origin = websocket.headers.get("origin")
+    if origin is not None and origin not in settings.cors_origin_list:
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+
     await websocket.accept()
 
     seq = 1  # numbering is per connection, so a new connection starts again at 1

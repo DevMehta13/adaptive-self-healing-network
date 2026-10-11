@@ -1,4 +1,6 @@
+import pytest
 from fastapi.testclient import TestClient
+from starlette.websockets import WebSocketDisconnect
 
 from iot_backend.config import Settings
 from iot_backend.main import create_app
@@ -33,6 +35,17 @@ def test_heartbeats_follow_with_increasing_seq():
     for m in messages[1:]:
         assert set(m) == ENVELOPE_KEYS
         assert m["data"] == {"interval_s": 0.05}
+
+
+def test_foreign_origin_is_rejected():
+    with pytest.raises(WebSocketDisconnect):
+        with make_client().websocket_connect("/ws", headers={"Origin": "http://evil.example"}):
+            pass
+
+
+def test_allowed_origin_is_accepted():
+    with make_client().websocket_connect("/ws", headers={"Origin": "http://localhost:5173"}) as ws:
+        assert ws.receive_json()["type"] == "status"
 
 
 def test_seq_restarts_on_new_connection_and_asks_for_snapshot():
