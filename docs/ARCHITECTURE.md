@@ -29,7 +29,17 @@ Only one laptop controls the physical network at a time. Either contributor's co
 
 The proposed control mechanism is bounded flooding over all currently permitted surviving links. A node forwards each new management message once, with a hop limit and a bounded duplicate cache. This is independent of the installed data route. After B fails, a report or route instruction can still travel through C–D–A. HELLOs themselves remain local neighbor messages, not multi-hop flooded heartbeats.
 
-This is a design proposal, not a completed protocol. Before routing implementation, define message identities, restart handling, forwarding limits, stale-report expiry, and congestion limits. Control traffic must obey the same logical link permissions as data; it must not secretly use A–C as a shortcut.
+This mechanism is now implemented in simulation (Phase 3); the byte-level payloads and rules are in [PROTOCOL.md](PROTOCOL.md) and await Dev's review. Control traffic obeys the same logical link permissions as data and does not use A–C as a shortcut.
+
+Decisions recorded in Phase 3:
+
+- **HELLO is a unicast to each permitted neighbor** every second with small seeded jitter, rather than one broadcast. This enforces the logical topology at the sender and matches ESP-NOW's unicast peers; a broadcast would be heard by non-neighbors that must then discard it.
+- **Two-way needs the neighbor's list.** A node marks a neighbor `two_way` only when that neighbor's HELLO lists it with its current session; hearing a HELLO alone is `one_way`. Loss of contact is declared 3 s after the last HELLO.
+- **Delivery acknowledgements are management frames** and are flooded, so they reach the source even when the data route's relay is dead (plan.md). The data route still uses the routing tables.
+- **Flooding rule:** each node handles a management frame once (bounded identity cache), forwards to permitted neighbors except the sender, drops its own frames and expired TTLs. TTL, not the cache, is what finally bounds a flood.
+- **The controller sees the network only through a gateway interface** (events, clock, timers) implemented by `SimulatedGateway` now and a serial gateway later; a test shows the controller packages do not import the simulator.
+- **"Lost contact", never "powered off".** The controller declares a node lost only when every neighbor with a fresh report lists it as lost, each report newer than the node's own latest report, and records the observers as the source. One neighbor's claim is not enough: a one-way link failure is seen by only one end, and the node is still heard elsewhere.
+- **Reports expire.** A report is fresh for 15 s (three report intervals); after that nodes and links are `stale`, and only `up` links with fresh reports from both ends are usable.
 
 ## Startup and failure workflow
 

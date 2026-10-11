@@ -166,7 +166,7 @@ A routing table maps destination node id to next-hop node id. In Phase 2 tables 
 
 ### Delivery, acknowledgement, retries
 
-- **Only the final destination acknowledges.** It creates one DELIVERY_ACK per accepted DATA frame, addressed to the reading's origin; relays only forward it. The ACK is routed back through the routing tables like any frame. In Phase 3 plan.md moves acknowledgements onto bounded management flooding; the ACK format does not change.
+- **Only the final destination acknowledges.** It creates one DELIVERY_ACK per accepted DATA frame, addressed to the reading's origin; relays only forward it. From Phase 3 the ACK is a management frame and is **flooded** back (see *Discovery and management traffic*), so it reaches the origin even when the data route's relay is dead. The simulator keeps a `routed` mode (ACK follows the routing tables, the Phase 2 behaviour) for comparison; the ACK format never changed.
 - **Retries are end to end, from the origin only.** The origin keeps a reading pending until its ACK arrives. If none arrives within `ack_timeout` (default 1 s) it re-sends **the identical frame**: same `src`, `session`, `seq`, `ttl` and payload. At most 3 transmissions per reading (default); then the reading is *lost*. Reusing the identity is what lets the destination recognise a repeat.
 - **Late or unmatched ACKs are ignored** (reading not pending: already acknowledged, already given up on, or from an earlier session) and are not counted again.
 - **One sequence counter per node and session** numbers every frame the node creates (DATA and DELIVERY_ACK). It wraps from 4294967295 to 0.
@@ -191,7 +191,91 @@ Each node has a bounded outgoing queue (default 16 frames, including the one bei
 
 ### Counted discard reasons
 
-`not_permitted_neighbor`, `ttl_expired`, `no_route`, `queue_full`, `node_stopped` (frame arrived at a powered-off node; simulator only), `stale_sequence`, `unexpected_type`, and the decoding reasons. Firmware should keep a small counter per reason.
+`not_permitted_neighbor`, `ttl_expired`, `no_route`, `queue_full`, `node_stopped` (frame arrived at a powered-off node; simulator only), `stale_sequence`, `unexpected_type`, `flood_duplicate`, `own_frame`, `hello_not_local`, and the decoding reasons. Firmware should keep a small counter per reason.
+
+## Discovery and management traffic (Phase 3)
+
+**Pending Dev's review.** No new header fields; HELLO and TOPOLOGY_REPORT payloads are defined above.
+
+### Three kinds of frame
+
+| Kind | Types | How it travels |
+| --- | --- | --- |
+| Data | DATA | Hop by hop by the routing tables. |
+| Local | HELLO | One hop only, never forwarded. |
+| Management | TOPOLOGY_REPORT, DELIVERY_ACK | Bounded flooding over permitted links; **ignores the routing tables**, so a broken data route cannot cut it off. Later route messages will join this class. |
+
+### HELLO: one unicast per permitted neighbor (decision)
+
+Every `hello_interval` (default 1 s) a node sends one HELLO to **each** permitted neighbor, not one broadcast.
+
+- *Logical links are enforced at the sender.* A node only ever addresses boards in its permitted list. A broadcast is physically heard by every board and would have to be discarded by the non-neighbors, which is exactly the "physically reachable is not the same as permitted" case the project must show honestly.
+- *Per-neighbor delivery.* ESP-NOW unicast reaches one known peer MAC, which is how forwarding to a next hop already works; the receiver also learns the sender from the radio callback.
+- *Cost.* With two neighbors this is two frames per second per node (15 to 25 bytes each). Broadcast would save one. Nothing in the protocol prevents switching later; the HELLO format is the same.
+
+A HELLO's `dst` must be the receiver and its `src` must equal the link-layer sender, otherwise it is rejected `hello_not_local`. A receiver ignores HELLOs from senders that are not permitted neighbors (`not_permitted_neighbor`).
+
+**Jitter.** Each node waits `hello_interval ± hello_jitter` (default ±100 ms) between rounds and starts at a random point in the first interval, drawn from a node-specific seeded generator. Boards that power up together would otherwise transmit in lock-step forever, so on a shared radio channel their frames would repeatedly collide; the jitter spreads them out. (The simulator does not model collisions, so it shows the desynchronised timing, not the benefit.)
+
+### Neighbor table
+
+One entry per permitted neighbor (at most 8): its latest `session`, the local time it was last heard, and a state.
+
+| State | Meaning |
+| --- | --- |
+| (absent) | Never heard. |
+| `one_way` | We hear its HELLOs, but its latest HELLO does not list **us in our current session**. Frames from it reach us; we cannot confirm ours reach it. |
+| `two_way` | We hear it **and** its HELLO lists us with our current session, so both directions work. |
+| `lost` | Heard before, but no HELLO within `neighbor_timeout` (default 3 s). |
+
+Rules:
+
+- Hearing a HELLO proves only that the neighbor's frames reach us. Two-way needs the neighbor's HELLO to list us; this is the same idea as OSPF's 2-Way check. The listed `session` stops a neighbor that heard our *previous* life from confirming our new one.
+- Loss is declared exactly `neighbor_timeout` after the last HELLO (one timer per neighbor). A HELLO from a `lost` neighbor revives it as `one_way` or `two_way`.
+- A HELLO whose header `session` differs from the stored one means the neighbor restarted; the entry's session is replaced and a change is reported.
+- Any change of state or session schedules a TOPOLOGY_REPORT within `report_coalesce` (default 50 ms), so several changes share one report. A report is also sent every `report_interval` (default 5 s) and once about one HELLO interval after boot.
+- A node never concludes "powered off". `lost` means only that nothing was heard.
+
+### Bounded flooding of management frames
+
+For a TOPOLOGY_REPORT (and a DELIVERY_ACK) a node:
+
+1. **Creates:** records the frame's identity in its flood cache and sends it to every permitted neighbor (the gateway node delivers its own reports locally).
+2. **Receives** a management frame (after the permitted-neighbor check):
+   - If `src` is this node: drop (`own_frame`).
+   - If the identity is in the flood cache: drop (`flood_duplicate`).
+   - Otherwise remember it. If `dst` is this node, consume it. If not: drop when `ttl` ≤ 1 (`ttl_expired`), else send it with `ttl` − 1 to every permitted neighbor **except the one it came from**.
+
+So each node handles a given management frame at most once, and TTL (default 8) ends the flood even if a cache has forgotten an identity. The cache holds the last 64 identities (9 bytes each); the oldest is evicted first. Frames follow permitted links only: management traffic never uses A–C as a shortcut.
+
+### Gateway and controller
+
+C hands every TOPOLOGY_REPORT addressed to it to the gateway interface as a plain event; the controller sees nothing else of the network. In the simulator that is a `SimulatedGateway`; on hardware it will be a line of JSON on C's USB serial port.
+
+### Defaults
+
+| Setting | Default |
+| --- | --- |
+| `hello_interval` | 1000 ms |
+| `hello_jitter` | ±100 ms |
+| `neighbor_timeout` | 3000 ms |
+| `report_interval` | 5000 ms |
+| `report_coalesce` | 50 ms |
+| `flood_cache_size` | 64 identities |
+| management `ttl` | 8 |
+
+These are initial experiment settings, not hardware guarantees.
+
+### Added RAM per node (estimate for the ESP8266, not measured)
+
+| Item | Bytes |
+| --- | --- |
+| Neighbor table, 2 neighbors (up to 8: ≤ 80) | about 30 |
+| Flood cache, 64 × (1 + 4 + 4) | 576 |
+| Frame build buffers (HELLO ≤ 55, report ≤ 79) | ≤ 134 |
+| Total | about 0.7 KB |
+
+This is small next to the 4 KB send queue from Phase 2 but should be checked against measured free heap in Phase 6.
 
 ## Reference examples
 
