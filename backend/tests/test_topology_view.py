@@ -196,3 +196,25 @@ def test_controller_and_gateway_interface_do_not_import_the_simulator(package):
             elif isinstance(node, ast.ImportFrom) and node.module:
                 names = [node.module]
             assert not [n for n in names if "simulator" in n], f"{path.name} imports {names}"
+
+
+def test_link_needs_both_ends_to_report_two_way(world):
+    gw, view = world
+    gw.report(A, {B: ("two_way", 2000)})
+    gw.report(B, {A: ("one_way", 1000)})  # B's latest report has not caught up yet
+    assert view.link_state("A", "B") == LINK_ONE_WAY
+    assert view.usable_links() == []
+    gw.report(B, {A: ("two_way", 1000)}, seq=2)
+    assert view.usable_links() == [("A", "B")]
+
+
+def test_one_neighbors_claim_is_not_enough_while_another_still_hears_the_node(world):
+    gw, view = world
+    gw.report(A, {B: ("two_way", 2000)})
+    gw.report(C, {B: ("two_way", 2000)})
+    gw.report(B, {A: ("two_way", 1000), C: ("two_way", 3000)})
+    gw.advance(1_000)
+    gw.report(A, {B: ("lost", 2000)}, seq=2)  # only A lost it (say, one direction failed)
+    assert view.node_status("B") == REACHABLE
+    gw.report(C, {B: ("lost", 2000)}, seq=2)  # now every observer agrees
+    assert view.node_status("B") == LOST_CONTACT

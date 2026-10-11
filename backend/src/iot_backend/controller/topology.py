@@ -8,9 +8,11 @@ Rules (all times are the gateway clock):
 
 * A report is **fresh** for `report_expiry_ms` after it arrives (default 15 s = 3 report
   intervals). Information from an expired report is never presented as current.
-* A node is **lost contact** when a fresh report from some other node lists it as `lost` and
-  that report arrived *after* the node's own latest report. The observers are recorded as the
-  source. It is never described as "powered off": silence cannot prove that.
+* A node is **lost contact** when *every* other node that has a fresh report mentioning it
+  lists it as `lost`, and each of those reports arrived *after* the node's own latest report.
+  Requiring agreement keeps a one-way link failure, which only one neighbor sees, from marking
+  a node that is still heard elsewhere. The observers are recorded as the source. It is never
+  described as "powered off": silence cannot prove that.
 * A node is **reachable** when its own report is fresh and no such newer claim exists,
   **stale** when its latest report has expired and nothing newer exists, **unknown** when
   nothing has ever been heard about it.
@@ -213,19 +215,21 @@ class TopologyView:
         new_status: dict[int, tuple[str, tuple[int, ...], int]] = {}
         for node in known:
             own = self._reports.get(node)
-            claims = [
-                (o, r.entries[node].last_heard_ms_ago)
-                for o, r in fresh.items()
-                if o != node
-                and node in r.entries
-                and r.entries[node].state == "lost"
-                and (own is None or r.received_ms > own.received_ms)
-            ]
-            if claims:
+            observers = [(o, r) for o, r in fresh.items() if o != node and node in r.entries]
+            claims = [(o, r) for o, r in observers if r.entries[node].state == "lost"]
+            # Every neighbor that currently has a fresh report must agree, and each of those
+            # reports must be newer than the node's own latest report. One neighbor alone
+            # (say, a one-way link failure) is not enough while others still hear the node.
+            unanimous = (
+                bool(claims)
+                and len(claims) == len(observers)
+                and (own is None or min(r.received_ms for _, r in claims) > own.received_ms)
+            )
+            if unanimous:
                 new_status[node] = (
                     LOST_CONTACT,
                     tuple(sorted(o for o, _ in claims)),
-                    max(age for _, age in claims),
+                    max(r.entries[node].last_heard_ms_ago for _, r in claims),
                 )
             elif own is not None and node in fresh:
                 new_status[node] = (REACHABLE, (), 0)
@@ -279,23 +283,20 @@ class TopologyView:
             a, b = pair
             state_name, directions = self._link(a, b, fresh, new_status)
             previous = self._links.get(pair)
-            if (
-                previous is None
-                or previous.state != state_name
-                or previous.directions != directions
-            ):
-                old = previous.state if previous else None
-                self._links[pair] = _LinkState(state_name, directions, now)
-                self._emit(
-                    "link_state_changed",
-                    {
-                        "link": f"{_name(a)}-{_name(b)}",
-                        "old": old,
-                        "new": state_name,
-                        "usable": state_name == LINK_UP,
-                        "directions": directions,
-                    },
-                )
+            if previous is not None and previous.state == state_name:
+                previous.directions = directions  # same state: refresh silently
+                continue
+            self._links[pair] = _LinkState(state_name, directions, now)
+            self._emit(
+                "link_state_changed",
+                {
+                    "link": f"{_name(a)}-{_name(b)}",
+                    "old": previous.state if previous else None,
+                    "new": state_name,
+                    "usable": state_name == LINK_UP,
+                    "directions": directions,
+                },
+            )
 
         self._arm_timer(fresh, now)
 
