@@ -22,6 +22,7 @@ def snapshot(request: Request) -> dict[str, Any]:
         "mode": request.app.state.settings.mode,
         "backend": {"status": "ok", "version": __version__},
         "server_time": utc_now(),
+        "last_event_id": 0,  # no state-changing events exist yet
         "nodes": [],
         "links": [],
     }

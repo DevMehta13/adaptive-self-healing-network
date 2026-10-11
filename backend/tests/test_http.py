@@ -21,6 +21,7 @@ def test_snapshot_is_minimal_and_empty():
     assert body["mode"] == "simulation"
     assert body["backend"] == {"status": "ok", "version": __version__}
     assert body["server_time"].endswith("Z")
+    assert body["last_event_id"] == 0
     assert body["nodes"] == []
     assert body["links"] == []
 
