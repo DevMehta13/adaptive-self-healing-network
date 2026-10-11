@@ -35,13 +35,33 @@ This is a design proposal, not a completed protocol. Before routing implementati
 
 1. Powered nodes announce their identity to permitted neighbors. Reports reach C and the laptop through the control mechanism before data routes exist.
 2. The laptop builds a fresh graph and calculates a route to C.
-3. The controller distributes a versioned route update and obtains evidence that required forwarding entries are installed before treating that route as active.
+3. The controller distributes a versioned route update, including a backup next hop where one exists, and obtains evidence that the required primary and backup forwarding entries are installed before treating that route as active.
 4. A sends numbered readings; each relay records forwarding, and C acknowledges application receipt.
-5. When B stops responding, neighboring nodes time out their observations. Reports reach the laptop through surviving control links.
-6. The controller excludes unavailable links, computes A → D → C, and installs the replacement route through D.
+5. When B stops responding, neighboring nodes time out their observations. A switches locally to its pre-installed backup, D, and reports reach the laptop through surviving control links.
+6. The controller excludes unavailable links, computes the best remaining route (here A → D → C), and confirms A's local choice or installs a replacement route version.
 7. Data resumes and observed forwarding confirms the change. When B returns, fresh reports make it eligible again.
 
 Route-update ordering, acknowledgement retries, old/new version handling, and behavior during partial installation must be specified before implementation. TTL limits loops but does not by itself make route updates consistent.
+
+## Local failover and controller loss
+
+Approved by both owners on 2026-10-11 and not implemented. Phases and defaults are in [plan.md](../plan.md).
+
+The controller calculates routes, but surviving a single relay failure should not depend on reaching it. Two mechanisms reduce that dependence.
+
+**Backup next hop (local fast-failover).** Each route version installs a primary and a backup next hop, both computed by the controller: for A, primary B and backup D. The backup relay's forwarding entry is installed and confirmed before the version becomes active. When a node's primary neighbor goes stale (HELLO timeout), it switches to the backup without waiting for the controller and reports the switch through management flooding. This follows the same idea as IP and MPLS fast reroute: compute centrally, react locally.
+
+- Nodes use only confirmed, controller-installed backups; they never calculate routes.
+- A backup must be loop-free: it must not forward back through the node using it. The controller checks this before installing it. In the diamond, D reaches C directly.
+- Returning to the primary is a controller decision under the active policy, which prevents flapping.
+- A HELLO timeout cannot distinguish a powered-off relay from a broken link, so the switch is reported as loss of contact.
+- If the backup is also unavailable, the node enters the no-route state.
+
+**Fail-static forwarding and buffering at C.** The controller sends C a periodic heartbeat over the gateway interface. When the heartbeat stops, C marks the controller unreachable. Nodes keep forwarding on their last confirmed routes and backups, but no new routes are calculated. C continues to acknowledge readings, because those acknowledgements come from C rather than the laptop. C stores readings and node events in a bounded ring buffer, dropping and counting the oldest entry when full. On reconnection, C replays the buffer; the controller counts each reading once by source, session and sequence, and the dashboard labels replayed readings as delayed.
+
+- C is powered by the same USB cable that connects it to the laptop, so unplugging it removes C entirely. Controller loss is tested by stopping the controller software. The buffer is RAM-only and is lost if C loses power.
+- Buffer size depends on ESP8266 free heap, measured in Phase 6.
+- Pre-installed backups cover only the failures the last route version anticipated. A second failure while the controller is unreachable may leave no route.
 
 ## Topology and routing
 
@@ -55,7 +75,7 @@ Nodes cannot reliably distinguish an unplugged device from an unreachable radio 
 
 ## Packet and reliability requirements
 
-Proposed message families: HELLO, neighbor/topology report, route update, route-install acknowledgement, sensor data, delivery acknowledgement, and probe request/response. The exact binary layout is not finalized.
+Proposed message families: HELLO, neighbor/topology report, route update, route-install acknowledgement, sensor data, delivery acknowledgement, probe request/response, and local-failover report. A controller heartbeat travels only over the gateway interface between the laptop and C. The exact binary layout is not finalized.
 
 Protocol design must include a version, type, source/destination, restart/session identity, sequence number, hop limit, route generation where applicable, and a bounded payload. Do not assume a sequence number stays unique after a node restarts.
 
@@ -76,6 +96,7 @@ Protocol design must include a version, type, source/destination, restart/sessio
 | Failure detection | Time until loss of contact is declared; exact physical unplug time needs a recorded reference |
 | Route computation | Time spent calculating a route, separate from distributing it |
 | Service recovery | Time from a documented failure reference to the first confirmed restored delivery |
+| Local failover time | Time from declared loss of the primary neighbor to the first confirmed delivery through the backup; reported separately from controller-driven recovery |
 | Delivery gap | Time between the last receipt before interruption and the first receipt afterward |
 
 Do not subtract timestamps from unsynchronized boards to claim one-way latency. Do not use Wi-Fi access-point RSSI as if it were peer ESP-NOW RSSI. If peer RSSI is unavailable, show unavailable and record the limitation.
@@ -84,7 +105,7 @@ The laptop can timestamp observations consistently, but those include reporting 
 
 ## Dashboard and simulator
 
-The intended dashboard shows node reachability, permitted and observed links, calculated and confirmed routes, sensor values, packet counts, RTT, available RSSI, history charts, and a failure/recovery timeline. Planned failure controls must label software-injected events separately from real disconnections. Show telemetry freshness so stale state does not look live.
+The intended dashboard shows node reachability, permitted and observed links, calculated and confirmed routes, sensor values, packet counts, RTT, available RSSI, history charts, and a failure/recovery timeline. Planned failure controls must label software-injected events separately from real disconnections. Recovery events state whether they came from local failover or a controller reroute, and replayed readings are labeled as delayed. Show telemetry freshness so stale state does not look live.
 
 A simulator is planned for development on separate laptops and larger virtual topologies. It should reuse protocol definitions and controller behavior where practical. Simulation cannot validate ESP8266 radio performance, physical RSSI, power stability, or USB drivers. The approved transition to hardware follows the working simulated demo in Phase 5, before dashboard polish and adaptive routing.
 
@@ -99,8 +120,8 @@ Avoid creating package files, selecting versions, or claiming run commands until
 
 ## Boundaries
 
-- A surviving route to C and a working controller are required for centrally computed healing.
-- C and the laptop are single points of failure in this version. Existing forwarding may persist during controller loss, but autonomous recovery is not promised.
+- A surviving route to C and a working controller are required for centrally computed healing. Local failover needs only a confirmed, pre-installed backup and a surviving path through it.
+- C is a single point of failure in this version because it is the only gateway. The laptop is required to calculate new routes, store data, and run the dashboard. During controller loss, nodes keep forwarding, can fail over only to pre-installed backups, and C buffers a bounded number of readings. Dual gateways, a Wi-Fi backup link to the laptop, a standby controller, and distributed routing are possible future work.
 - Failure of A removes the data source. Failure of both B and D partitions A from C.
 - Delivery may pause and readings may be lost during recovery. Unlimited buffering and zero-loss guarantees are not in scope.
 - Logical link filtering reproduces a topology; it does not demonstrate physical radio isolation or security.
