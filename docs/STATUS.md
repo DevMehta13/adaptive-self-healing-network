@@ -4,7 +4,7 @@ Last updated: 2026-10-11
 
 ## Project state
 
-**Phase 0 is half done (the backend half exists; the dashboard half is Dev's and has not started). Phase 1's backend side is done.** The agreed project uses four ESP8266 NodeMCU boards. Hardware has not been purchased; no radio, USB, sensor, dashboard, controller, or routing test has been performed. The running code is the backend under `backend/`: a status-only API, the protocol codec, and a two-node simulator.
+**Phase 0 is half done (the backend half exists; the dashboard half is Dev's and has not started). Phase 1 and Phase 2 are done on the backend side.** The agreed project uses four ESP8266 NodeMCU boards. Hardware has not been purchased; no radio, USB, sensor, dashboard, or controller exists, and no hardware test has been performed. The running code is the backend under `backend/`: a status-only API, the protocol codec, and a four-node simulator with manual routing, forwarding, retries and duplicate detection (no route calculation or failure detection).
 
 ### Ownership split (agreed between the owners)
 
@@ -34,14 +34,25 @@ The two sides meet only through written contracts. The first is [docs/DASHBOARD_
   - `backend/src/iot_backend/simulator/`: virtual clock, seeded directional links (delay, random loss, scripted drops), virtual A and B exchanging encoded bytes, event trace, CLI demo.
   - 64 new tests covering the required scenarios (see Verification record).
 
+- 2026-10-11: **Phase 1 review fixes and Phase 2, backend side** (authorized by Harshal):
+  - Fixes: nodes receive the link-layer sender (`receive(data, from_node)`); the summary comes from node/link counters, separating readings created from frames sent; `stop_node` / `start_node` with RAM loss replace instant restart.
+  - Four virtual nodes A-D. All boards can physically hear each other; the diamond A-B, B-C, A-D, D-C is enforced by each node's permitted-neighbor list (not by leaving links out).
+  - Manual routing tables with a runtime `set_route`; `no_route` drops.
+  - Forwarding with a TTL rule, only C acknowledges, observed paths rebuilt from received-frame evidence.
+  - End-to-end retries from A (same identity, at most 3 attempts), bounded wrap-safe duplicate detection at C with re-ACK, bounded send queues with `queue_full` drops.
+  - Failure controls: node stop/start, directional link down, runtime delay/loss changes.
+  - Six strict JSON scenarios in `scenarios/`, and a CLI that runs them and prints trace, observed paths and a drops-by-reason summary.
+  - Behavioural rules added to `docs/PROTOCOL.md`; the frame header and byte layout, `protocol/` code and `tests/protocol-examples/` are unchanged.
+
 ## Current authorization and next step
 
-Harshal authorized **Phase 0 (backend half), its follow-ups, and Phase 1 (backend side)**. Nothing beyond that is authorized. Phase 2 (four nodes, forwarding, retries, duplicate suppression, routing) has **not** been started; plan approval is not implementation authorization.
+Harshal authorized **Phase 0 (backend half), its follow-ups, Phase 1 (backend side), and Phase 2 (backend side)**. Nothing beyond that is authorized. Phase 3 (HELLO/discovery, neighbor-loss timeouts, management flooding), the controller, Dijkstra, backup next hops and dashboard events have **not** been started; plan approval is not implementation authorization.
 
 **Needs Dev's review (nothing here is frozen until he approves):**
 
 - [docs/DASHBOARD_API.md](DASHBOARD_API.md): new `event_id` / `last_event_id` rule, Origin check, 3-interval stale rule.
 - [docs/PROTOCOL.md](PROTOCOL.md) and `tests/protocol-examples/`: header size, 32-bit session/sequence, `value` encoding, rejection-reason names and order. The firmware encoder must reproduce every `valid-*` example and reject every `invalid-*` one.
+- The new *Forwarding and delivery behaviour* section of `docs/PROTOCOL.md` (no format change): the TTL rule (a relay drops a frame that arrives with TTL 1), the permitted-neighbor rule, end-to-end retries with the same identity, the 64-number / 8-session duplicate window and re-ACK, and the default queue of 16 frames. Can the ESP8266 hold these (about 8 sessions x 8 bytes of bitmap plus a 16-frame queue of up to 250 bytes = 4 KB)? Confirm against measured free heap in Phase 6.
 
 **Phase 0 remaining:**
 
@@ -49,7 +60,7 @@ Harshal authorized **Phase 0 (backend half), its follow-ups, and Phase 1 (backen
 - Phase 0 is complete only when Dev's shell connects to the backend from a fresh checkout on both operating systems.
 - macOS verification of the backend (including the simulator and protocol tests) is pending until CI runs after push.
 
-**Next step:** Phase 2 — four virtual nodes with manually configured routes, TTL handling, duplicate detection, bounded queues and limited retransmission, once Harshal authorizes it.
+**Next step:** Phase 3 — HELLO messages, neighbor observations with freshness timers, topology reports and bounded management flooding, so the controller can discover that B is gone from received reports and timeouts. It needs Harshal's explicit authorization first.
 
 **Layout note:** `plan.md` lists a top-level `tests/` folder. Backend tests live in `backend/tests/` so the backend can be tested on its own; the top-level `tests/protocol-examples/` holds the shared protocol examples that both Python and firmware check.
 
@@ -65,7 +76,8 @@ Harshal authorized **Phase 0 (backend half), its follow-ups, and Phase 1 (backen
 | Firmware/toolchain versions | Must validate ESP8266 ESP-NOW and serial behavior on actual boards |
 | Peer RSSI | Reliable measurement method on the chosen ESP8266 framework is unverified |
 | Wire protocol and control transport | Frame header, DATA and DELIVERY_ACK are specified (draft, pending Dev's review). Management messages (HELLO, reports, route updates, probes, failover reports) and bounded flooding are reserved codes only; specify them in Phases 3–4 |
-| Phase 1 simulator limits | B counts every valid frame it receives (no duplicate suppression yet), A does not retry, late ACKs after the timeout are ignored (traced as `ack_ignored`), and only A and B exist; all are Phase 2 work |
+| Phase 2 simulator limits | Routes are manual and nothing detects a failed node, so a stopped relay means lost readings (shown by `b-stopped-no-route-change.json`). ACKs return through the routing tables; plan.md moves them to bounded management flooding in Phase 3. A reading reported *lost* may have been delivered when only its ACKs failed. Late ACKs are ignored. The duplicate window (64 numbers, 8 sessions) is bounded: a very late retry is refused, and a long-forgotten session could be counted again |
+| Simulated timing | Link delay (20 ms), service time (5 ms), queue size (16), ACK timeout (1 s) and attempts (3) are configured defaults, not measurements; hardware must set them |
 | Route installation | Versioned updates with relay installation before activation at A are planned; failure handling still requires specification and tests |
 | Demonstration route policy | Need repeatable selection of B without misrepresenting measured costs |
 | Timers and metrics | Initial HELLO, timeout, traffic, TTL, retry, and adaptive-policy settings are recorded in the plan; hardware validation and remaining evaluation details are pending |
@@ -78,6 +90,7 @@ Harshal authorized **Phase 0 (backend half), its follow-ups, and Phase 1 (backen
 
 ## Verification record
 
+- 2026-10-11, **Windows 11, Python 3.11.0, uv 0.13.0** (Phase 1 review fixes and Phase 2; macOS **not** run; CI not run, nothing pushed): `uv run ruff check .` and `uv run ruff format --check .` passed; `uv run pytest` passed **117 tests**. They cover: the receive-with-sender, counter-based summary and stop/start fixes; normal A>B>C delivery with observed paths for DATA and ACK (relays never ACK); manual switch to D; `no_route`; direct A-to-C bypass rejected by C although the radio reached it, and a never-sent frame when A's own list forbids C; frames from a non-permitted neighbor rejected by a relay; nothing reaching C except through B or D under random loss (3 seeds); lost ACK then retry with the same identity, counted once and re-ACKed; three lost attempts then *lost* with no further sends; late ACK ignored; routing loop ended by TTL and a precise TTL-1 rule test; B stopped with routes unchanged then restarted; restarted A with a new session and an in-flight old ACK ignored; one-direction link failure in each direction; runtime delay change; queue overflow bounded and counted; same seed gives identical traces and different seeds differ; duplicate detection across the 2^32 wrap (unit and simulation); malformed frames; scenario files load strictly, run and are repeatable; the CLI. As a check on the tests themselves, three deliberate breakages (duplicate filter disabled, receive-side neighbor check removed, retries given new sequence numbers) were each caught and then reverted. These are simulation results only; they say nothing about radio behaviour, timing on ESP8266 boards, or the firmware, which does not exist.
 - 2026-10-11, **Windows 11, Python 3.11.0, uv 0.13.0** (Phase 0 follow-ups and Phase 1; macOS **not** run; CI not run, nothing pushed): `uv run ruff check .` and `uv run ruff format --check .` passed; `uv run pytest` passed **74 tests**. These cover the Origin check and time-only heartbeats; every file in `tests/protocol-examples/` (encode equals bytes, decode equals fields, invalid files rejected with the stated reason); round-trip, boundary and reserved-type tests; and the simulator scenarios: normal delivery, dropped DATA, dropped ACK (delivered but unacknowledged), same-seed identical trace and different-seed different losses, malformed frames rejected while the run continues, and an A restart with a new session and restarted sequence numbers. The CLI demo (`uv run python -m iot_backend.simulator --seed 42 --duration 12 --drop A-B:2 --drop B-A:4 --malformed-at 5 --restart-a 9`) was also run and read by hand. These are simulation and codec results only; they say nothing about radio behavior or the firmware, which does not exist. The reference examples were generated with an independent hand-written packer and their hex checked against the codec, but no second implementation (C++) has yet confirmed the format.
 
 - 2026-10-11, **Windows 11, Python 3.11.0, uv 0.13.0** (backend only; no macOS run): `uv sync`; `uv run ruff check .` and `ruff format --check .` passed; `uv run pytest` passed 7 tests (health, snapshot, CORS, WebSocket status event, envelope shape, increasing `seq`, heartbeat, `seq` restart on reconnect). Started the real server with `uv run python -m iot_backend` and a separate Python `websockets` client received `/health`, `/api/snapshot`, the `status` event and two heartbeats about 2 s apart. The CI workflow has **not** run yet (not pushed); macOS is unverified. Simulation-mode status plumbing only; nothing network-related is measured.

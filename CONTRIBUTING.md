@@ -46,7 +46,7 @@ The intended toolchain is portable; PlatformIO documents support for both [macOS
 - Use data-capable USB cables for programming and the gateway. Identify the board's actual USB interface before choosing a driver.
 - Use portable path handling, match filename capitalization exactly, and avoid checked-in absolute paths.
 - When dependencies are introduced, record tested versions and setup instructions for both systems. Keep machine-specific environments out of Git.
-- One laptop connects to C for a physical integration run. The simulator supports independent software work; so far it models only two virtual nodes (see [backend/README.md](backend/README.md)).
+- One laptop connects to C for a physical integration run. The simulator supports independent software work; it models the four-node diamond with manually set routes (see [backend/README.md](backend/README.md)); there is no route calculation or failure detection yet.
 
 ## Verification expectations
 

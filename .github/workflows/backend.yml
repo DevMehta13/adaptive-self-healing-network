@@ -5,11 +5,13 @@ on:
     paths:
       - "backend/**"
       - "tests/protocol-examples/**"
+      - "scenarios/**"
       - ".github/workflows/backend.yml"
   pull_request:
     paths:
       - "backend/**"
       - "tests/protocol-examples/**"
+      - "scenarios/**"
       - ".github/workflows/backend.yml"
 
 jobs:
