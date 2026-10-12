@@ -565,7 +565,15 @@ def test_observed_path_is_c_evidence_even_when_the_controllers_plan_disagrees():
 def test_the_runtime_module_never_reads_simulator_internals():
     source = Path(inspect.getsourcefile(__import__("iot_backend.live.runtime", fromlist=["x"])))
     text = source.read_text(encoding="utf-8")
-    for word in ("sim.trace", ".trace.events", "observed_paths", "_nodes[", "_links[", "_engine", "route_state("):
+    for word in (
+        "sim.trace",
+        ".trace.events",
+        "observed_paths",
+        "_nodes[",
+        "_links[",
+        "_engine",
+        "route_state(",
+    ):
         if word == "route_state(":  # the controller's own state is allowed in the snapshot only
             assert text.count(word) == 1
         else:
