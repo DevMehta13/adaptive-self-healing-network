@@ -247,6 +247,25 @@ def test_relays_are_installed_and_acknowledged_before_the_source_is_told():
     assert events_of(ctl, "route_active")[0].data["confirmed_by"] == ["B", "A"]
 
 
+def test_a_path_with_two_relays_waits_for_both_before_the_source_is_told():
+    gw, view, ctl = make()
+    chain = {A: (B,), B: (A, D), D: (B, C), C: (D,)}  # a longer line A - B - D - C
+    for node, neighbors in chain.items():
+        gw.report(node, {n: ("two_way", 10) for n in neighbors})
+    assert events_of(ctl, "route_computed")[0].data["path"] == ["A", "B", "D", "C"]
+    first_round = {c.node: c.next_hop for _, c in gw.sent}
+    assert first_round == {B: D, D: C}  # both relays are told together; the source is not
+    gw.ack(B, gw.sent[0][1])
+    assert A not in {c.node for _, c in gw.sent}  # one relay confirmed is not enough
+    assert ctl.route_state()["waiting_for"] == ["D"]
+    gw.ack(D, gw.sent[1][1])
+    assert gw.sent[-1][1].node == A and gw.sent[-1][1].next_hop == B
+    assert "route_active" not in types(ctl)
+    gw.ack(A, gw.sent[-1][1])
+    assert types(ctl)[-1] == "route_active"
+    assert events_of(ctl, "route_active")[0].data["confirmed_by"] == ["B", "D", "A"]
+
+
 def test_commands_carry_epoch_version_destination_and_no_backup():
     gw, view, ctl = make(epoch=777)
     diamond_reports(gw, symmetric())

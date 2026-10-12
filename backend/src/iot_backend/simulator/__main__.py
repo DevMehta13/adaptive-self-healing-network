@@ -1,15 +1,22 @@
 """Command-line demo: run a four-node scenario and print its trace, observed paths and summary."""
 
 import argparse
+import statistics
 from collections.abc import Sequence
 from dataclasses import replace
 
-from iot_backend.controller import TopologyView
+from iot_backend.controller import RoutingConfig, TopologyView
 from iot_backend.protocol import NODE_IDS
 from iot_backend.simulator.link import LinkConfig
-from iot_backend.simulator.measurements import detection_measurements
-from iot_backend.simulator.scenario import LINK_KEYS, ScenarioConfig, Simulation
+from iot_backend.simulator.measurements import detection_measurements, recovery_measurement
+from iot_backend.simulator.scenario import (
+    LINK_KEYS,
+    ROUTING_CONTROLLER,
+    ScenarioConfig,
+    Simulation,
+)
 from iot_backend.simulator.scenario_file import (
+    ControllerHost,
     ScenarioError,
     apply_actions,
     load_scenario,
@@ -35,7 +42,10 @@ DROP_REASONS = (
     "node_stopped",
     "flood_duplicate",
     "own_frame",
+    "not_from_gateway",
+    "probe_unmatched",
 )
+HIDDEN_BY_DEFAULT = {"HELLO", "PROBE", "PROBE_REPLY"}
 
 
 def _link_value(text: str) -> tuple[tuple[str, str], str]:
@@ -111,15 +121,25 @@ def build_parser() -> argparse.ArgumentParser:
         help="deliver a corrupted 3-byte frame from A to B at this time",
     )
     parser.add_argument("--no-trace", action="store_true", help="print only paths and summary")
+    parser.add_argument(
+        "--measure-seeds",
+        type=int,
+        metavar="N",
+        help=(
+            "run the scenario with seeds 1..N and print recovery statistics "
+            "(min / median / max, simulated time); prints no trace"
+        ),
+    )
     parser.add_argument("--verbose", action="store_true", help="also show HELLO frames")
     return parser
 
 
-def _build(args: argparse.Namespace) -> tuple[str, str, int, Simulation, list]:
+def _build(args: argparse.Namespace) -> tuple[str, str, int, Simulation, list, RoutingConfig]:
+    routing = RoutingConfig()
     if args.scenario:
         spec = load_scenario(args.scenario)
         config, name, description = spec.config, spec.name, spec.description
-        duration_ms, actions = spec.duration_ms, spec.actions
+        duration_ms, actions, routing = spec.duration_ms, spec.actions, spec.controller
     else:
         config = ScenarioConfig(seed=42)
         name, description, duration_ms, actions = (
@@ -151,14 +171,76 @@ def _build(args: argparse.Namespace) -> tuple[str, str, int, Simulation, list]:
     for key, loss in args.loss:
         links[key] = replace(links.get(key, LinkConfig()), loss=loss)
     config.links = links
-    return name, description, duration_ms, Simulation(config), actions
+    return name, description, duration_ms, Simulation(config), actions, routing
+
+
+def _spread(values: list[int | None]) -> str:
+    known = [v for v in values if v is not None]
+    if not known:
+        return "never"
+    text = f"{min(known)} / {int(statistics.median(known))} / {max(known)} ms"
+    return text if len(known) == len(values) else f"{text} ({len(values) - len(known)} never)"
+
+
+def _measure(args: argparse.Namespace) -> int:
+    if not args.scenario:
+        print("error: --measure-seeds needs a scenario file")
+        return 2
+    runs = []
+    compute_us: list[int] = []
+    for seed in range(1, args.measure_seeds + 1):
+        args.seed = seed
+        _, _, duration_ms, sim, actions, routing = _build(args)
+        host = ControllerHost(sim, routing) if sim.config.routing == ROUTING_CONTROLLER else None
+        apply_actions(sim, actions, host)
+        sim.run(duration_ms)
+        if host is None:
+            print("error: --measure-seeds needs a scenario with routing 'controller'")
+            return 2
+        recovery = recovery_measurement(
+            actions, sim.trace.events, host.route_events, host.topology_events
+        )
+        if recovery is None:
+            print("error: the scenario has no scripted failure to measure")
+            return 2
+        runs.append(recovery)
+        compute_us.extend(host.controller.stats.compute_us)
+    print(f"scenario: {args.scenario}  seeds 1..{args.measure_seeds}  (SIMULATION, not hardware)")
+    print(f"reference: scripted failure `{runs[0].failure}` at {runs[0].failure_ms / 1000:.3f} s")
+    print("                              min / median / max")
+    rows = (
+        ("failure detection", [r.detection_ms for r in runs]),
+        ("route active (after failure)", [r.route_active_after_ms for r in runs]),
+        ("  distribution only", [r.distribution_ms for r in runs]),
+        ("service recovery", [r.service_recovery_ms for r in runs]),
+        ("delivery gap at C", [r.delivery_gap_ms for r in runs]),
+    )
+    for label, values in rows:
+        print(f"  {label:<28} {_spread(values)}")
+    lost = [r.readings_lost for r in runs]
+    spread = f"{min(lost)} / {int(statistics.median(lost))} / {max(lost)}"
+    print(f"  {'readings lost in recovery':<28} {spread}")
+    if compute_us:
+        print(
+            f"  route computation, wall-clock CPU on this laptop (not simulated): "
+            f"{min(compute_us)} / {int(statistics.median(compute_us))} / {max(compute_us)} us "
+            f"over {len(compute_us)} runs"
+        )
+    return 0
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.measure_seeds:
+        try:
+            return _measure(args)
+        except (ScenarioError, ValueError) as error:
+            print(f"error: {error}")
+            return 2
     try:
-        name, description, duration_ms, sim, actions = _build(args)
-        apply_actions(sim, actions)
+        name, description, duration_ms, sim, actions, routing = _build(args)
+        host = ControllerHost(sim, routing) if sim.config.routing == ROUTING_CONTROLLER else None
+        apply_actions(sim, actions, host)
     except (ScenarioError, ValueError) as error:
         print(f"error: {error}")
         return 2
@@ -167,7 +249,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         sim.restart_node("A", round(args.restart_a * 1000))
     if args.malformed_at is not None:
         sim.inject_frame("B", b"\x01\x02\x03", round(args.malformed_at * 1000), from_name="A")
-    view = TopologyView(sim.gateway) if sim.config.discovery else None
+    view = host.view if host else TopologyView(sim.gateway) if sim.config.discovery else None
     sim.run(duration_ms)
 
     print(f"scenario: {name} - {description}")
@@ -177,7 +259,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if not args.no_trace:
         print(f"{'time':>9}  {'nd':<2}  {'event':<22}  {'packet':<18} details")
         for event in sim.trace.events:
-            if not args.verbose and event.info.get("msg") == "HELLO":
+            if not args.verbose and event.info.get("msg") in HIDDEN_BY_DEFAULT:
                 continue
             print(format_event(event))
     if sim.trace.dropped:
@@ -209,8 +291,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     print(f"  duplicates at dest ........ {s.duplicates}")
     print(f"  acknowledged at source .... {s.acknowledged}")
     print(f"  lost (gave up) ............ {s.lost}")
+    print(f"  dropped, no route (source). {s.dropped_no_route}")
     print(f"  unresolved ................ {s.unresolved}")
-    print(f"  HELLO / report frames ..... {s.hellos} / {s.reports}")
+    print(f"  HELLO / PROBE / report .... {s.hellos} / {s.probes} / {s.reports}")
     print("  drops by reason:")
     reasons = list(DROP_REASONS) + sorted(set(s.drops) - set(DROP_REASONS))
     for reason in reasons:
@@ -218,7 +301,56 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if view is not None:
         _print_controller(view, actions)
+    if host is not None:
+        _print_routes(sim, host, actions)
     return 0
+
+
+def _route_text(state: tuple) -> str:
+    epoch, version, hop = state
+    return f"epoch {epoch} v{version} via {hop}" if hop else f"epoch {epoch} v{version}: NO ROUTE"
+
+
+def _print_routes(sim: Simulation, host: ControllerHost, actions: list) -> None:
+    print()
+    print("Routes held by nodes at the end (epoch, version, next hop for C)")
+    for node in "ABCD":
+        state = sim.route_state(node, "C")
+        print(f"  node {node}: {'none installed' if state is None else _route_text(state)}")
+    print()
+    print("Route events (controller)")
+    for event in host.route_events:
+        print(
+            f"  #{event.event_id:<3} {event.time_ms / 1000:8.3f} s  {event.type:<20} {event.data}"
+        )
+    stats = host.controller.stats
+    print(
+        f"  updates sent {stats.updates_sent}, retries {stats.retries}, "
+        f"acks ignored {stats.acks_ignored}, plans {stats.plans}"
+    )
+    recovery = recovery_measurement(
+        actions, sim.trace.events, host.route_events, host.topology_events
+    )
+    if recovery is None:
+        return
+    print()
+    print("Recovery measurement (simulated; reference = scripted failure time)")
+    print(f"  failure ................. {recovery.failure} at {recovery.failure_ms / 1000:.3f} s")
+    for label, value in (
+        ("failure detected after", recovery.detection_ms),
+        ("route active after", recovery.route_active_after_ms),
+        ("  of which distribution", recovery.distribution_ms),
+        ("service recovery after", recovery.service_recovery_ms),
+        ("delivery gap at C", recovery.delivery_gap_ms),
+    ):
+        text = "never" if value is None else f"{value} ms"
+        print(f"  {label:<24} {text}")
+    print(f"  readings lost in recovery  {recovery.readings_lost}")
+    if stats.compute_us:
+        print(
+            f"  route computation (wall-clock CPU on this laptop, not simulated time): "
+            f"{len(stats.compute_us)} runs, worst {max(stats.compute_us)} us"
+        )
 
 
 def _print_controller(view: TopologyView, actions: list) -> None:

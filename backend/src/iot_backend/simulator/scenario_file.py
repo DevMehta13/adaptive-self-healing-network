@@ -4,14 +4,17 @@ The format is strict: unknown keys are errors, so a typo cannot silently change 
 """
 
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
+from iot_backend.controller import RouteController, RoutingConfig, TopologyView
 from iot_backend.simulator.link import LinkConfig
 from iot_backend.simulator.scenario import (
     LINK_KEYS,
     NODE_LETTERS,
+    ROUTING_CONTROLLER,
+    ROUTING_MANUAL,
     ScenarioConfig,
     Simulation,
 )
@@ -28,6 +31,18 @@ _TOP_KEYS = {
     "links",
     "initial_seq",
     "actions",
+    "routing",
+    "controller",
+}
+_CONTROLLER_KEYS = {
+    "epoch",
+    "hold_down_ms",
+    "install_timeout_ms",
+    "install_max_attempts",
+    "replan_delay_ms",
+    "max_failed_plans",
+    "no_route_grace_ms",
+    "initial_settle_ms",
 }
 _SETTING_KEYS = {
     "reading_interval_ms",
@@ -44,6 +59,12 @@ _SETTING_KEYS = {
     "report_interval_ms",
     "report_coalesce_ms",
     "flood_cache_size",
+    "probe_interval_ms",
+    "probe_jitter_ms",
+    "rtt_window",
+    "rtt_min_samples",
+    "rtt_max_age_ms",
+    "max_routes",
 }
 _BOOL_SETTINGS = {"discovery"}
 _STRING_SETTINGS = {"ack_delivery"}
@@ -57,6 +78,7 @@ _ACTION_KEYS = {
     "link_down": {"link", "down"},
     "set_link": {"link", "delay_ms", "loss"},
     "inject_frame": {"node", "from", "hex"},
+    "restart_controller": {"epoch"},
 }
 
 
@@ -71,6 +93,7 @@ class ScenarioSpec:
     duration_ms: int
     config: ScenarioConfig
     actions: list[dict[str, Any]] = field(default_factory=list)
+    controller: RoutingConfig = field(default_factory=RoutingConfig)  # used if routing=controller
 
 
 def parse_link(text: str) -> tuple[str, str]:
@@ -119,6 +142,21 @@ def parse_scenario(raw: dict[str, Any]) -> ScenarioSpec:
     config.reading_src = reading.get("from", config.reading_src)
     config.reading_dst = reading.get("to", config.reading_dst)
 
+    routing = raw.get("routing", ROUTING_MANUAL)
+    if routing not in (ROUTING_MANUAL, ROUTING_CONTROLLER):
+        raise ScenarioError(f"routing must be 'manual' or 'controller', got {routing!r}")
+    config.routing = routing
+    if routing == ROUTING_CONTROLLER and "routes" in raw:
+        raise ScenarioError("routing 'controller' installs routes itself: remove 'routes'")
+    controller_raw = raw.get("controller", {})
+    _check_keys("controller", set(controller_raw), _CONTROLLER_KEYS)
+    if controller_raw and routing != ROUTING_CONTROLLER:
+        raise ScenarioError("a 'controller' section needs routing 'controller'")
+    try:
+        controller = RoutingConfig(**{k: int(v) for k, v in controller_raw.items()})
+    except ValueError as error:
+        raise ScenarioError(f"controller: {error}") from error
+
     if "permitted" in raw:
         config.permitted = {node: set(nbrs) for node, nbrs in raw["permitted"].items()}
     for node, table in raw.get("routes", {}).items():
@@ -143,6 +181,8 @@ def parse_scenario(raw: dict[str, Any]) -> ScenarioSpec:
         _check_keys(
             f"actions[{i}]", set(action), _ACTION_KEYS[kind] | {"action", "at_ms"}, {"at_ms"}
         )
+        if kind == "restart_controller" and routing != ROUTING_CONTROLLER:
+            raise ScenarioError(f"actions[{i}]: restart_controller needs routing 'controller'")
     try:
         Simulation(config)  # validates names, routes and links up front
     except ValueError as error:
@@ -154,11 +194,62 @@ def parse_scenario(raw: dict[str, Any]) -> ScenarioSpec:
         duration_ms=round(float(raw["duration_s"]) * 1000),
         config=config,
         actions=actions,
+        controller=controller,
     )
 
 
-def apply_actions(sim: Simulation, actions: list[dict[str, Any]]) -> None:
-    """Schedule a scenario's timed actions on a simulation."""
+class ControllerHost:
+    """The controller side of a simulated run: a topology view and a route controller on the
+    simulation's gateway. It can be restarted, which is a new process: empty view, a new epoch,
+    version numbers starting again from 1. It touches the simulation only through its gateway.
+    """
+
+    def __init__(self, sim: Simulation, config: RoutingConfig) -> None:
+        self._sim = sim
+        self.config = config
+        self.views: list[TopologyView] = []
+        self.controllers: list[RouteController] = []
+        self._start(config)
+
+    def _start(self, config: RoutingConfig) -> None:
+        view = TopologyView(self._sim.gateway)
+        self.views.append(view)
+        self.controllers.append(RouteController(view, self._sim.gateway, config))
+
+    @property
+    def view(self) -> TopologyView:
+        return self.views[-1]
+
+    @property
+    def controller(self) -> RouteController:
+        return self.controllers[-1]
+
+    @property
+    def route_events(self) -> list:
+        """Route events of every controller run, in order (ids restart with each run)."""
+        return [e for c in self.controllers for e in c.events]
+
+    @property
+    def topology_events(self) -> list:
+        return [e for v in self.views for e in v.events]
+
+    def restart(self, epoch: int) -> None:
+        self.controller.stop()
+        self.config = replace(self.config, epoch=epoch)
+        self._start(self.config)
+
+
+def start_controller(sim: Simulation, spec: ScenarioSpec) -> ControllerHost | None:
+    """Attach the route controller if the scenario uses controller routing."""
+    if spec.config.routing != ROUTING_CONTROLLER:
+        return None
+    return ControllerHost(sim, spec.controller)
+
+
+def apply_actions(
+    sim: Simulation, actions: list[dict[str, Any]], host: ControllerHost | None = None
+) -> None:
+    """Schedule a scenario's timed actions on a simulation (and, if given, its controller)."""
     for action in actions:
         at = int(action["at_ms"])
         kind = action["action"]
@@ -180,14 +271,20 @@ def apply_actions(sim: Simulation, actions: list[dict[str, Any]]) -> None:
             sim.configure_link(src, dst, at, action.get("delay_ms"), action.get("loss"))
         elif kind == "inject_frame":
             sim.inject_frame(action["node"], bytes.fromhex(action["hex"]), at, action["from"])
+        elif kind == "restart_controller":
+            if host is None:
+                raise ScenarioError("restart_controller needs a controller host")
+            sim.call_at(at, lambda epoch=int(action["epoch"]): host.restart(epoch))
 
 
 __all__ = [
     "NODE_LETTERS",
+    "ControllerHost",
     "ScenarioError",
     "ScenarioSpec",
     "apply_actions",
     "load_scenario",
     "parse_link",
     "parse_scenario",
+    "start_controller",
 ]

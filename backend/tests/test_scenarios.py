@@ -11,6 +11,7 @@ from iot_backend.simulator.scenario_file import (
     apply_actions,
     load_scenario,
     parse_scenario,
+    start_controller,
 )
 
 SCENARIO_DIR = Path(__file__).resolve().parents[2] / "scenarios"
@@ -20,7 +21,8 @@ SCENARIO_FILES = sorted(SCENARIO_DIR.glob("*.json"))
 def run_scenario(name: str) -> Simulation:
     spec = load_scenario(SCENARIO_DIR / f"{name}.json")
     sim = Simulation(spec.config)
-    apply_actions(sim, spec.actions)
+    host = start_controller(sim, spec)  # None for the manual-route scenarios
+    apply_actions(sim, spec.actions, host)
     sim.run(spec.duration_ms)
     return sim
 
