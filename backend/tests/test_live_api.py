@@ -544,3 +544,29 @@ def test_a_slow_websocket_client_is_dropped_not_buffered_forever():
     from iot_backend.api import ws as ws_module
 
     assert ws_module.MAX_BACKLOG <= 5000  # the per-connection queue has a bound
+
+
+def test_observed_path_is_c_evidence_even_when_the_controllers_plan_disagrees():
+    """Freeze the controller (its plan stays A > B > C) and let the nodes fail over alone:
+    the dashboard must show what C saw (via D), not what the plan says."""
+    with make_client() as client:
+        api = Api(client)
+        api.step(12_000)
+        api.live.controller.stop()  # a controller that has stopped reacting
+        api.post("node", {"node": "B", "action": "stop"})
+        api.step(20_000)
+        snapshot = api.snapshot()
+    assert snapshot["route"]["path"] == ["A", "B", "C"]  # the stale plan
+    recent = snapshot["readings"]["recent"]
+    assert recent and {r["via"] for r in recent[-5:]} == {"D"}  # what C actually observed
+    assert all(r["observed_path"] == ["A", "D", "C"] for r in recent[-5:])
+
+
+def test_the_runtime_module_never_reads_simulator_internals():
+    source = Path(inspect.getsourcefile(__import__("iot_backend.live.runtime", fromlist=["x"])))
+    text = source.read_text(encoding="utf-8")
+    for word in ("sim.trace", ".trace.events", "observed_paths", "_nodes[", "_links[", "_engine", "route_state("):
+        if word == "route_state(":  # the controller's own state is allowed in the snapshot only
+            assert text.count(word) == 1
+        else:
+            assert word not in text, f"runtime reads {word}"
