@@ -168,6 +168,15 @@ class TopologyView:
                 result.append((_name(a), _name(b), cost))
         return result
 
+    def stale_links(self) -> list[tuple[str, str]]:
+        """Links whose state is unknown because a report expired (not known to be down)."""
+        self._evaluate()
+        return [
+            (_name(a), _name(b))
+            for (a, b), state in sorted(self._links.items())
+            if state.state == LINK_STALE
+        ]
+
     def unmeasured_links(self) -> list[tuple[str, str]]:
         """Up links that are not routable because an end has no measurement."""
         self._evaluate()

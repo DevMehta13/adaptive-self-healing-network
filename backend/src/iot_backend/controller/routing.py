@@ -20,6 +20,16 @@ Rules, all of them testable from outside:
   failed (a node refused) / unconfirmed (acknowledgements missing) / superseded (replaced).
 * **No path.** The controller reports `no_available_route` and tells the source explicitly with a
   ROUTE_UPDATE whose next hop is none (bounded retries as above).
+* **Backups (Phase 4b, `backup_next_hops`).** Each forwarding node on the route also gets a
+  backup next hop that is *loop-free and node-protecting*: the backup neighbor's own shortest
+  path to the destination passes through neither this node nor the primary next hop (see
+  `protecting_backups`). The backup relay's entry is installed and acknowledged, in the same
+  route version, before the primary relays and the source; the route is active only when all of
+  it is confirmed.
+* **Local failover reports.** A node that switched to its backup says so (LOCAL_FAILOVER_REPORT).
+  The controller records a *local failover* recovery event, stops using the abandoned link until
+  it has been routable for the hold-down again, and installs the route that results: it never
+  re-installs the primary the node just abandoned.
 * **Versions.** Every update carries (epoch, version). Nodes ignore anything older than what they
   hold. The epoch identifies this controller run; a restarted controller must use a larger one.
 
@@ -35,7 +45,13 @@ from typing import Any
 
 from iot_backend.controller.topology import TopologyView
 from iot_backend.protocol import NODE_IDS, NODE_NAMES
-from iot_backend.transports import Gateway, GatewayEvent, RouteInstallAckEvent, RouteUpdateCommand
+from iot_backend.transports import (
+    Gateway,
+    GatewayEvent,
+    LocalFailoverEvent,
+    RouteInstallAckEvent,
+    RouteUpdateCommand,
+)
 
 # Plan kinds and states
 KIND_ROUTE = "route"
@@ -97,6 +113,74 @@ def shortest_path(
 
 
 @dataclass(frozen=True)
+class BackupPlan:
+    """Backups for a route: who falls back to whom, and which extra nodes need an entry."""
+
+    backups: dict[int, int]  # forwarding node on the route -> its backup next hop
+    entries: dict[int, int]  # node off the route that must forward: node -> next hop
+
+    @property
+    def signature(self) -> tuple[tuple[tuple[int, int], ...], tuple[tuple[int, int], ...]]:
+        return tuple(sorted(self.backups.items())), tuple(sorted(self.entries.items()))
+
+
+def protecting_backups(links: Iterable[tuple[int, int, int]], path: tuple[int, ...]) -> BackupPlan:
+    """Choose a loop-free, node-protecting backup next hop for each node on `path`.
+
+    For node N on the path with primary next hop P, a neighbor n of N (n is not P) is a valid
+    backup only if n's own shortest path to the destination exists and passes through neither N
+    nor P:
+
+    * not through N, or the backup would send the frame straight back (a loop);
+    * not through P, or the backup would depend on the very relay whose failure it is meant to
+      cover (it is "loop-free" but not "node-protecting").
+
+    Among valid candidates the cheapest (cost to n plus n's cost to the destination, then fewer
+    hops, then lower id) wins. Nodes off the route on a backup path get an entry too, and a
+    candidate is dropped if it would give such a node (or a node already on the primary path)
+    two different next hops, so one entry per node is always consistent. No valid backup means
+    none: the relay B in the diamond has none, because its only other neighbor, A, reaches C
+    through B itself.
+    """
+    links = list(links)
+    adjacency: dict[int, dict[int, int]] = {}
+    for a, b, cost in links:
+        adjacency.setdefault(a, {})[b] = cost
+        adjacency.setdefault(b, {})[a] = cost
+    destination = path[-1]
+    on_path = {node: path[i + 1] for i, node in enumerate(path[:-1])}
+    backups: dict[int, int] = {}
+    entries: dict[int, int] = {}
+    for index, node in enumerate(path[:-1]):
+        primary = path[index + 1]
+        best: tuple[tuple[int, int, int], int, dict[int, int]] | None = None
+        for neighbor in sorted(adjacency.get(node, {})):
+            if neighbor == primary:
+                continue
+            route = shortest_path(links, neighbor, destination)
+            if route is None or node in route.path or primary in route.path:
+                continue
+            needed = {
+                hop: route.path[i + 1] for i, hop in enumerate(route.path[:-1])
+            }  # entries along the backup path
+            conflict = any(
+                (hop in on_path and on_path[hop] != nxt) or (hop in entries and entries[hop] != nxt)
+                for hop, nxt in needed.items()
+            )
+            if conflict:
+                continue
+            key = (adjacency[node][neighbor] + route.cost_ms, len(route.path), neighbor)
+            if best is None or key < best[0]:
+                best = (key, neighbor, needed)
+        if best is not None:
+            backups[node] = best[1]
+            for hop, nxt in best[2].items():
+                if hop not in on_path:
+                    entries[hop] = nxt
+    return BackupPlan(backups, entries)
+
+
+@dataclass(frozen=True)
 class RoutingConfig:
     source: str = "A"
     destination: str = "C"
@@ -111,6 +195,9 @@ class RoutingConfig:
     # measured one by one at startup; installing the first path found would often be replaced
     # within milliseconds. Later changes (a failure) are acted on immediately.
     initial_settle_ms: int = 1_000
+    # Phase 4b: compute and install backup next hops. Off by default, so Phase 4a scenarios
+    # keep their exact behaviour; nodes use backups only if they also run local failover.
+    backup_next_hops: bool = False
     max_events: int = 1_000
 
     def __post_init__(self) -> None:
@@ -143,6 +230,9 @@ class _Plan:
     sessions: dict[int, int]  # session of each path node when the plan was computed
     computed_ms: int
     state: str = COMPUTED
+    trigger: str = ""
+    backups: dict[int, int] = field(default_factory=dict)  # node -> backup next hop
+    entries: dict[int, int] = field(default_factory=dict)  # off-route backup-path nodes
     phases: list[list[int]] = field(default_factory=list)
     phase_index: int = 0
     outstanding: dict[int, int] = field(default_factory=dict)  # node -> transmissions so far
@@ -155,6 +245,8 @@ class ControllerStats:
     retries: int = 0  # retransmissions of an unacknowledged update
     acks_ignored: int = 0  # acknowledgements that matched no outstanding update
     plans: int = 0
+    failovers_seen: int = 0  # distinct local failover reports acted on
+    failover_reports_repeated: int = 0  # repeats of a report already handled
     # Wall-clock time spent in Dijkstra on this laptop, in microseconds. Not simulated time.
     compute_us: deque[int] = field(default_factory=lambda: deque(maxlen=1_000))
 
@@ -180,11 +272,13 @@ class RouteController:
         self._last_eligible: frozenset[tuple[int, int]] | None = None
         self._last_change_ms = self._started_ms
         self._basis: tuple[frozenset[tuple[int, int]], tuple[tuple[str, int], ...]] | None = None
+        self._last_cost: dict[tuple[int, int], int] = {}  # last measured cost of a routable link
         self._since: dict[tuple[int, int], int] = {}
         self._eligible_at: dict[tuple[int, int], int] = {}
         self._seen: set[tuple[int, int]] = set()
         self._failed_streak = 0
         self._forced_trigger: str | None = None
+        self._handled_failovers: deque[tuple[int, int, int, int, int | None]] = deque(maxlen=32)
         self._busy = False
         self._again = False
         self._scheduled = False
@@ -246,6 +340,8 @@ class RouteController:
             "cost_ms": plan.cost_ms,
             "confirmed_by": [_name(n) for n in plan.confirmed],
             "waiting_for": [_name(n) for n in sorted(plan.outstanding)],
+            "backups": {_name(n): _name(b) for n, b in sorted(plan.backups.items())},
+            "backup_entries": {_name(n): _name(h) for n, h in sorted(plan.entries.items())},
         }
 
     # ---- inputs ----
@@ -255,6 +351,8 @@ class RouteController:
             return
         if isinstance(event, RouteInstallAckEvent):
             self._on_ack(event)
+        elif isinstance(event, LocalFailoverEvent):
+            self._on_failover(event)
 
     def _on_view_event(self, _event: object) -> None:
         # Fired while the view is mid-evaluation: read it back only after it has finished.
@@ -291,6 +389,15 @@ class RouteController:
             (min(NODE_IDS[a], NODE_IDS[b]), max(NODE_IDS[a], NODE_IDS[b])): cost
             for a, b, cost in self._view.routable_links()
         }
+        # Fail-static on silence: a link whose information has merely *expired* (the controller
+        # stopped hearing reports, for instance while detached) is not known to be down, so it
+        # keeps its last known cost and is not treated as having left. Only a link the view
+        # says is down or one-way leaves the graph.
+        for a, b in self._view.stale_links():
+            key = (min(NODE_IDS[a], NODE_IDS[b]), max(NODE_IDS[a], NODE_IDS[b]))
+            if key in self._since and key in self._last_cost and key not in routable:
+                routable[key] = self._last_cost[key]
+        self._last_cost.update(routable)
         self._update_hold_down(routable, now)
         eligible = {key: cost for key, cost in routable.items() if now >= self._eligible_at[key]}
         if frozenset(eligible) != self._last_eligible:
@@ -353,17 +460,25 @@ class RouteController:
         if result is None:
             self._no_path(links, now, trigger)
             return
-        node_sessions = {n: sessions.get(_name(n), 0) for n in result.path}
+        extra = (
+            protecting_backups(links, result.path)
+            if self._config.backup_next_hops
+            else BackupPlan({}, {})
+        )
+        involved = set(result.path) | set(extra.entries)
+        node_sessions = {n: sessions.get(_name(n), 0) for n in involved}
         if (
             plan is not None
             and plan.kind == KIND_ROUTE
             and plan.path == result.path
+            and (tuple(sorted(plan.backups.items())), tuple(sorted(plan.entries.items())))
+            == extra.signature
             and plan.state in (INSTALLING, ACTIVE)
         ):
             if plan.sessions == node_sessions:
-                return  # the same route is already being installed or in use
+                return  # the same route, backups included, is already installing or in use
             trigger = "node_restarted"
-        self._start_plan(KIND_ROUTE, result, node_sessions, links, now, trigger)
+        self._start_plan(KIND_ROUTE, result, node_sessions, links, now, trigger, extra)
 
     def _no_path(self, links: list[tuple[int, int, int]], now: int, trigger: str) -> None:
         plan = self._plan
@@ -390,6 +505,7 @@ class RouteController:
         links: list[tuple[int, int, int]],
         now: int,
         trigger: str,
+        extra: BackupPlan | None = None,
     ) -> None:
         if self._plan is not None and self._plan.state in (COMPUTED, INSTALLING):
             self._plan.state = SUPERSEDED
@@ -403,7 +519,10 @@ class RouteController:
             cost_ms=result.cost_ms if result else None,
             sessions=sessions,
             computed_ms=now,
+            trigger=trigger,
         )
+        if extra is not None:
+            plan.backups, plan.entries = dict(extra.backups), dict(extra.entries)
         self._plan = plan
         flow = f"{self._config.source}->{self._config.destination}"
         graph = [{"link": f"{_name(a)}-{_name(b)}", "cost_ms": c} for a, b, c in links]
@@ -413,7 +532,10 @@ class RouteController:
             if at > now
         ]
         if kind == KIND_ROUTE:
-            plan.phases = [p for p in (list(path[1:-1]), [path[0]]) if p]
+            # Order of installation: backup relays (nodes off the route that a backup points
+            # at), then the primary relays (which hold backups of their own), then the source.
+            # Nothing is ever told to fall back onto a node that has no entry yet.
+            plan.phases = [p for p in (sorted(plan.entries), list(path[1:-1]), [path[0]]) if p]
             self._emit(
                 "route_computed",
                 {
@@ -425,6 +547,8 @@ class RouteController:
                     "graph": graph,
                     "held_down": held,
                     "trigger": trigger,
+                    "backups": {_name(n): _name(b) for n, b in sorted(plan.backups.items())},
+                    "backup_entries": {_name(n): _name(h) for n, h in sorted(plan.entries.items())},
                 },
             )
         else:
@@ -447,7 +571,12 @@ class RouteController:
     def _begin_phase(self, plan: _Plan) -> None:
         plan.state = INSTALLING
         nodes = plan.phases[plan.phase_index]
-        phase = "source" if plan.phase_index == len(plan.phases) - 1 else "relays"
+        if plan.phase_index == len(plan.phases) - 1:
+            phase = "source"
+        elif plan.kind == KIND_ROUTE and nodes and nodes[0] in plan.entries:
+            phase = "backup_relays"
+        else:
+            phase = "relays"
         self._emit(
             "route_installing",
             {
@@ -469,7 +598,14 @@ class RouteController:
             self.stats.updates_sent += 1
         else:
             self.stats.retries += 1
-        next_hop = None if plan.kind == KIND_NO_ROUTE else plan.path[plan.path.index(node) + 1]
+        backup: int | None = None
+        if plan.kind == KIND_NO_ROUTE:
+            next_hop = None
+        elif node in plan.entries:
+            next_hop = plan.entries[node]  # a backup relay: it forwards, with no backup of its own
+        else:
+            next_hop = plan.path[plan.path.index(node) + 1]
+            backup = plan.backups.get(node)
         self._gateway.send_route_update(
             RouteUpdateCommand(
                 node=node,
@@ -477,7 +613,7 @@ class RouteController:
                 version=plan.version,
                 destination=self._destination,
                 next_hop=next_hop,
-                backup_next_hop=None,  # Phase 4b
+                backup_next_hop=backup,
             )
         )
         self._gateway.call_later(
@@ -537,6 +673,8 @@ class RouteController:
                     "cost_ms": plan.cost_ms,
                     "confirmed_by": [_name(n) for n in plan.confirmed],
                     "distribution_ms": now - plan.computed_ms,
+                    "trigger": plan.trigger,
+                    "backups": {_name(n): _name(b) for n, b in sorted(plan.backups.items())},
                 },
             )
         else:
@@ -576,6 +714,57 @@ class RouteController:
                 self._fail(plan, FAILED, "node holds a newer version", [ack.origin])
             return
         self.stats.acks_ignored += 1  # about an older update; the current one is unaffected
+
+    def _on_failover(self, report: LocalFailoverEvent) -> None:
+        """A node switched to its backup (or found none) on its own.
+
+        Recorded as a *local failover*, which is a different recovery from a controller reroute.
+        The link the node abandoned is treated as having left the graph: it comes back only
+        after it has been routable for the hold-down, so the controller cannot send the node
+        back onto the primary it just gave up. Then the route is calculated again, which
+        normally confirms the backup path as the new primary route (with a new backup if one
+        exists) or installs something better.
+        """
+        key = (
+            report.origin,
+            report.epoch,
+            report.version,
+            report.from_next_hop,
+            report.to_next_hop,
+        )
+        if key in self._handled_failovers:
+            self.stats.failover_reports_repeated += 1
+            return  # a repeat of a report already acted on
+        self._handled_failovers.append(key)
+        self.stats.failovers_seen += 1
+        plan = self._plan
+        current = plan is not None and (report.epoch, report.version) == (
+            self._epoch,
+            plan.version,
+        )
+        link = (min(report.origin, report.from_next_hop), max(report.origin, report.from_next_hop))
+        self._emit(
+            "local_failover",
+            {
+                "node": _name(report.origin),
+                "from": _name(report.from_next_hop),
+                "to": None if report.to_next_hop is None else _name(report.to_next_hop),
+                "reason": report.reason,
+                "epoch": report.epoch,
+                "version": report.version,
+                "link": f"{_name(link[0])}-{_name(link[1])}",
+                "matches_current_route": current,
+                "outcome": "no_route" if report.to_next_hop is None else "backup_in_use",
+            },
+        )
+        # treat the abandoned link as gone: if it returns (or is still reported up) it must be
+        # routable for the hold-down before routes use it again
+        self._since.pop(link, None)
+        self._eligible_at.pop(link, None)
+        self._seen.add(link)
+        self._basis = None
+        self._forced_trigger = "local_failover_report"
+        self._reconcile()
 
     def _fail(self, plan: _Plan, state: str, reason: str, nodes: list[int]) -> None:
         plan.state = state
