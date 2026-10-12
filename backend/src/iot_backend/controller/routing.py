@@ -227,9 +227,17 @@ class RouteController:
     def route_state(self) -> dict[str, Any]:
         """The current plan, in the shape proposed for the dashboard snapshot."""
         plan = self._plan
+        flow = f"{self._config.source}->{self._config.destination}"
         if plan is None:
-            return {"epoch": self._epoch, "state": "waiting", "kind": None, "version": None}
+            return {
+                "flow": flow,
+                "epoch": self._epoch,
+                "state": "waiting",
+                "kind": None,
+                "version": None,
+            }
         return {
+            "flow": flow,
             "epoch": self._epoch,
             "version": plan.version,
             "kind": plan.kind,
