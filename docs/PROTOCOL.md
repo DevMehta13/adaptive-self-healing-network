@@ -1,6 +1,6 @@
 # Node protocol
 
-**Draft — pending Dev's review.** Written by Harshal (backend owner) for Dev, who will implement the same format in C++ on the ESP8266. Scope so far: the frame header, DATA, DELIVERY_ACK (Phase 1), forwarding/delivery behaviour (Phase 2; no format change), HELLO / TOPOLOGY_REPORT payloads with management-traffic behaviour (Phase 3), probes, route updates, route acknowledgements and the local-failover report (Phase 4a), and the behaviour of local failover (Phase 4b). The Python implementation is `backend/src/iot_backend/protocol/`; the shared reference examples are in [tests/protocol-examples/](../tests/protocol-examples/). If this document and the examples disagree, tell Harshal — they are meant to agree exactly.
+**Draft — pending Dev's review.** Written by Harshal (backend owner) for Dev, who will implement the same format in C++ on the ESP8266. Scope so far: the frame header, DATA, DELIVERY_ACK (Phase 1), forwarding/delivery behaviour (Phase 2; no format change), HELLO / TOPOLOGY_REPORT payloads with management-traffic behaviour (Phase 3), probes, route updates, route acknowledgements and the local-failover report (Phase 4a), the behaviour of local failover (Phase 4b), and TELEMETRY plus the evidence node C reports about each reading (Phase 5a). The Python implementation is `backend/src/iot_backend/protocol/`; the shared reference examples are in [tests/protocol-examples/](../tests/protocol-examples/). If this document and the examples disagree, tell Harshal — they are meant to agree exactly.
 
 ## Why a compact binary format
 
@@ -58,6 +58,7 @@ The whole encoded frame must be **≤ 250 bytes** (ESP-NOW v1). That leaves a **
 | `0x14` | PROBE | Implemented (Phase 4a, pending Dev's review) |
 | `0x15` | PROBE_REPLY | Implemented (Phase 4a, pending Dev's review) |
 | `0x16` | LOCAL_FAILOVER_REPORT | Defined in Phase 4a; sent by nodes from Phase 4b (pending Dev's review) |
+| `0x17` | TELEMETRY | Implemented (Phase 5a, pending Dev's review) |
 
 Codes `0x01–0x0F` are the data plane; `0x10` and above are management. Every code in this table now has a payload definition. A code that is added to the table before its payload is specified must be **rejected** (`reserved_type`) by the decoder; the reason is kept for that purpose, though no code is reserved today.
 
@@ -170,6 +171,24 @@ Created by a node that switched to its backup, or found it had none; addressed t
 | 10 | 1 | `to_next_hop` | The backup now in use (must differ from `from_next_hop`), or `0` when the node had **no usable backup** and now has no route. *(0 added in Phase 4b.)* |
 | 11 | 1 | `reason` | `1` the next hop stopped being a two-way neighbor (trigger T1: lost *or* one-way); `2` K consecutive link-layer send failures (trigger T2). Other values are invalid. *(2 added in Phase 4b.)* |
 
+### TELEMETRY (`0x17`) — payload 32 bytes (Phase 5a, pending Dev's review)
+
+A node's **own counters**, created by that node (`src`), addressed to C, carried by management flooding. It exists because some facts are known only to the node that holds them: C knows what it received, but only A knows how many readings it created and how many were never acknowledged. Sent every `telemetry_interval` (default 5 s in the live demo, 0 = off, jittered ±10 %).
+
+| Offset | Size | Field | Meaning |
+| --- | --- | --- | --- |
+| 0 | 4 | `created` | Readings created (source nodes). |
+| 4 | 4 | `acknowledged` | Readings whose delivery ACK came back (source). |
+| 8 | 4 | `lost` | Readings given up on after the last attempt (source). |
+| 12 | 4 | `no_route` | Readings dropped at creation for lack of a route (source). |
+| 16 | 4 | `delivered` | Unique readings accepted (destination). |
+| 20 | 4 | `forwarded` | Frames relayed for others. |
+| 24 | 4 | `dropped` | Frames discarded or rejected, all reasons. |
+| 28 | 2 | `failovers` | Local failovers performed. |
+| 30 | 2 | `send_failures` | Link-layer failure callbacks received. |
+
+Counters are cumulative since the node's boot (the frame's `session` says which boot) and saturate rather than wrap. Fields that do not apply to a node are zero. Any value is valid; only the size is checked (`bad_payload_length`). A receiver must label counts with the time they were received: they describe the node a moment ago, not now.
+
 ## Decoding rules
 
 A receiver must validate in this order and stop at the first failure. The frame is dropped and the reason recorded (the simulator traces `frame_rejected`; firmware should count by reason). Rejection never changes node state and never stops the node.
@@ -184,7 +203,7 @@ A receiver must validate in this order and stop at the first failure. The frame 
 | 6 | `src` or `dst` is 0 or 255 | `bad_node_id` |
 | 7 | `session` is 0 | `bad_session` |
 | 8 | `payload_len` ≠ total length − 14 | `length_mismatch` |
-| 9 | Payload size is wrong for the type (DATA ≠ 4, DELIVERY_ACK ≠ 9, PROBE ≠ 0, PROBE_REPLY ≠ 8, ROUTE_UPDATE ≠ 11, ROUTE_INSTALL_ACK ≠ 10, LOCAL_FAILOVER_REPORT ≠ 12); HELLO or TOPOLOGY_REPORT payload empty, `count` above 8, or length ≠ 1 + entry size × `count` (a report may add an RTT trailer of exactly `1 + 3 × rtt_count` bytes, `rtt_count` 1 to 8) | `bad_payload_length` |
+| 9 | Payload size is wrong for the type (TELEMETRY ≠ 32, DATA ≠ 4, DELIVERY_ACK ≠ 9, PROBE ≠ 0, PROBE_REPLY ≠ 8, ROUTE_UPDATE ≠ 11, ROUTE_INSTALL_ACK ≠ 10, LOCAL_FAILOVER_REPORT ≠ 12); HELLO or TOPOLOGY_REPORT payload empty, `count` above 8, or length ≠ 1 + entry size × `count` (a report may add an RTT trailer of exactly `1 + 3 × rtt_count` bytes, `rtt_count` 1 to 8) | `bad_payload_length` |
 | 10 | (DELIVERY_ACK `origin`, HELLO `node`, report `neighbor`, report RTT `neighbor`, route `destination`, `next_hop` or `backup_next_hop` equal to 255, failover node ids) is 0 or 255 (`next_hop` and `backup_next_hop` may be 0 = none) | `bad_node_id` |
 | 11 | (DELIVERY_ACK, HELLO entry, report entry, PROBE_REPLY `probe_session`) session is 0 | `bad_session` |
 | 12 | (report entry) `state` is not 1, 2 or 3; (report RTT) `rtt_ms` is `0xFFFF`; (route messages) `epoch` or `version` is 0; (ROUTE_UPDATE) a backup without a primary or equal to it; (ROUTE_INSTALL_ACK) `status` not 1–3; (LOCAL_FAILOVER_REPORT) `from_next_hop` = `to_next_hop` or `reason` not 1 or 2 | `bad_value` |
@@ -501,6 +520,20 @@ Local failover and backups are off by default only so that Phase 4a scenarios ke
 
 LOCAL_FAILOVER_REPORT was defined in Phase 4a but never sent. Phase 4b needed to say "no backup" and to name the second trigger, so `to_next_hop` may now be `0` and `reason` may be `2`. The layout and size (12 bytes) are unchanged. `valid-failover-report` is unchanged; five examples were added (`valid-failover-report-send-failures`, `valid-failover-report-no-backup`, `invalid-failover-reason-3`, `invalid-failover-from-zero`, `invalid-failover-to-255`). A firmware decoder written against the Phase 4a text must accept `to_next_hop` 0 and `reason` 2.
 
+## What node C observes about a reading (Phase 5a)
+
+**Pending Dev's review.** For the dashboard, C reports every DATA frame it accepts (and every repeat) to the gateway with the evidence C itself has. On hardware this is the line C writes to the serial port; in simulation it is a `ReadingEvent`.
+
+| Field | Source |
+| --- | --- |
+| `origin`, `session`, `seq`, `value` | the frame |
+| `via` | the **link-layer sender**: the neighbor whose radio handed C the frame (ESP-NOW reports the sender's MAC) |
+| `ttl` | the frame's remaining TTL |
+| `hops` | `data_ttl − ttl + 1`, the number of transmissions, assuming every node uses the configured data TTL (8) |
+| `duplicate` | the duplicate filter's verdict |
+
+C does **not** know the relays before `via`. An observed path is therefore `origin, (unknown relays...), via, C`, and with the diamond's two-hop paths `via` is the whole story: `hops` 2 and `via` B means A → B → C. Nothing here comes from a routing table or from the simulator's trace; a path computed by the controller is a *plan*, a different thing.
+
 ## Reference examples
 
 Each file in `tests/protocol-examples/` holds one case:
@@ -535,5 +568,6 @@ Defining ROUTE_UPDATE made the last "still reserved" example wrong by constructi
 - Is `value` as int32 hundredths fine for the eventual sensor? (Phase 8 may refine this without changing the header.)
 - Rejection-reason names and order: confirm they are practical to implement and count in firmware.
 - **Phase 4a:** the optional RTT trailer on TOPOLOGY_REPORT (is a trailer easier or harder than a wider entry for the firmware packer?), `0` as "none" in the next-hop fields, the 11- and 10-byte route payloads, the epoch rule (start time in seconds), and whether `max_routes` 8 and the 5-sample RTT window fit the ESP8266's heap.
+- **Phase 5a:** TELEMETRY (counters, 32 bytes, flooded every 5 s) and whether the nine counters are the right set; the reading evidence C reports (`via` from the link-layer sender, `hops` from TTL) and that the ESP8266 can report the ESP-NOW sender MAC and the frame TTL to the serial line per reading; what the serial JSON line looks like (not specified yet).
 - **Phase 4b:** the node-protecting backup rule and three-round installation order; T1 (two-way lost or one-way) and T2 (K consecutive failures, default 3); `to_next_hop` 0 and reason 2 in LOCAL_FAILOVER_REPORT; whether report repeats (5, one per report interval) are acceptable; and that the ESP8266 ESP-NOW send callback behaves as modelled (to be verified in Phase 6).
 - **Phase 4a:** a probe consumes a sequence number, like every created frame. If that is too many numbers per second for your counter or the duplicate window, say so and probes can use a separate counter.

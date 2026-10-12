@@ -2,12 +2,12 @@
 
 Laptop-side backend. It contains:
 
-- a FastAPI app serving a small HTTP API and a live WebSocket stream to the dashboard (reports its own status only);
+- a FastAPI app that runs the simulation **live** and serves it to the dashboard: a snapshot, a WebSocket event stream, and presenter controls that change the simulated environment (Phase 5a);
 - the node **protocol** module: binary frame encoding and validated decoding;
 - a deterministic **simulator** with four virtual nodes (A, B, C, D): manual or controller-installed routing, forwarding, retries, duplicate detection, HELLO discovery, link probes, bounded flooding and failures;
 - a **gateway interface** (`transports/`) and a **controller** (`controller/`): a topology view and, since Phase 4a, Dijkstra route calculation with versioned route installation and automatic rerouting. The controller sees the network only through events that reached node C and acts on it only through commands that node C turns into frames.
 
-Primary routes are calculated and installed automatically (Phase 4a), together with backup next hops that nodes switch to on their own when the primary fails (Phase 4b, local failover). The controller heartbeat and C's buffering, adaptive policies, a serial gateway and a database do not exist yet.
+Primary routes are calculated and installed automatically (Phase 4a), together with backup next hops that nodes switch to on their own when the primary fails (Phase 4b, local failover). The controller heartbeat and C's buffering and replay (Phase 5b), adaptive policies, a serial gateway and a database do not exist yet.
 
 Contracts (both drafts, pending Dev's review): [docs/DASHBOARD_API.md](../docs/DASHBOARD_API.md) and [docs/PROTOCOL.md](../docs/PROTOCOL.md).
 
@@ -31,13 +31,50 @@ uv sync
 
 This creates `backend/.venv` and installs the exact versions pinned in `uv.lock`. Commands are the same on Windows and macOS.
 
-## Run the server
+## Run the live demo
+
+The server starts the simulated network and paces it against the wall clock. The same commands work in PowerShell (Windows) and in a macOS terminal; run them inside `backend/`.
 
 ```sh
 uv run python -m iot_backend
 ```
 
-Then open <http://127.0.0.1:8000/health> or <http://127.0.0.1:8000/docs>. Stop with Ctrl+C.
+In a second terminal, watch it without a dashboard:
+
+```sh
+uv run python -m iot_backend.watch --no-heartbeats
+```
+
+Then do things to the simulated network (a presenter's controls). With PowerShell use `curl.exe` (plain `curl` is an alias for something else) and double the inner quotes, or use `Invoke-RestMethod`; with a macOS terminal use `curl` as written:
+
+```sh
+# macOS / Git Bash
+curl -X POST http://127.0.0.1:8000/api/control/node -H "Content-Type: application/json" -d '{"node":"B","action":"stop"}'
+curl -X POST http://127.0.0.1:8000/api/control/node -H "Content-Type: application/json" -d '{"node":"B","action":"start"}'
+```
+
+```powershell
+# Windows PowerShell
+Invoke-RestMethod -Method Post http://127.0.0.1:8000/api/control/node -ContentType application/json -Body '{"node":"B","action":"stop"}'
+Invoke-RestMethod -Method Post http://127.0.0.1:8000/api/control/node -ContentType application/json -Body '{"node":"B","action":"start"}'
+```
+
+What you will see in the watcher, in order: `ENV Stop B (injected by presenter, simulation)`; `LOCAL FAILOVER A: B -> D` about one second later; `route computed ... trigger=local_failover_report` and `ROUTE ACTIVE ... A>D>C`; a couple of seconds after that `LOST CONTACT with B` (the controller's own detection, later than the node's); readings now `via D`. After `Start B`: the links come back, are held down for 5 s, and then the route moves back to B. All times are simulated time; add `IOT_LIVE_SPEED=10` to run ten times faster.
+
+Other controls (full list in [docs/DASHBOARD_API.md](../docs/DASHBOARD_API.md)):
+
+| Request | Body |
+| --- | --- |
+| `POST /api/control/link` | `{"link":"A->B","down":true}` (one direction) |
+| `POST /api/control/link-config` | `{"link":"B->C","loss":0.2,"delay_ms":80}` |
+| `POST /api/control/gateway` | `{"attached":false}` (controller sees and sends nothing) |
+| `POST /api/control/pause`, `/resume` | `{}` |
+| `POST /api/control/speed` | `{"factor":5}` |
+| `POST /api/control/reset` | `{"scenario":"b-failure-auto-reroute"}` (any file in `scenarios/`) |
+
+`GET /api/snapshot` is the full current state; `GET /api/events?after_id=N` the recent history; `GET /health` a liveness check. Open <http://127.0.0.1:8000/docs> for the generated reference. Stop with Ctrl+C.
+
+A recorded run of this demo, as JSON, is in `tests/dashboard-fixtures/` so the dashboard can be built without the backend. Regenerate it after changing a shape with `uv run python -m iot_backend.live.record`.
 
 Optional configuration: copy `.env.example` to `.env` (`Copy-Item .env.example .env` on Windows, `cp .env.example .env` on macOS) and edit it, or set `IOT_*` environment variables. Defaults work without any file.
 
@@ -159,7 +196,11 @@ backend/
     config.py          settings from IOT_* environment variables
     envelope.py        the versioned WebSocket message envelope
     main.py            app factory and server entry point
-    api/               dashboard-facing endpoints (routes.py, ws.py)
+    api/               dashboard-facing endpoints (routes.py, control.py, ws.py)
+    live/              runtime.py (the paced live simulation and what the dashboard is
+                       shown), schema.py (event and snapshot shapes),
+                       record.py (writes tests/dashboard-fixtures/)
+    watch.py           terminal watcher: python -m iot_backend.watch
     protocol/          frame constants, message classes, encode()/decode()
     simulator/         engine.py (virtual clock), link.py, nodes.py (forwarding, retries),
                        dedup.py (duplicate filter), trace.py, scenario.py (Simulation),
@@ -173,6 +214,18 @@ backend/
 ```
 
 `src/iot_backend/` is the Python package from plan.md's `backend/` tree. `controller/`, `transports/` and `storage/` will be added inside it by the phases that need them. Backend tests live in `backend/tests/` so the backend can be tested on its own; the shared protocol examples that the firmware will also use live at the repository top level, in `tests/protocol-examples/`.
+
+## The live simulation in plain language (Phase 5a)
+
+**How a discrete-event simulation becomes a live one.** The simulator never looks at a clock: it has a to-do list of future events and a virtual clock that jumps to the next one. To make it live, a small task wakes every 50 ms, measures how much real time passed, multiplies that by the speed factor (1x is real time) and says "run until your virtual clock has moved by that much". The simulation inside is untouched, so it is exactly as repeatable as before: only *when* slices are requested depends on the wall clock. Pause just stops asking. Tests do not sleep: they use `POST /api/control/step` to ask for slices directly.
+
+**Why the dashboard shows the controller's view and not the simulator's truth.** The simulator knows B was switched off at 12.000 s. A real controller would not: it finds out when neighbors stop hearing B, a timeout expires, and reports travel to C. If the dashboard drew the truth, B would turn red instantly, every detection delay would look like zero, and nothing on screen would be evidence of what the system actually knew. So the backend keeps three parts apart: the environment (ground truth), the gateway on C (the only way out of it), and the controller. The dashboard model reads only from the gateway and the controller. After you press "Stop B" the snapshot still says B is reachable, and `presenter.conditions.stopped_nodes` says B is stopped: those are two different statements by two different parties, and the gap between them is the detection time.
+
+**What C can actually observe about a packet's path.** Not much, and it is enough. When a frame reaches C, the radio tells C which neighbor sent it (on ESP-NOW, that neighbor's MAC address) and the frame still carries its remaining TTL. So C knows "this reading came from A, was handed to me by D, and has made two transmissions". It does not know what happened before D. The dashboard's observed path is `A, D, C` for two hops, and `A, ?, D, C` (with an unknown relay) for three. This is the same evidence the real C will have, and it is deliberately different from the controller's *planned* route: after a local failover the plan can still say B while readings arrive via D.
+
+**Why presenter actions go on a separate channel.** "We stopped B" is not something the network knows, and it is not something the controller knows. But a viewer wants to see it: the story is "we did X; A noticed after 1 s; the controller confirmed after 2.5 s". Putting the action in its own `environment` channel keeps that story readable without pretending the system had that knowledge. Every control also goes only to the environment: none of them calls the controller, so the controller has to discover each effect itself, as it must on hardware.
+
+**Why some counts are labelled with an age.** C knows how many readings it received. Only A knows how many it created and how many were never acknowledged. A sends those counters in a small TELEMETRY message every 5 s, flooded to C like other management traffic, so "pending" on the dashboard is as old as the last message. The snapshot says who knows each number and how old it is.
 
 ## How the live updates work
 
@@ -258,6 +311,14 @@ The two channels split the job: `GET /api/snapshot` gives the full current state
 **Why nodes never switch back on their own.** When the primary comes back, the node cannot tell a real recovery from a flapping link or a one-off good moment, and two nodes could disagree about which route is in force. Only the controller sees all the links, and it already has hold-down and policy for exactly this decision. A node that went back by itself would also undo the controller's choice and could ping-pong.
 
 **What the measurement comparison shows.** Switching the relay locally is only quicker if the node can notice sooner than the controller can. Detecting by HELLO timeout (T1) waits for the same 3 s as the controller, so it saves only the report and installation time (about 0.2 s here) and nothing in the one-way case. Detecting by failed sends (T2) does not wait for a timer, and moved the switch from about 2.6 s to about 0.1 to 1 s. The readings themselves are then limited by the reading interval and the ACK timeout (a reading created at the failure retries at +1 s), so the delivery gap improves by less than the switch does. T2 also fires falsely under loss (about 20 per simulated hour at 5 % loss with K = 3), which costs a hold-down of the good link each time.
+
+## Limitations of the live demo (Phase 5a)
+
+- One live run is shared by everyone connected; presenter controls act on it for all viewers. There is no per-client session and no persistence: a backend restart starts a new run (`run_id` 1).
+- While the gateway is detached the controller *and* the dashboard see nothing, and node C does not buffer readings. Buffering and replay with a "delayed" label are Phase 5b.
+- The pacing task runs in the server's event loop. At very high speed the simulation may fall behind (at most 5 s of simulated time per 50 ms wake-up) instead of keeping up.
+- The default `Origin` allow-list is `http://localhost:5173` (the Vite dev server). Requests with no `Origin` header are accepted, so keep the default localhost bind.
+- All numbers are simulated: delays, loss and timings are configured values, not measurements.
 
 ## Limitations
 
