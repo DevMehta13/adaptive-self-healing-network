@@ -7,7 +7,7 @@ Laptop-side backend. It contains:
 - a deterministic **simulator** with four virtual nodes (A, B, C, D): manual or controller-installed routing, forwarding, retries, duplicate detection, HELLO discovery, link probes, bounded flooding and failures;
 - a **gateway interface** (`transports/`) and a **controller** (`controller/`): a topology view and, since Phase 4a, Dijkstra route calculation with versioned route installation and automatic rerouting. The controller sees the network only through events that reached node C and acts on it only through commands that node C turns into frames.
 
-Primary routes are calculated and installed automatically (Phase 4a). Backup next hops, local failover, the controller heartbeat and C's buffering, adaptive policies, a serial gateway and a database do not exist yet.
+Primary routes are calculated and installed automatically (Phase 4a), together with backup next hops that nodes switch to on their own when the primary fails (Phase 4b, local failover). The controller heartbeat and C's buffering, adaptive policies, a serial gateway and a database do not exist yet.
 
 Contracts (both drafts, pending Dev's review): [docs/DASHBOARD_API.md](../docs/DASHBOARD_API.md) and [docs/PROTOCOL.md](../docs/PROTOCOL.md).
 
@@ -99,6 +99,26 @@ The six Phase 2 files set `discovery: false` and `ack_delivery: "routed"` so the
 | `stale-update-ignored.json` | After the reroute two late, stale updates (an older version, and a bigger version of an older epoch) reach A. A ignores both and keeps the newer route. |
 | `controller-restart.json` | The controller restarts with a new epoch; its version numbers start again at 1, yet nodes accept them and delivery never stops. |
 
+**Phase 4b scenarios** add `"local_failover": true` at the nodes and `"backup_next_hops": true` at the controller:
+
+| Scenario file | What it shows |
+| --- | --- |
+| `local-failover-b-stops.json` | The controller installs A > B > C with D as A's backup (D first). B stops; A switches to D by itself, *before* the controller's new route reaches it; the controller confirms A > D > C. |
+| `local-failover-one-way-a-b.json` | Only A to B fails. A still hears B, so a timeout never fires; A fails over because B is no longer two-way (T1) or sends to B fail (T2). |
+| `failover-without-controller.json` | The controller is detached (sees and sends nothing), then B stops. A still moves to D and C keeps accepting and acknowledging readings. On reattach the controller learns of the failover and catches up. |
+| `backup-also-dead.json` | B and D stop. A enters no_route locally, drops readings with a reason, and its report is bounded (it cannot leave A: A is cut off). |
+| `backup-unusable-but-reportable.json` | B stops and A hears nothing from D. A has no usable backup, enters no_route, and its report still reaches C through D. |
+| `no-false-failover.json` | Two consecutive link-layer failures happen three times with successes between them: K - 1 failures must not trigger. |
+| `b-returns-after-failover.json` | B returns. Nothing switches back by itself; the controller restores B only after the hold-down, by policy. |
+
+Compare the three ways of handling a failure, and measure false triggers (simulation only):
+
+```sh
+uv run python -m iot_backend.simulator ../scenarios/local-failover-b-stops.json --compare-modes 50
+uv run python -m iot_backend.simulator ../scenarios/local-failover-one-way-a-b.json --compare-modes 50
+uv run python -m iot_backend.simulator ../scenarios/no-false-failover.json --false-triggers 30 --duration 120
+```
+
 Measure recovery over many seeds (simulation only; the reference is the scripted failure time):
 
 ```sh
@@ -120,11 +140,13 @@ Command-line options (also usable on top of a scenario file):
 | `--malformed-at S` | Deliver a corrupted 3-byte frame from A to B at second S. |
 | `--no-trace` | Print only the observed paths, summary and controller view. |
 | `--verbose` | Also show HELLO and PROBE frames in the trace. |
+| `--compare-modes N` | Replay a scenario's scripted failure with seeds 1..N under three modes (controller-only, local failover T1, T1 + T2) and print when A's table switched, when it first sent that way, the delivery gap, readings lost and when the controller's route was confirmed. |
+| `--false-triggers N` | No failure at all: count local failovers under random A-B loss (0-20 %) for K = 2, 3, 4 over seeds 1..N (use `--duration`). |
 | `--measure-seeds N` | Run a controller scenario with seeds 1..N and print min / median / max of failure detection, route active, distribution, service recovery, delivery gap and readings lost, plus route computation time (wall-clock CPU, reported separately). Prints no trace. |
 
-Scenario files are strict JSON (an unknown key is an error, so a typo cannot silently change an experiment). They can set `seed`, `duration_s`, `settings` (interval, timeout, `max_attempts`, `ttl`, `queue_capacity`, `service_ms`, `discovery`, `ack_delivery`, `hello_interval_ms`, `hello_jitter_ms`, `neighbor_timeout_ms`, `report_interval_ms`, `report_coalesce_ms`, `flood_cache_size`, `probe_interval_ms`, `probe_jitter_ms`, `rtt_window`, `rtt_min_samples`, `rtt_max_age_ms`, `max_routes`), `routing` (`"manual"` or `"controller"`), `controller` (`epoch`, `hold_down_ms`, `install_timeout_ms`, `install_max_attempts`, `replan_delay_ms`, `max_failed_plans`, `no_route_grace_ms`, `initial_settle_ms`), `permitted`, `routes` (manual routing only), `links` (`delay_ms`, `loss`, `drop_frames`, `drop_msg`, `down`), `initial_seq`, and timed `actions`: `stop_node`, `start_node`, `restart_node`, `set_route`, `set_permitted`, `link_down`, `set_link`, `inject_frame`, `restart_controller`.
+Scenario files are strict JSON (an unknown key is an error, so a typo cannot silently change an experiment). They can set `seed`, `duration_s`, `settings` (interval, timeout, `max_attempts`, `ttl`, `queue_capacity`, `service_ms`, `discovery`, `ack_delivery`, `hello_interval_ms`, `hello_jitter_ms`, `neighbor_timeout_ms`, `report_interval_ms`, `report_coalesce_ms`, `flood_cache_size`, `probe_interval_ms`, `probe_jitter_ms`, `rtt_window`, `rtt_min_samples`, `rtt_max_age_ms`, `max_routes`, `local_failover`, `failover_t1`, `failover_t2_k`, `send_fail_ms`, `failover_report_repeats`), `routing` (`"manual"` or `"controller"`), `controller` (`epoch`, `hold_down_ms`, `install_timeout_ms`, `install_max_attempts`, `replan_delay_ms`, `max_failed_plans`, `no_route_grace_ms`, `initial_settle_ms`, `backup_next_hops`), `permitted`, `routes` (manual routing only), `links` (`delay_ms`, `loss`, `drop_frames`, `drop_msg`, `down`), `initial_seq`, and timed `actions`: `stop_node`, `start_node`, `restart_node`, `set_route`, `set_permitted`, `link_down`, `set_link`, `inject_frame`, `restart_controller`, `detach_gateway`, `attach_gateway`.
 
-Event names in the trace: `frame_sent` (a node created and transmitted a frame), `frame_forwarded` (a relay passed one on), `frame_received`, `frame_rejected`, `frame_dropped`, `frame_dropped_by_link`, `reading_delivered`, `duplicate_received`, `ack_received`, `ack_ignored`, `ack_timeout` (one attempt), `reading_lost`, `neighbor_changed`, `neighbor_restarted`, `node_booted`, `node_stopped`, `route_update_sent` (C originated an instruction), `route_installed` (a node applied it), `route_update_ignored` (duplicate, stale or refused). The `delivery_time_ms` on `ack_received` is the time from the *first attempt* to the ACK (time to confirmed delivery), together with `attempts`; it is not an RTT. A frame appears as `A:3905a56d#1`: creator, session id in hex, sequence number.
+Event names in the trace: `frame_sent` (a node created and transmitted a frame), `frame_forwarded` (a relay passed one on), `frame_received`, `frame_rejected`, `frame_dropped`, `frame_dropped_by_link`, `reading_delivered`, `duplicate_received`, `ack_received`, `ack_ignored`, `ack_timeout` (one attempt), `reading_lost`, `neighbor_changed`, `neighbor_restarted`, `node_booted`, `node_stopped`, `route_update_sent` (C originated an instruction), `route_installed` (a node applied it), `route_update_ignored` (duplicate, stale or refused), `send_failed` (the link layer said the next hop's radio did not acknowledge; shown with `--verbose`), `local_failover`, `local_no_route`, `frame_rerouted`, `gateway_detached`, `gateway_attached`. The `delivery_time_ms` on `ack_received` is the time from the *first attempt* to the ACK (time to confirmed delivery), together with `attempts`; it is not an RTT. A frame appears as `A:3905a56d#1`: creator, session id in hex, sequence number.
 
 ## Layout
 
@@ -223,13 +245,28 @@ The two channels split the job: `GET /api/snapshot` gives the full current state
 
 **Why "no route" must be explicit.** A source with no instructions and a source that has been *told* there is nothing available look the same from outside, but they are different facts: the first might simply not have heard yet. Saying "No available route" makes the situation observable, lets the source drop readings immediately with a reason (counted, nothing piling up) instead of sending them into the dark and retrying each three times, and tells the person looking at the dashboard what is actually wrong. It also keeps the controller honest: if the source *could not* be told, the announcement ends `unconfirmed`, and nothing claims otherwise.
 
+## Local failover in plain language (Phase 4b)
+
+**Compute centrally, react locally.** The laptop knows the whole network, so it works out both the best route and a spare next hop for each node. A node knows only its own neighbors, but it can notice quickly when its next hop has failed, and then all it has to do is use the spare it was given. Splitting the work this way keeps the slow part (thinking) off the failure path, so the reaction is a table lookup. Routers do the same in IP fast reroute and in MPLS fast reroute: backup paths are precomputed and installed, and the point of failure switches to them at once; the control plane then catches up and installs the new best route.
+
+**Loop-free and node-protecting, with the diamond.** Route A > B > C. If B fails, A may use D, because D reaches C directly (A > D > C): D's own path does not pass through A (no loop) and does not pass through B (it does not rely on the failed relay). B itself has no backup: its only other neighbor is A, whose way to C is through B, so "falling back" to A would send the frame straight back. Now add a link D-B, and make D's shortest path to C go D > B > C. D is still "loop-free" (it does not come back through A), but it is no protection: when B fails, D's path fails with it. That is why the rule also requires that the backup's path avoids the primary next hop ("node-protecting").
+
+**Why a timeout alone misses one-way failures.** A node declares a neighbor lost when it stops *hearing* it. If only A's transmissions to B are lost, A keeps hearing B's HELLOs, so its timer never expires, yet nothing A sends reaches B. B stops hearing A and drops it from its HELLO list; A then sees that B no longer lists it. The neighbor is *one-way*, not lost. That is why T1 is "no longer two-way" and why T2 (failed sends) exists: it notices from the sender's side.
+
+**What the link-layer callback proves and does not.** After a unicast send, the radio tells the sender whether the *next hop's radio* acknowledged the frame. That proves one hop, a moment ago. It does not prove the relay will forward the frame, that C received it, or that the application accepted it (that is DELIVERY_ACK). It can also say "failed" for a frame that did arrive, when only the acknowledgement was lost. So it is a good, fast hint that a link is bad, and a poor proof of delivery. Real ESP8266 behaviour must still be checked on boards.
+
+**Why nodes never switch back on their own.** When the primary comes back, the node cannot tell a real recovery from a flapping link or a one-off good moment, and two nodes could disagree about which route is in force. Only the controller sees all the links, and it already has hold-down and policy for exactly this decision. A node that went back by itself would also undo the controller's choice and could ping-pong.
+
+**What the measurement comparison shows.** Switching the relay locally is only quicker if the node can notice sooner than the controller can. Detecting by HELLO timeout (T1) waits for the same 3 s as the controller, so it saves only the report and installation time (about 0.2 s here) and nothing in the one-way case. Detecting by failed sends (T2) does not wait for a timer, and moved the switch from about 2.6 s to about 0.1 to 1 s. The readings themselves are then limited by the reading interval and the ACK timeout (a reading created at the failure retries at +1 s), so the delivery gap improves by less than the switch does. T2 also fires falsely under loss (about 20 per simulated hour at 5 % loss with K = 3), which costs a hold-down of the good link each time.
+
 ## Limitations
 
 - Tested on Windows only so far; macOS is covered by CI after push.
 - No authentication; keep the default `127.0.0.1` binding.
 - Failures are detected and routed around automatically (Phase 4a), but the node-side reaction is still the controller's: until a replacement route is confirmed, readings sent toward the failed relay are lost (bounded: 3 attempts each). Backup next hops and local failover are Phase 4b.
-- The route is calculated for one flow, A to C, and only primary next hops are used; the backup field is carried but always none.
-- If both relays are dead, A cannot be told there is no route (nothing can leave C). A's readings are then lost after their 3 attempts rather than dropped `no_route`.
+- The route and its backups are calculated for one flow, A to C. A backup protects only the failures the last route version anticipated; a second failure before the controller replaces it may leave no route.
+- If both relays are dead, A cannot be told there is no route (nothing can leave C). With local failover A finds out by itself (backup also dead, `local_no_route`) and drops readings with a reason, but its report cannot leave it either. Without local failover A's readings are lost after their 3 attempts.
+- The send callback is a simulated model of ESP-NOW's. It is not verified on ESP8266 boards.
 - Recovery timings are quantised by the 2 s reading interval and the 1 s retry timer: the first reading to arrive over the new path is usually a retry, so *service recovery* is mostly a statement about those timers, not about how fast the route was installed (which is *route active*).
 - The controller waits 1 s after the first link is measured before computing the first route, and 5 s of silence at start before saying "no route". Both are configurable and were chosen for the simulation.
 - Detection times are simulated: the reference is the scripted stop time and delays are configured values. Real boards add radio timing the simulator does not model, including collisions.

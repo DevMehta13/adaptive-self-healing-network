@@ -1,6 +1,6 @@
 # Node protocol
 
-**Draft — pending Dev's review.** Written by Harshal (backend owner) for Dev, who will implement the same format in C++ on the ESP8266. Scope so far: the frame header, DATA, DELIVERY_ACK (Phase 1), forwarding/delivery behaviour (Phase 2; no format change), HELLO / TOPOLOGY_REPORT payloads with management-traffic behaviour (Phase 3), and probes, route updates, route acknowledgements and the local-failover report (Phase 4a). The Python implementation is `backend/src/iot_backend/protocol/`; the shared reference examples are in [tests/protocol-examples/](../tests/protocol-examples/). If this document and the examples disagree, tell Harshal — they are meant to agree exactly.
+**Draft — pending Dev's review.** Written by Harshal (backend owner) for Dev, who will implement the same format in C++ on the ESP8266. Scope so far: the frame header, DATA, DELIVERY_ACK (Phase 1), forwarding/delivery behaviour (Phase 2; no format change), HELLO / TOPOLOGY_REPORT payloads with management-traffic behaviour (Phase 3), probes, route updates, route acknowledgements and the local-failover report (Phase 4a), and the behaviour of local failover (Phase 4b). The Python implementation is `backend/src/iot_backend/protocol/`; the shared reference examples are in [tests/protocol-examples/](../tests/protocol-examples/). If this document and the examples disagree, tell Harshal — they are meant to agree exactly.
 
 ## Why a compact binary format
 
@@ -57,7 +57,7 @@ The whole encoded frame must be **≤ 250 bytes** (ESP-NOW v1). That leaves a **
 | `0x13` | ROUTE_INSTALL_ACK | Implemented (Phase 4a, pending Dev's review) |
 | `0x14` | PROBE | Implemented (Phase 4a, pending Dev's review) |
 | `0x15` | PROBE_REPLY | Implemented (Phase 4a, pending Dev's review) |
-| `0x16` | LOCAL_FAILOVER_REPORT | Payload defined in Phase 4a; **no node sends it before Phase 4b** |
+| `0x16` | LOCAL_FAILOVER_REPORT | Defined in Phase 4a; sent by nodes from Phase 4b (pending Dev's review) |
 
 Codes `0x01–0x0F` are the data plane; `0x10` and above are management. Every code in this table now has a payload definition. A code that is added to the table before its payload is specified must be **rejected** (`reserved_type`) by the decoder; the reason is kept for that purpose, though no code is reserved today.
 
@@ -157,9 +157,9 @@ The installing node's answer, created by that node (`src`), addressed to C, carr
 | 8 | 1 | `destination` | Same as in the update. |
 | 9 | 1 | `status` | `1` installed (also sent again for a repeat of the held version), `2` stale (the node holds a newer pair and ignored the update), `3` rejected (the node cannot use it: next hop is not a permitted neighbor, or its route table is full). `0` and values above 3 are invalid. |
 
-### LOCAL_FAILOVER_REPORT (`0x16`) — payload 12 bytes (defined in Phase 4a, **not sent until Phase 4b**)
+### LOCAL_FAILOVER_REPORT (`0x16`) — payload 12 bytes (defined in Phase 4a, sent from Phase 4b)
 
-Created by a node that switched to its backup; addressed to C; carried by management flooding. It is defined now so the format does not change twice.
+Created by a node that switched to its backup, or found it had none; addressed to C; carried by management flooding. The byte layout is the Phase 4a one. Phase 4b changed only the meaning of two values: `to_next_hop` may be `0` and a second `reason` exists (both explained below and in *Local failover*).
 
 | Offset | Size | Field | Meaning |
 | --- | --- | --- | --- |
@@ -167,8 +167,8 @@ Created by a node that switched to its backup; addressed to C; carried by manage
 | 4 | 4 | `version` | Version of that route. |
 | 8 | 1 | `destination` | Destination of the entry. |
 | 9 | 1 | `from_next_hop` | The primary next hop that was abandoned. |
-| 10 | 1 | `to_next_hop` | The backup now in use (must differ from `from_next_hop`). |
-| 11 | 1 | `reason` | `1` neighbor lost (the primary's HELLO timed out). Other values are invalid. |
+| 10 | 1 | `to_next_hop` | The backup now in use (must differ from `from_next_hop`), or `0` when the node had **no usable backup** and now has no route. *(0 added in Phase 4b.)* |
+| 11 | 1 | `reason` | `1` the next hop stopped being a two-way neighbor (trigger T1: lost *or* one-way); `2` K consecutive link-layer send failures (trigger T2). Other values are invalid. *(2 added in Phase 4b.)* |
 
 ## Decoding rules
 
@@ -187,7 +187,7 @@ A receiver must validate in this order and stop at the first failure. The frame 
 | 9 | Payload size is wrong for the type (DATA ≠ 4, DELIVERY_ACK ≠ 9, PROBE ≠ 0, PROBE_REPLY ≠ 8, ROUTE_UPDATE ≠ 11, ROUTE_INSTALL_ACK ≠ 10, LOCAL_FAILOVER_REPORT ≠ 12); HELLO or TOPOLOGY_REPORT payload empty, `count` above 8, or length ≠ 1 + entry size × `count` (a report may add an RTT trailer of exactly `1 + 3 × rtt_count` bytes, `rtt_count` 1 to 8) | `bad_payload_length` |
 | 10 | (DELIVERY_ACK `origin`, HELLO `node`, report `neighbor`, report RTT `neighbor`, route `destination`, `next_hop` or `backup_next_hop` equal to 255, failover node ids) is 0 or 255 (`next_hop` and `backup_next_hop` may be 0 = none) | `bad_node_id` |
 | 11 | (DELIVERY_ACK, HELLO entry, report entry, PROBE_REPLY `probe_session`) session is 0 | `bad_session` |
-| 12 | (report entry) `state` is not 1, 2 or 3; (report RTT) `rtt_ms` is `0xFFFF`; (route messages) `epoch` or `version` is 0; (ROUTE_UPDATE) a backup without a primary or equal to it; (ROUTE_INSTALL_ACK) `status` not 1–3; (LOCAL_FAILOVER_REPORT) `from_next_hop` = `to_next_hop` or `reason` not 1 | `bad_value` |
+| 12 | (report entry) `state` is not 1, 2 or 3; (report RTT) `rtt_ms` is `0xFFFF`; (route messages) `epoch` or `version` is 0; (ROUTE_UPDATE) a backup without a primary or equal to it; (ROUTE_INSTALL_ACK) `status` not 1–3; (LOCAL_FAILOVER_REPORT) `from_next_hop` = `to_next_hop` or `reason` not 1 or 2 | `bad_value` |
 
 Whether a valid frame is *for this node*, from a *permitted neighbor*, or an *expected type* is behaviour, not decoding; see the next section.
 
@@ -437,6 +437,70 @@ These come on top of the earlier estimates (0.7 KB for discovery, about 4 KB for
 
 These are initial experiment settings, not hardware guarantees.
 
+## Local failover (Phase 4b)
+
+**Pending Dev's review.** Nodes never calculate routes. A node uses only the backup next hop the controller installed (ROUTE_UPDATE's `backup_next_hop`), and only when its current next hop has failed.
+
+### Backup next hops (what the controller installs)
+
+For a node N on the route with primary next hop P, a neighbor n of N is a valid backup only if n's own shortest path to the destination passes through **neither N nor P**. Not N: the backup would send the frame straight back (a loop). Not P: the backup would depend on the very relay whose failure it is meant to cover ("loop-free" but not "node-protecting"). In the diamond with route A > B > C, A's backup is D (D reaches C directly); B has none (its only other neighbor, A, reaches C through B). Among valid candidates the cheapest wins. Every node on a backup path that is off the primary route gets its own entry, in the same route version; a candidate that would give one node two different next hops is dropped. No valid backup is encoded as `backup_next_hop` 0.
+
+### Installation order
+
+Backup relays (nodes off the route that a backup points at, here D) are installed and acknowledged first, then the primary relays (which may hold backups of their own), then the source. A node therefore never holds a backup that points at a node with no entry. A route version is reported active only when all three rounds are confirmed.
+
+### Triggers (per node, per installed route, configurable)
+
+| | Trigger | Fires when | Why it exists |
+| --- | --- | --- | --- |
+| T1 | neighbor state | the current next hop is no longer a **two-way** neighbor: `lost` (no HELLO for `neighbor_timeout`) **or** `one_way` (its HELLO no longer lists this node) | A timeout-only rule cannot see a one-way failure: if the frames A sends to B are lost, A still hears B's HELLOs, so A's timer for B never expires. B stops hearing A, drops A from its HELLO list, and A sees B become one-way |
+| T2 | link-layer delivery | `K` (default 3) **consecutive** unicast transmissions to the current next hop report failure; any send counts (DATA, HELLO, PROBE, forwarded frames); one success resets the count | Faster than T1: it needs a few sends, not a 3 s timeout |
+
+The trigger is checked when a neighbor's state changes, when a send result arrives, and when a route is installed (a newly installed primary that is already failing is abandoned at once, so a controller that re-installs a dead primary cannot pull the node back onto it).
+
+### What the link-layer callback is, and is not
+
+The simulator models the ESP-NOW send callback: after a unicast send the sender is told, after a short delay, whether the next hop's **radio** acknowledged the frame. Results are processed in the order the frames were sent. A send is reported failed when the frame did not arrive, when the receiver is powered off, **or when the reverse direction is down or loses the acknowledgement** — so a frame can arrive and still be reported failed (`send_failed` with `delivered=true` in the trace). It is a next-hop signal. It is never an end-to-end delivery confirmation: a relay whose radio acknowledges a frame and then drops it still produces "success". The end-to-end acknowledgement remains DELIVERY_ACK from C.
+
+*Not yet verified:* the ESP8266 ESP-NOW send-callback semantics (what it reports for unicast to an unreachable peer, how long the failure takes, whether retries are visible, and callback ordering) must be confirmed on hardware in Phase 6. `send_fail_ms` (default 30 ms) is a placeholder.
+
+### What a node does on a trigger
+
+1. Switch to the backup immediately, if it is a two-way neighbor and has not itself failed K sends. Frames already queued for the primary are re-routed at transmit time (DATA only; trace `frame_rerouted`).
+2. Flood a LOCAL_FAILOVER_REPORT (`from_next_hop` the abandoned hop, `to_next_hop` the backup, `reason` 1 or 2). It is repeated every `report_interval` up to `failover_report_repeats` times (default 5) or until a newer version replaces the entry, so a controller that was unreachable the first time can still learn of it.
+3. Trace `local_failover` with the trigger, the failed hop, and its timing (`since_last_hello_ms` for T1, `consecutive_failures` and `since_first_failure_ms` for T2).
+4. If there is no backup, or the backup is unusable, or the backup itself fails: the entry becomes **no route** locally (`local_no_route`), new readings are dropped with reason `no_route`, and a report with `to_next_hop` 0 is sent (same bounded repeats).
+
+### No local switch-back
+
+A node that failed over stays on the backup until a **newer version** from the controller replaces the entry. A duplicate of the held version changes nothing. Returning to the primary is the controller's decision, taken by policy and with the hold-down; this keeps a flapping neighbor from making the node flap, and keeps two nodes from disagreeing about the route.
+
+### Added RAM per node (estimate, not measured)
+
+| Item | Bytes |
+| --- | --- |
+| Per installed entry: failed-over and no-route flags, reports left | 3 per entry (about 24 for 8) |
+| Send-failure counter and first-failure time per neighbor | 6 per neighbor (about 12 for 2, 48 for 8) |
+| Out-of-order verdict slots (ticket, neighbor, ok) | a few bytes; only reordering fills them |
+| **Total** | **about 0.05 KB typical, 0.1 KB worst case** |
+
+### Defaults added in Phase 4b
+
+| Setting | Default | Where |
+| --- | --- | --- |
+| `local_failover` | off (experiments turn it on) | node |
+| `failover_t1` | on | node |
+| `failover_t2_k` | 3 (0 = T2 off) | node |
+| `send_fail_ms` | 30 ms (placeholder, verify in Phase 6) | simulator link layer |
+| `failover_report_repeats` | 5 | node |
+| `backup_next_hops` | off (experiments turn it on) | controller |
+
+Local failover and backups are off by default only so that Phase 4a scenarios keep their exact behaviour; the Phase 4b scenarios turn them on.
+
+### Change to a defined payload (Phase 4b)
+
+LOCAL_FAILOVER_REPORT was defined in Phase 4a but never sent. Phase 4b needed to say "no backup" and to name the second trigger, so `to_next_hop` may now be `0` and `reason` may be `2`. The layout and size (12 bytes) are unchanged. `valid-failover-report` is unchanged; five examples were added (`valid-failover-report-send-failures`, `valid-failover-report-no-backup`, `invalid-failover-reason-3`, `invalid-failover-from-zero`, `invalid-failover-to-255`). A firmware decoder written against the Phase 4a text must accept `to_next_hop` 0 and `reason` 2.
+
 ## Reference examples
 
 Each file in `tests/protocol-examples/` holds one case:
@@ -471,4 +535,5 @@ Defining ROUTE_UPDATE made the last "still reserved" example wrong by constructi
 - Is `value` as int32 hundredths fine for the eventual sensor? (Phase 8 may refine this without changing the header.)
 - Rejection-reason names and order: confirm they are practical to implement and count in firmware.
 - **Phase 4a:** the optional RTT trailer on TOPOLOGY_REPORT (is a trailer easier or harder than a wider entry for the firmware packer?), `0` as "none" in the next-hop fields, the 11- and 10-byte route payloads, the epoch rule (start time in seconds), and whether `max_routes` 8 and the 5-sample RTT window fit the ESP8266's heap.
+- **Phase 4b:** the node-protecting backup rule and three-round installation order; T1 (two-way lost or one-way) and T2 (K consecutive failures, default 3); `to_next_hop` 0 and reason 2 in LOCAL_FAILOVER_REPORT; whether report repeats (5, one per report interval) are acceptable; and that the ESP8266 ESP-NOW send callback behaves as modelled (to be verified in Phase 6).
 - **Phase 4a:** a probe consumes a sequence number, like every created frame. If that is too many numbers per second for your counter or the duplicate window, say so and probes can use a separate counter.

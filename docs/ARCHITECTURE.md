@@ -55,7 +55,7 @@ Route-update ordering, acknowledgement retries, old/new version handling, and be
 
 ## Local failover and controller loss
 
-Approved by both owners on 2026-10-11 and not implemented. Phases and defaults are in [plan.md](../plan.md).
+Approved by both owners on 2026-10-11. Backup next hops and local failover are implemented in simulation (Phase 4b); controller-loss buffering and replay (C's ring buffer, the controller heartbeat) are not (Phase 5). Phases and defaults are in [plan.md](../plan.md).
 
 The controller calculates routes, but surviving a single relay failure should not depend on reaching it. Two mechanisms reduce that dependence.
 
@@ -94,6 +94,20 @@ Decisions recorded in Phase 4a (simulation; pending Dev's review where they touc
 - **"No available route" is explicit.** The controller says so and sends the source a ROUTE_UPDATE with next hop none. The source then drops new readings immediately (`no_route`, counted) instead of queueing and retrying. If the source cannot be reached (both relays dead, so nothing leaves C) the announcement is retried a bounded number of times and ends `unconfirmed`; the controller does not claim the source knows. Making the source *discover* this itself is a node-side local decision and belongs with Phase 4b.
 - **Route computation time and distribution time are different quantities.** Computation is wall-clock CPU on the laptop (microseconds, Python); distribution is simulated milliseconds from "computed" to "every node confirmed". They are never added, and neither is a hardware result.
 
+Decisions recorded in Phase 4b (simulation; pending Dev's review where they touch the protocol):
+
+- **Compute centrally, react locally.** The controller computes primary and backup next hops with global knowledge; each node merely follows the installed table and switches to the backup when its next hop fails. This is the idea of IP fast reroute and MPLS fast reroute: the expensive, global computation is not on the failure path, and the reaction is a table lookup.
+- **Backup rule: loop-free and node-protecting.** For node N with primary next hop P, a neighbor n is a valid backup only if n's own shortest path to the destination passes through neither N nor P. In the diamond A's backup is D and B and D have none. "Loop-free" alone (not through N) is not enough: a backup that routes through P fails together with P.
+- **Backup entries are installed and confirmed first.** Order: backup relays, primary relays, source. A route is active only when the primary path and all backup entries are acknowledged.
+- **Two triggers, measured separately.** T1: the next hop is no longer two-way (lost or one-way). T2: K consecutive link-layer failures to it. T1 must test two-way, not a timeout: in a one-way A→B failure A keeps hearing B and a timeout never fires.
+- **The link-layer callback is a next-hop signal.** It can say "failed" for a frame that arrived (the acknowledgement was lost) and "ok" for a frame the relay then drops. It is never end-to-end confirmation. Real ESP8266 behaviour is unverified until Phase 6.
+- **No local switch-back.** Only a newer controller version ends a failover; the controller decides by policy and the existing hold-down. A node that re-receives a dead primary abandons it again immediately, so the controller cannot fight the failover.
+- **The controller treats a failover report as a distinct recovery.** It records `local_failover`, holds the abandoned link down for the hold-down (as if it had left), and installs the resulting route as a new version: the backup path promoted to primary, with a new backup if one exists.
+- **Expired information is not a failure.** A link whose reports have merely expired keeps its last known cost and is not treated as having left, and no route is withdrawn because the controller stopped hearing anything. Otherwise a detached controller would announce "no route" on its own blindness (found by the failover-without-controller scenario). A link the view says is down or one-way still leaves the graph.
+- **Resolved open item (local failover trigger).** Both triggers are kept; T2 is the faster, T1 the safe net. Measured in simulation (below and in STATUS.md): T1 alone gains little over the controller because both wait for the same 3 s neighbor timeout; T1 + T2 switches in about 0.1 to 1 s. T2 produces false failovers under loss; K = 3 is the default compromise.
+
+Phase 4b limitations: the controller computes backups for the one configured flow (A to C); a failure of the *destination's* only gateway links cannot be protected; and a node cut off from every neighbor cannot report at all.
+
 B is the normal relay for the scripted demonstration, not a permanently superior route. Equal or fluctuating measurements may favor D. A repeatable demo may need a declared tie-break rule or explicitly labeled test costs/delays; do not falsify measured latency to force B. Returning B becomes available again and is selected only if the policy prefers it.
 
 Nodes cannot reliably distinguish an unplugged device from an unreachable radio link using a timeout alone. The dashboard should present loss of contact and its observation source; the demonstrator knows B was unplugged.
@@ -124,7 +138,7 @@ Protocol design must include a version, type, source/destination, restart/sessio
 | Failure detection | Time until loss of contact is declared; exact physical unplug time needs a recorded reference |
 | Route computation | Time spent calculating a route, separate from distributing it. Simulation: wall-clock CPU time of the Dijkstra call on the laptop. Not simulated time, so it is reported separately from every other row |
 | Service recovery | Time from a documented failure reference to the first confirmed restored delivery |
-| Local failover time | Time from declared loss of the primary neighbor to the first confirmed delivery through the backup; reported separately from controller-driven recovery |
+| Local failover time | Time from declared loss of the primary neighbor to the first confirmed delivery through the backup; reported separately from controller-driven recovery. Simulation (Phase 4b) reports: when the source's table switched to the backup, when it first sent a reading that way, the delivery gap at C, readings lost, and when the controller's route was confirmed, for three modes (controller-only, T1, T1 + T2) |
 | Delivery gap | Time between the last receipt before interruption and the first receipt afterward |
 
 Do not subtract timestamps from unsynchronized boards to claim one-way latency. Do not use Wi-Fi access-point RSSI as if it were peer ESP-NOW RSSI. If peer RSSI is unavailable, show unavailable and record the limitation.

@@ -10,6 +10,7 @@
 - `/ws` now rejects browser connections whose `Origin` is not in the allowed origins (a missing `Origin` is allowed).
 - Heartbeats are paced by time only; messages from the client never trigger one.
 - **Proposed (Phase 3, not wired yet):** element shapes for `nodes` and `links`, and the topology event types, so the graph view can be built early. See *Topology in the snapshot and events*.
+- **Proposed (Phase 4b, not wired yet):** the `local_failover` route event, two new `trigger` values and a `backup_relays` install phase, `backups` in the `route` object, and per-node forwarding state. See *Local failover in the snapshot and events*.
 - **Proposed (Phase 4a, not wired yet):** `rtt_ms` and `cost_ms` on links, the `node_restarted` topology event, a `route` object in the snapshot, and the route event types. See *Routes in the snapshot and events*.
 
 Base URL in development: `http://127.0.0.1:8000` (HTTP) and `ws://127.0.0.1:8000/ws` (WebSocket). Host and port are configurable (see [backend/README.md](../backend/README.md)).
@@ -203,6 +204,34 @@ Internally the route controller numbers its own events; Phase 5 merges the strea
 - Show every simulated link delay as a **simulated setting**. The simulated cheaper B links make B the preferred relay; that is configuration, not a measurement.
 - Route **computation time** is wall-clock CPU time on the laptop (microseconds) and is reported separately (`ControllerStats.compute_us`); **distribution time** is simulated milliseconds. Do not add or compare them.
 - Recovery timings (failure detection, route active, service recovery, delivery gap) are referenced to the *scripted* failure time and are simulation results, not hardware results.
+
+## Local failover in the snapshot and events (proposed — not wired)
+
+Phase 4b builds this in the backend. It is **not** served yet; Phase 5 wires it. Docs only.
+
+### Additions to the `route` object
+
+```json
+{ "backups": { "A": "D" }, "backup_entries": { "D": "C" } }
+```
+
+`backups` maps each forwarding node on the route to its installed backup next hop (empty if none). `backup_entries` lists nodes **off** the route that were given a forwarding entry so a backup can work. Draw backups distinctly from the route (for example dotted) and never as an observed path.
+
+### New and extended events
+
+| `type` | `data` |
+| --- | --- |
+| `local_failover` | `node`, `from` (abandoned next hop), `to` (backup now in use, or `null`), `reason` (`neighbor_lost` = T1, `send_failures` = T2), `epoch`, `version`, `link` (`"A-B"`), `matches_current_route` (the report is about the route the controller currently believes in), `outcome` (`backup_in_use` or `no_route`). **Label the recovery "local failover", not "controller reroute".** |
+| `route_computed` | now also `backups`, `backup_entries`; `trigger` may be `local_failover_report` |
+| `route_installing` | `phase` may be `backup_relays` (before `relays`, then `source`) |
+| `route_active` | now also `trigger` (what caused this version: `initial`, `topology_changed`, `local_failover_report`, ...) and `backups` |
+| `link_held_down` | also emitted for a link a node abandoned: the controller will not route over it again until it has been routable for the hold-down |
+
+The node-side trace events `local_failover` (with `trigger` = `T1_neighbor_state` or `T2_send_failures` and its timing), `local_no_route`, `send_failed` and `frame_rerouted` are simulator trace, not API events, until Phase 5 decides which are surfaced.
+
+### Recovery labelling
+
+A recovery is *local failover* when the source's table was switched by the node itself and *controller reroute* when it was switched by a route version. The ordering is visible in time: the node's switch comes first, and the controller's route that follows is labelled with `trigger: local_failover_report`. When the controller is unreachable only the first can happen, and the second appears after reconnection.
 
 ## Known limits of this draft
 
