@@ -116,7 +116,9 @@ class TopologyView:
         self._handlers: list[Callable[[TopologyEvent], None]] = []
         self._update_handlers: list[Callable[[], None]] = []
         self._next_event_id = 1
-        self._timer_at: int | None = None
+        # Times at which an expiry check is already scheduled. Without this a timer that fires
+        # re-arms a duplicate of one still pending, and the pending set grows without bound.
+        self._armed: set[int] = set()
         gateway.subscribe(self._on_gateway_event)
 
     # ---- public ----
@@ -265,8 +267,8 @@ class TopologyView:
         for handler in list(self._update_handlers):
             handler()
 
-    def _on_timer(self) -> None:
-        self._timer_at = None
+    def _on_timer(self, due: int) -> None:
+        self._armed.discard(due)
         self._evaluate()
 
     # ---- evaluation ----
@@ -414,9 +416,9 @@ class TopologyView:
         if not fresh:
             return
         due = min(r.received_ms for r in fresh.values()) + self._config.report_expiry_ms + 1
-        if due > now and due != self._timer_at:
-            self._timer_at = due
-            self._gateway.call_later(due - now, self._on_timer)
+        if due > now and due not in self._armed:
+            self._armed.add(due)
+            self._gateway.call_later(due - now, lambda: self._on_timer(due))
 
     def _emit(self, type_: str, data: dict[str, Any]) -> None:
         event = TopologyEvent(self._next_event_id, self._gateway.now_ms(), type_, data)
