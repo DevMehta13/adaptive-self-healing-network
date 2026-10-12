@@ -1,6 +1,6 @@
 # Architecture
 
-This document separates the agreed system shape from mechanisms that still need implementation and hardware validation. Nothing described here is currently running. The approved phases and technical defaults in [plan.md](../plan.md) govern upcoming work; implementation is awaiting the owner's instruction.
+This document separates the agreed system shape from mechanisms that still need implementation and hardware validation. Mechanisms are labelled by phase: those marked as decisions or implemented run only in the simulator today; nothing has run on hardware. The approved phases and technical defaults in [plan.md](../plan.md) govern upcoming work; implementation is awaiting the owner's instruction.
 
 ## Connections and responsibilities
 
@@ -51,7 +51,7 @@ Decisions recorded in Phase 3:
 6. The controller excludes unavailable links, computes the best remaining route (here A → D → C), and confirms A's local choice or installs a replacement route version.
 7. Data resumes and observed forwarding confirms the change. When B returns, fresh reports make it eligible again.
 
-Route-update ordering, acknowledgement retries, old/new version handling, and behavior during partial installation must be specified before implementation. TTL limits loops but does not by itself make route updates consistent.
+Route-update ordering, acknowledgement retries, old/new version handling, and behavior during partial installation are specified and implemented in simulation for Phase 4a (primary routes only; the backup next hop and local failover of steps 3 and 5 are Phase 4b). The decisions are listed under *Topology and routing*. TTL limits loops but does not by itself make route updates consistent; versions and epochs do.
 
 ## Local failover and controller loss
 
@@ -79,13 +79,28 @@ Store freshness and measurements for each neighbor observation. Hearing a HELLO 
 
 Use Dijkstra with non-negative costs. The first measured cost proposal is per-link round-trip probe time; describe it as RTT cost, not synchronized one-way latency. Missing measurements must not become zero-cost links. Specify expiry, tie-breaking, and route-change rules before implementing adaptive decisions.
 
+Decisions recorded in Phase 4a (simulation; pending Dev's review where they touch the protocol):
+
+- **Link cost is round-trip probe time measured by the prober on its own clock.** PROBE and PROBE_REPLY are one-hop frames that carry no timestamps, so no node ever subtracts another node's clock. Each node keeps a window of 5 recent samples per neighbor and reports their median; fewer than 3 fresh samples (older than 10 s are forgotten) means *unmeasured*. EWMA smoothing stays in Phase 9.
+- **A link's routing cost is the larger of its two ends' measurements, and both must exist.** Both ends measure the same round trip independently; taking the larger never makes a link look better than either end saw it. A link with a missing end is left out of the graph. It is never given a default or zero cost.
+- **The graph contains only links that are up (two-way, both reports fresh) and measured.** One-way, stale, down and unmeasured links are excluded. Lost-contact nodes have no usable links.
+- **Dijkstra over summed link costs, with a documented tie-break:** equal cost, then fewer hops, then the lexicographically smaller list of node ids (B before D). The tie-break is a rule for repeatability, not a statement that B is better.
+- **Recalculation is triggered by changes in the *set* of usable links or by a restarted node on the route, never by RTT values alone.** Measurement noise therefore cannot flip the route. (Policy-driven switching on RTT, with a three-evaluation rule, is Phase 9.) Before the first route the controller waits until no new link has appeared for 1 s, because links are measured one at a time at startup and the first path found is often replaced milliseconds later.
+- **A link that returns is held down for 5 s (configurable) before routes may use it.** A link that comes and goes would otherwise move the route at every flap, and each move costs installation traffic and a window in which packets can be lost. Waiting until the link has been stable for the hold-down means switching back only on evidence that it is staying up. Failures are never delayed: a lost link leaves the graph immediately. A link seen for the first time is not held down.
+- **Relays are installed first; the source is told only after every relay has acknowledged; a route is active only after the source acknowledges too.** Until the source is switched nothing is sent toward a new relay, so installing relays cannot cause loss. The reverse order creates a black hole.
+- **Route state at the controller:** computed → installing → active, or failed (a node refused it), unconfirmed (acknowledgements did not arrive within the bounded retries), superseded (a newer plan replaced it). Retries are bounded per update (3 transmissions, 1 s apart), re-planning after a failure is bounded (3 times in a row), and a topology change starts afresh.
+- **Updates travel by management flooding and are originated by C.** The laptop never transmits on the radio; C creates the frame (its own `src`), and nodes accept route updates only when `src` is the gateway.
+- **Epoch plus version.** Nodes ignore any update older than the `(epoch, version)` pair they hold and accept a newer epoch regardless of version, so a restarted controller (new epoch, versions from 1) is never stuck behind old numbers, and a late duplicate can never undo a newer route. A node that refuses an update says which pair it holds, so a controller started with a too-small epoch advances itself.
+- **"No available route" is explicit.** The controller says so and sends the source a ROUTE_UPDATE with next hop none. The source then drops new readings immediately (`no_route`, counted) instead of queueing and retrying. If the source cannot be reached (both relays dead, so nothing leaves C) the announcement is retried a bounded number of times and ends `unconfirmed`; the controller does not claim the source knows. Making the source *discover* this itself is a node-side local decision and belongs with Phase 4b.
+- **Route computation time and distribution time are different quantities.** Computation is wall-clock CPU on the laptop (microseconds, Python); distribution is simulated milliseconds from "computed" to "every node confirmed". They are never added, and neither is a hardware result.
+
 B is the normal relay for the scripted demonstration, not a permanently superior route. Equal or fluctuating measurements may favor D. A repeatable demo may need a declared tie-break rule or explicitly labeled test costs/delays; do not falsify measured latency to force B. Returning B becomes available again and is selected only if the policy prefers it.
 
 Nodes cannot reliably distinguish an unplugged device from an unreachable radio link using a timeout alone. The dashboard should present loss of contact and its observation source; the demonstrator knows B was unplugged.
 
 ## Packet and reliability requirements
 
-Proposed message families: HELLO, neighbor/topology report, route update, route-install acknowledgement, sensor data, delivery acknowledgement, probe request/response, and local-failover report. A controller heartbeat travels only over the gateway interface between the laptop and C. The radio frame is a compact binary format with a fixed 14-byte little-endian header (decision made in Phase 1, chosen over JSON for the 250-byte ESP-NOW limit and ESP8266 memory); the draft layout, decoding rules and reference examples are in [PROTOCOL.md](PROTOCOL.md) and are pending Dev's review. Only DATA and DELIVERY_ACK are specified so far; the other message families are reserved codes. Forwarding, TTL, retry and duplicate rules (Phase 2) are in the same document and add no header fields.
+Proposed message families: HELLO, neighbor/topology report, route update, route-install acknowledgement, sensor data, delivery acknowledgement, probe request/response, and local-failover report. A controller heartbeat travels only over the gateway interface between the laptop and C. The radio frame is a compact binary format with a fixed 14-byte little-endian header (decision made in Phase 1, chosen over JSON for the 250-byte ESP-NOW limit and ESP8266 memory); the draft layout, decoding rules and reference examples are in [PROTOCOL.md](PROTOCOL.md) and are pending Dev's review. Every message family above now has a payload definition (LOCAL_FAILOVER_REPORT is defined but not yet sent; that is Phase 4b). Forwarding, TTL, retry and duplicate rules (Phase 2) are in the same document and add no header fields.
 
 Protocol design must include a version, type, source/destination, restart/session identity, sequence number, hop limit, route generation where applicable, and a bounded payload. Do not assume a sequence number stays unique after a node restarts.
 
@@ -107,7 +122,7 @@ Protocol design must include a version, type, source/destination, restart/sessio
 | RTT | Time from a probe/send to its response on the same device's clock; label per-link versus end-to-end |
 | RSSI | Received signal strength for the actual peer observation, only if the ESP8266 implementation can obtain it reliably |
 | Failure detection | Time until loss of contact is declared; exact physical unplug time needs a recorded reference |
-| Route computation | Time spent calculating a route, separate from distributing it |
+| Route computation | Time spent calculating a route, separate from distributing it. Simulation: wall-clock CPU time of the Dijkstra call on the laptop. Not simulated time, so it is reported separately from every other row |
 | Service recovery | Time from a documented failure reference to the first confirmed restored delivery |
 | Local failover time | Time from declared loss of the primary neighbor to the first confirmed delivery through the backup; reported separately from controller-driven recovery |
 | Delivery gap | Time between the last receipt before interruption and the first receipt afterward |

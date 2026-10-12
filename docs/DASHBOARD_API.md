@@ -10,6 +10,7 @@
 - `/ws` now rejects browser connections whose `Origin` is not in the allowed origins (a missing `Origin` is allowed).
 - Heartbeats are paced by time only; messages from the client never trigger one.
 - **Proposed (Phase 3, not wired yet):** element shapes for `nodes` and `links`, and the topology event types, so the graph view can be built early. See *Topology in the snapshot and events*.
+- **Proposed (Phase 4a, not wired yet):** `rtt_ms` and `cost_ms` on links, the `node_restarted` topology event, a `route` object in the snapshot, and the route event types. See *Routes in the snapshot and events*.
 
 Base URL in development: `http://127.0.0.1:8000` (HTTP) and `ws://127.0.0.1:8000/ws` (WebSocket). Host and port are configurable (see [backend/README.md](../backend/README.md)).
 
@@ -138,8 +139,70 @@ Draw `one_way` and `stale` differently from `up` (for example dashed), and never
 | `node_regained_contact` | `node`, `session`, `restarted` (true if the session changed). |
 | `node_stale` | `node`, `reason` — its reports expired. |
 | `link_state_changed` | `link` (`"A-B"`), `old`, `new`, `usable`, `directions`. |
+| `node_restarted` | `node`, `old_session`, `session` — a node rebooted so fast that it was never declared lost (its RAM, and any route it held, is gone). *Added in Phase 4a.* |
 
 Freshness rule: a report is fresh for 15 s after it arrives (three report intervals). If reports stop, nodes and links turn `stale` instead of staying "live". The snapshot's `last_event_id` and the ordering rule above apply unchanged.
+
+## Routes in the snapshot and events (proposed — not wired)
+
+Phase 4a builds this in the backend (`RouteController.route_state()` and its event stream). It is **not** served yet: `/api/snapshot` has no `route` field and `/ws` sends no route events. Phase 5 will wire them. Everything below is a proposal for Dev to build the route view against. Simulated link delays are configured settings; the dashboard must label them so (see *Labels*).
+
+### Link additions
+
+Each `links` element gains:
+
+```json
+{ "rtt_ms": { "A": 31, "B": 29 }, "cost_ms": 31 }
+```
+
+| Field | Meaning |
+| --- | --- |
+| `rtt_ms` | The round-trip time each end measured for this link **on its own clock**, in ms; `null` for an end with no fresh measurement. These are round trips, not one-way delays, and the two numbers are never subtracted from each other. |
+| `cost_ms` | What the route calculation uses: the larger of the two, only if **both** ends measured it and the link is `up`; otherwise `null`. A link with `cost_ms: null` is not used for routing and must not be drawn or described as zero or free. |
+
+### `route` object (snapshot)
+
+```json
+{
+  "flow": "A->C",
+  "epoch": 1700000000,
+  "version": 3,
+  "kind": "route",
+  "state": "active",
+  "path": ["A", "D", "C"],
+  "cost_ms": 130,
+  "confirmed_by": ["D", "A"],
+  "waiting_for": []
+}
+```
+
+| Field | Meaning |
+| --- | --- |
+| `kind` | `route`, or `no_route` when the controller has declared that no path exists. |
+| `state` | `waiting` (no plan yet; discovery in progress), `computed`, `installing`, `active`, `failed` (a node refused), `unconfirmed` (acknowledgements missing after the bounded retries), `superseded`. **Only `active` may be drawn as the current route.** |
+| `path` | Calculated route (empty for `no_route`). This is the *plan*; keep it visually separate from the observed packet path, which comes from packet events. |
+| `confirmed_by` / `waiting_for` | Nodes whose installation has / has not been acknowledged yet. |
+
+### Route events (state-changing, so each carries the envelope's `event_id`)
+
+Internally the route controller numbers its own events; Phase 5 merges the streams and assigns the backend-wide `event_id`.
+
+| `type` | `data` |
+| --- | --- |
+| `route_computed` | `flow`, `epoch`, `version`, `path`, `cost_ms`, `graph` (links used with their `cost_ms`), `held_down` (links excluded by hold-down, with `eligible_in_ms`), `trigger` (`initial`, `topology_changed`, `node_restarted`, `retry_after_failure`, `epoch_advanced`). Computation time is **not** in the event (see below). |
+| `route_installing` | `version`, `epoch`, `kind`, `phase` (`relays` or `source`), `nodes`. One event per phase. |
+| `route_active` | `version`, `epoch`, `path`, `cost_ms`, `confirmed_by`, `distribution_ms` (computed → every node acknowledged, simulated time). |
+| `route_install_failed` | `version`, `epoch`, `kind`, `state` (`failed` or `unconfirmed`), `reason`, `nodes`, `attempts`. |
+| `no_available_route` | `flow`, `epoch`, `version`, `reason`, `graph`, `held_down`, `trigger`, `source_notified` (always `false` here; see `no_route_confirmed`). The headline text for the UI is **"No available route"**. |
+| `no_route_confirmed` | `version`, `epoch`, `confirmed_by`, `distribution_ms` — the source acknowledged being told there is no route. If it never arrives, the source was not told (for example, it is cut off). |
+| `link_held_down` | `link`, `hold_down_ms`, `eligible_at_ms` — a link that came back is not used for routes until then. |
+| `epoch_advanced` | `old_epoch`, `held_epoch`, `epoch` — nodes held a newer controller epoch than this controller started with, so it moved past it. |
+
+### Labels and measurements
+
+- Show every simulated link delay as a **simulated setting**. The simulated cheaper B links make B the preferred relay; that is configuration, not a measurement.
+- Route **computation time** is wall-clock CPU time on the laptop (microseconds) and is reported separately (`ControllerStats.compute_us`); **distribution time** is simulated milliseconds. Do not add or compare them.
+- Recovery timings (failure detection, route active, service recovery, delivery gap) are referenced to the *scripted* failure time and are simulation results, not hardware results.
 
 ## Known limits of this draft
 

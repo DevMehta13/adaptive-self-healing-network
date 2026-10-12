@@ -2,7 +2,7 @@
 
 A college project about keeping sensor data moving when a wireless relay fails, using four inexpensive ESP8266 NodeMCU boards and a laptop.
 
-**Status: design plus the Phase 0 backend foundation (a status-only HTTP/WebSocket server) and a protocol contract, and a four-node simulator with manual routing, forwarding, retries and duplicate detection. Neighbor discovery and failure *detection* exist in simulation; no firmware, route calculation or rerouting, or dashboard has been implemented or tested.** The software-first phased plan is approved in [plan.md](plan.md); see [docs/STATUS.md](docs/STATUS.md) for what exists.
+**Status: design plus the Phase 0 backend foundation (a status-only HTTP/WebSocket server), a protocol contract, and a four-node simulator with forwarding, retries, duplicate detection, neighbor discovery, failure *detection*, link probes, and (Phase 4a) controller-calculated routes that are installed and changed automatically. This is all simulation: no firmware, hardware test, backup next hops or local failover, or dashboard has been implemented or tested.** The software-first phased plan is approved in [plan.md](plan.md); see [docs/STATUS.md](docs/STATUS.md) for what exists.
 
 ## What we are building
 

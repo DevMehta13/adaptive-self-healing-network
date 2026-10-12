@@ -4,10 +4,10 @@ Laptop-side backend. It contains:
 
 - a FastAPI app serving a small HTTP API and a live WebSocket stream to the dashboard (reports its own status only);
 - the node **protocol** module: binary frame encoding and validated decoding;
-- a deterministic **simulator** with four virtual nodes (A, B, C, D): manual routing, forwarding, retries, duplicate detection, HELLO discovery, bounded flooding and failures;
-- a **gateway interface** (`transports/`) and a **controller topology view** (`controller/`) that see the network only through events that reached node C.
+- a deterministic **simulator** with four virtual nodes (A, B, C, D): manual or controller-installed routing, forwarding, retries, duplicate detection, HELLO discovery, link probes, bounded flooding and failures;
+- a **gateway interface** (`transports/`) and a **controller** (`controller/`): a topology view and, since Phase 4a, Dijkstra route calculation with versioned route installation and automatic rerouting. The controller sees the network only through events that reached node C and acts on it only through commands that node C turns into frames.
 
-There is no route calculation, route installation, serial gateway, or database yet; data routes are set by hand, so a failed relay is *detected* but not routed around.
+Primary routes are calculated and installed automatically (Phase 4a). Backup next hops, local failover, the controller heartbeat and C's buffering, adaptive policies, a serial gateway and a database do not exist yet.
 
 Contracts (both drafts, pending Dev's review): [docs/DASHBOARD_API.md](../docs/DASHBOARD_API.md) and [docs/PROTOCOL.md](../docs/PROTOCOL.md).
 
@@ -65,7 +65,7 @@ or with no file for the default (A sends to C through B for 20 simulated seconds
 uv run python -m iot_backend.simulator --seed 42 --duration 20 --drop A-B:3:DATA
 ```
 
-The output has up to four parts: a time-ordered **trace** of events, the **observed path** of every reading (rebuilt only from "frame received" evidence, never from the routing tables), a **summary** with a drops-by-reason table, and, when discovery is on, the **controller view** with topology events and simulated detection times. HELLO frames are hidden from the trace unless you add `--verbose`. Simulated time passes instantly; nothing waits for real seconds.
+The output has up to six parts: a time-ordered **trace** of events, the **observed path** of every reading (rebuilt only from "frame received" evidence, never from the routing tables), a **summary** with a drops-by-reason table, and, when discovery is on, the **controller view** with topology events and simulated detection times. In `routing: "controller"` scenarios it also prints the **routes held by the nodes**, the controller's **route events**, and a **recovery measurement**. HELLO and PROBE frames are hidden from the trace unless you add `--verbose`. Simulated time passes instantly; nothing waits for real seconds.
 
 | Scenario file | What it shows |
 | --- | --- |
@@ -82,7 +82,28 @@ The output has up to four parts: a time-ordered **trace** of events, the **obser
 | `flooding-is-bounded.json` | An 8-entry flood cache and faster reports: each node still forwards a frame at most once and the run stays small. |
 | `stale-report-expiry.json` | C stops at 10 s; with no reports arriving the view turns *stale* after 15 s instead of staying fresh. |
 
-The six Phase 2 files set `discovery: false` and `ack_delivery: "routed"` so they keep demonstrating the data plane alone; the Phase 3 files use the defaults (discovery on, ACKs flooded).
+The six Phase 2 files set `discovery: false` and `ack_delivery: "routed"` so they keep demonstrating the data plane alone; the Phase 3 files use the defaults (discovery on, ACKs flooded) and still use manual routes.
+
+**Phase 4a scenarios** use `"routing": "controller"`: nodes start with **no** data routes, probe their links every second, and the controller installs and changes routes by itself. Their link delays are *simulated settings* (A-B and B-C 10 ms one way, A-D and D-C 25 ms one way) so that B is cheaper than D; every description says so. They are not measurements.
+
+| Scenario file | What it shows |
+| --- | --- |
+| `auto-initial-route.json` | Readings created before the first route are dropped `no_route` and counted. After discovery and probing, the controller installs A > B > C (B first, then A) with nobody editing a table. |
+| `b-failure-auto-reroute.json` | B stops at 12 s. A and C time it out, reports reach C through D, and the controller installs A > D > C: D first, then A. |
+| `b-returns.json` | B stops (10 s) and returns (20 s). Its links come back but are held down for 5 s; then the controller picks B again because the simulated B links are cheaper. |
+| `one-way-a-b.json` | Only A to B fails while B stays alive. The link is *one-way*, so it is not usable, and the controller routes via D. |
+| `both-relays-fail.json` | B then D stop. The controller reports **No available route**. A cannot be told (nothing can leave C), so the announcement is retried a bounded number of times and ends *unconfirmed*; it stops by itself. |
+| `no-route-told-explicitly.json` | Every link loses one direction, so no link is two-way, while management messages still go around the ring. The controller says No available route, tells A, and A drops readings with reason `no_route`. The route returns after the links return and the hold-down. |
+| `route-update-lost.json` | The first ROUTE_UPDATE is dropped on both of C's links. The controller retries; the route is not active until the retry is acknowledged. |
+| `route-ack-lost.json` | B installs the route but its acknowledgement is lost. The controller resends, B recognises the repeat and acknowledges again without installing twice. |
+| `stale-update-ignored.json` | After the reroute two late, stale updates (an older version, and a bigger version of an older epoch) reach A. A ignores both and keeps the newer route. |
+| `controller-restart.json` | The controller restarts with a new epoch; its version numbers start again at 1, yet nodes accept them and delivery never stops. |
+
+Measure recovery over many seeds (simulation only; the reference is the scripted failure time):
+
+```sh
+uv run python -m iot_backend.simulator ../scenarios/b-failure-auto-reroute.json --measure-seeds 50
+```
 
 Command-line options (also usable on top of a scenario file):
 
@@ -98,11 +119,12 @@ Command-line options (also usable on top of a scenario file):
 | `--restart-a S` | Power-cycle A at second S: new session, sequence numbers start again. |
 | `--malformed-at S` | Deliver a corrupted 3-byte frame from A to B at second S. |
 | `--no-trace` | Print only the observed paths, summary and controller view. |
-| `--verbose` | Also show HELLO frames in the trace. |
+| `--verbose` | Also show HELLO and PROBE frames in the trace. |
+| `--measure-seeds N` | Run a controller scenario with seeds 1..N and print min / median / max of failure detection, route active, distribution, service recovery, delivery gap and readings lost, plus route computation time (wall-clock CPU, reported separately). Prints no trace. |
 
-Scenario files are strict JSON (an unknown key is an error, so a typo cannot silently change an experiment). They can set `seed`, `duration_s`, `settings` (interval, timeout, `max_attempts`, `ttl`, `queue_capacity`, `service_ms`, `discovery`, `ack_delivery`, `hello_interval_ms`, `hello_jitter_ms`, `neighbor_timeout_ms`, `report_interval_ms`, `report_coalesce_ms`, `flood_cache_size`), `permitted`, `routes`, `links` (`delay_ms`, `loss`, `drop_frames`, `drop_msg`, `down`), `initial_seq`, and timed `actions`: `stop_node`, `start_node`, `restart_node`, `set_route`, `set_permitted`, `link_down`, `set_link`, `inject_frame`.
+Scenario files are strict JSON (an unknown key is an error, so a typo cannot silently change an experiment). They can set `seed`, `duration_s`, `settings` (interval, timeout, `max_attempts`, `ttl`, `queue_capacity`, `service_ms`, `discovery`, `ack_delivery`, `hello_interval_ms`, `hello_jitter_ms`, `neighbor_timeout_ms`, `report_interval_ms`, `report_coalesce_ms`, `flood_cache_size`, `probe_interval_ms`, `probe_jitter_ms`, `rtt_window`, `rtt_min_samples`, `rtt_max_age_ms`, `max_routes`), `routing` (`"manual"` or `"controller"`), `controller` (`epoch`, `hold_down_ms`, `install_timeout_ms`, `install_max_attempts`, `replan_delay_ms`, `max_failed_plans`, `no_route_grace_ms`, `initial_settle_ms`), `permitted`, `routes` (manual routing only), `links` (`delay_ms`, `loss`, `drop_frames`, `drop_msg`, `down`), `initial_seq`, and timed `actions`: `stop_node`, `start_node`, `restart_node`, `set_route`, `set_permitted`, `link_down`, `set_link`, `inject_frame`, `restart_controller`.
 
-Event names in the trace: `frame_sent` (a node created and transmitted a frame), `frame_forwarded` (a relay passed one on), `frame_received`, `frame_rejected`, `frame_dropped`, `frame_dropped_by_link`, `reading_delivered`, `duplicate_received`, `ack_received`, `ack_ignored`, `ack_timeout` (one attempt), `reading_lost`, `neighbor_changed`, `neighbor_restarted`, `node_booted`, `node_stopped`. The `delivery_time_ms` on `ack_received` is the time from the *first attempt* to the ACK (time to confirmed delivery), together with `attempts`; it is not an RTT. A frame appears as `A:3905a56d#1`: creator, session id in hex, sequence number.
+Event names in the trace: `frame_sent` (a node created and transmitted a frame), `frame_forwarded` (a relay passed one on), `frame_received`, `frame_rejected`, `frame_dropped`, `frame_dropped_by_link`, `reading_delivered`, `duplicate_received`, `ack_received`, `ack_ignored`, `ack_timeout` (one attempt), `reading_lost`, `neighbor_changed`, `neighbor_restarted`, `node_booted`, `node_stopped`, `route_update_sent` (C originated an instruction), `route_installed` (a node applied it), `route_update_ignored` (duplicate, stale or refused). The `delivery_time_ms` on `ack_received` is the time from the *first attempt* to the ACK (time to confirmed delivery), together with `attempts`; it is not an RTT. A frame appears as `A:3905a56d#1`: creator, session id in hex, sequence number.
 
 ## Layout
 
@@ -120,9 +142,10 @@ backend/
     simulator/         engine.py (virtual clock), link.py, nodes.py (forwarding, retries),
                        dedup.py (duplicate filter), trace.py, scenario.py (Simulation),
                        scenario_file.py (JSON loader), gateway.py (SimulatedGateway),
-                       measurements.py (detection times), __main__.py (CLI)
+                       measurements.py (detection and recovery times), __main__.py (CLI)
     transports/        the Gateway interface the controller is written against
-    controller/        topology.py: nodes and links from reports, with freshness
+    controller/        topology.py: nodes and links from reports, with freshness and RTT;
+                       routing.py: Dijkstra, versioned installation, hold-down, no-route
   tests/               pytest checks (test_protocol.py loads ../tests/protocol-examples/,
                        test_scenarios.py loads ../scenarios/)
 ```
@@ -184,11 +207,31 @@ The two channels split the job: `GET /api/snapshot` gives the full current state
 
 **Why jitter helps.** If all boards power up together and send HELLOs on the same 1 s tick, their transmissions would land at the same instant every time, and on a shared radio channel they could collide repeatedly. Adding a small random offset (and a random starting point) spreads them out. The simulator does not model collisions, so it shows the spread-out timing rather than the benefit.
 
+## Routing in plain language (Phase 4a)
+
+**Dijkstra on our diamond.** Every usable link has a cost (its measured round-trip time, in milliseconds). Dijkstra finds the cheapest chain of links from A to C by growing outwards from A, always settling the closest unsettled node next. With A-B 30, B-C 35, A-D 65, D-C 65: A is at 0; B at 30 and D at 65 are its neighbors; settle B (30), which offers C at 30 + 35 = 65; settle D (65), which would offer C at 65 + 65 = 130, worse than 65; C is settled at 65 through B. The route is A > B > C. If two routes cost exactly the same, the rule is fixed so the answer never depends on luck: fewer hops, then the lower node ids (B before D).
+
+**Why RTT and not one-way delay.** To measure "how long did this take one way" you must subtract the sender's clock reading from the receiver's, and the boards' clocks are not synchronised: one can be seconds ahead of the other, so the difference is meaningless. A round trip needs only one clock. A notes when it sent a probe and when the reply came back, on its own clock, and the difference is a real duration. The reply carries no time at all; it only repeats the probe's identity. RTT is the sum of both directions, which is fine for a cost.
+
+**Why relays are installed first.** The source is the only node that *starts* sending down a path. If A is told "use B" while B has not yet been told "send to C", A's frames reach B and B has nowhere to send them: a black hole until B is configured. If B is told first and A afterwards, nothing is ever sent to B before B is ready. That is why the controller waits for each relay's acknowledgement before telling A, and calls the route active only when A has acknowledged as well. Acknowledgements make "I think it's installed" into "I know it is".
+
+**Why versions and epochs.** Updates can be duplicated, delayed or reordered (flooding delivers copies by several paths). Without a number, a late old update (A > B) could arrive after a newer one (A > D) and quietly put the route back through the dead relay. Each update carries a version; a node keeps the highest it has seen and ignores anything older. But the version is a counter in the controller's memory: if the controller restarts it begins again at 1, and every update would look old. The epoch fixes that: it names one run of the controller and only ever goes up, and a newer epoch beats any version of an older one. On the real laptop the epoch is its start time.
+
+**Why route updates must travel by flooding.** The update that moves A away from a dead B has to reach A. If it followed the data route (through B) it would be sent into the failure it is meant to repair. Flooding sends it over every surviving link, so it reaches A through D. The acknowledgement comes back the same way.
+
+**Why hold-down prevents flapping.** Imagine B's radio is on the edge of its range: it appears for a second, vanishes for two, appears again. Each reappearance would make the controller switch back to B (it is cheaper), then away again. Every switch costs messages and a short window where packets can be lost, and the network spends its time switching rather than carrying data. Requiring a returning link to stay up for 5 s before it is used again means the controller switches back only when the evidence says B is staying. Leaving B is never delayed: when it fails the route moves at once.
+
+**Why "no route" must be explicit.** A source with no instructions and a source that has been *told* there is nothing available look the same from outside, but they are different facts: the first might simply not have heard yet. Saying "No available route" makes the situation observable, lets the source drop readings immediately with a reason (counted, nothing piling up) instead of sending them into the dark and retrying each three times, and tells the person looking at the dashboard what is actually wrong. It also keeps the controller honest: if the source *could not* be told, the announcement ends `unconfirmed`, and nothing claims otherwise.
+
 ## Limitations
 
 - Tested on Windows only so far; macOS is covered by CI after push.
 - No authentication; keep the default `127.0.0.1` binding.
-- Failures are *detected* (Phase 3) but data routes are still set by hand, so a stopped B means lost readings until Phase 4 adds route calculation and installation.
+- Failures are detected and routed around automatically (Phase 4a), but the node-side reaction is still the controller's: until a replacement route is confirmed, readings sent toward the failed relay are lost (bounded: 3 attempts each). Backup next hops and local failover are Phase 4b.
+- The route is calculated for one flow, A to C, and only primary next hops are used; the backup field is carried but always none.
+- If both relays are dead, A cannot be told there is no route (nothing can leave C). A's readings are then lost after their 3 attempts rather than dropped `no_route`.
+- Recovery timings are quantised by the 2 s reading interval and the 1 s retry timer: the first reading to arrive over the new path is usually a retry, so *service recovery* is mostly a statement about those timers, not about how fast the route was installed (which is *route active*).
+- The controller waits 1 s after the first link is measured before computing the first route, and 5 s of silence at start before saying "no route". Both are configurable and were chosen for the simulation.
 - Detection times are simulated: the reference is the scripted stop time and delays are configured values. Real boards add radio timing the simulator does not model, including collisions.
 - Reports are sent by flooding without their own retry; a lost report is replaced by the next periodic one (5 s), and the controller expires stale information after 15 s.
 - If node C (the only gateway) stops, the controller learns nothing and can only show information as *stale*; it cannot tell that C itself is gone.

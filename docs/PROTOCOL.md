@@ -1,6 +1,6 @@
 # Node protocol
 
-**Draft — pending Dev's review.** Written by Harshal (backend owner) for Dev, who will implement the same format in C++ on the ESP8266. Scope so far: the frame header, DATA, DELIVERY_ACK (Phase 1), forwarding/delivery behaviour (Phase 2; no format change), and HELLO / TOPOLOGY_REPORT payloads with management-traffic behaviour (Phase 3). The Python implementation is `backend/src/iot_backend/protocol/`; the shared reference examples are in [tests/protocol-examples/](../tests/protocol-examples/). If this document and the examples disagree, tell Harshal — they are meant to agree exactly.
+**Draft — pending Dev's review.** Written by Harshal (backend owner) for Dev, who will implement the same format in C++ on the ESP8266. Scope so far: the frame header, DATA, DELIVERY_ACK (Phase 1), forwarding/delivery behaviour (Phase 2; no format change), HELLO / TOPOLOGY_REPORT payloads with management-traffic behaviour (Phase 3), and probes, route updates, route acknowledgements and the local-failover report (Phase 4a). The Python implementation is `backend/src/iot_backend/protocol/`; the shared reference examples are in [tests/protocol-examples/](../tests/protocol-examples/). If this document and the examples disagree, tell Harshal — they are meant to agree exactly.
 
 ## Why a compact binary format
 
@@ -53,13 +53,13 @@ The whole encoded frame must be **≤ 250 bytes** (ESP-NOW v1). That leaves a **
 | `0x02` | DELIVERY_ACK | Implemented |
 | `0x10` | HELLO | Implemented (Phase 3, pending Dev's review) |
 | `0x11` | TOPOLOGY_REPORT | Implemented (Phase 3, pending Dev's review) |
-| `0x12` | ROUTE_UPDATE | Reserved |
-| `0x13` | ROUTE_INSTALL_ACK | Reserved |
-| `0x14` | PROBE | Reserved |
-| `0x15` | PROBE_REPLY | Reserved |
-| `0x16` | LOCAL_FAILOVER_REPORT | Reserved |
+| `0x12` | ROUTE_UPDATE | Implemented (Phase 4a, pending Dev's review) |
+| `0x13` | ROUTE_INSTALL_ACK | Implemented (Phase 4a, pending Dev's review) |
+| `0x14` | PROBE | Implemented (Phase 4a, pending Dev's review) |
+| `0x15` | PROBE_REPLY | Implemented (Phase 4a, pending Dev's review) |
+| `0x16` | LOCAL_FAILOVER_REPORT | Payload defined in Phase 4a; **no node sends it before Phase 4b** |
 
-Codes `0x01–0x0F` are the data plane; `0x10` and above are management. Reserved types have no payload definition yet and **are rejected** (`reserved_type`) by the decoder.
+Codes `0x01–0x0F` are the data plane; `0x10` and above are management. Every code in this table now has a payload definition. A code that is added to the table before its payload is specified must be **rejected** (`reserved_type`) by the decoder; the reason is kept for that purpose, though no code is reserved today.
 
 ### DATA (`0x01`) — payload 4 bytes
 
@@ -91,7 +91,7 @@ A local keep-alive sent to **one** neighbor (`dst` is that neighbor, `ttl` 1). T
 
 The payload length must be exactly `1 + 5 × count`. An empty list is the single byte `00`.
 
-### TOPOLOGY_REPORT (`0x11`) — payload 1 + 8n bytes, n ≤ 8 (Phase 3, pending Dev's review)
+### TOPOLOGY_REPORT (`0x11`) — payload 1 + 8n bytes, n ≤ 8, plus an optional RTT trailer (Phase 3; trailer Phase 4a; pending Dev's review)
 
 A node's current neighbor observations, addressed to C (`dst`) and carried by bounded flooding (see *Management traffic* below).
 
@@ -105,7 +105,70 @@ A node's current neighbor observations, addressed to C (`dst`) and carried by bo
 
 The payload length must be exactly `1 + 8 × count`. Maximum payload is 65 bytes, 79 with the header.
 
+**RTT trailer (Phase 4a).** If the reporter has a measured round-trip time for at least one neighbor, the entries are followed by:
+
+| Offset | Size | Field | Meaning |
+| --- | --- | --- | --- |
+| `1 + 8n` | 1 | `rtt_count` | Number of measured neighbors, 1 to 8. |
+| `2 + 8n + 3j` | 1 | `neighbor` | Node id the measurement is for. |
+| `3 + 8n + 3j` | 2 | `rtt_ms` | Round-trip time to that neighbor in milliseconds, measured by the reporter on **its own clock** (see *Probes*). `0xFFFF` is never sent. |
+
+The payload length is therefore exactly `1 + 8n` (no measurements) or `1 + 8n + 1 + 3m`. A neighbor that is in the entries but not in the trailer is **unmeasured**. A receiver must treat "unmeasured" as *no cost known*, never as zero or as a default. The trailer is left out entirely when nothing is measured, so a report without measurements is byte-for-byte the Phase 3 report, and every Phase 3 reference example is unchanged. Largest report: `14 + 1 + 64 + 1 + 24 = 104` bytes.
+
+*Why a trailer and not a wider entry:* widening the 8-byte entry would have changed the bytes of every existing report example and of any firmware already written against them. A trailer keeps the Phase 3 prefix valid. One consequence to be aware of: a damaged Phase 3 report whose extra bytes happen to form a valid trailer would parse as a report with measurements; frames are not checksummed at this layer (the radio does that), so this is accepted.
+
 States: **one-way** means the reporter hears the neighbor's HELLOs but the neighbor's HELLOs do not list the reporter's current session; **two-way** means both directions are confirmed; **lost** means the neighbor was heard before but not within the neighbor timeout (default 3 s). Lost is "no HELLO heard", not proof that the neighbor lost power.
+
+### PROBE (`0x14`) — payload 0 bytes (Phase 4a, pending Dev's review)
+
+One hop, `ttl` 1, `dst` is the probed neighbor. The frame carries nothing: its own header `session` and `seq` identify it.
+
+### PROBE_REPLY (`0x15`) — payload 8 bytes (Phase 4a, pending Dev's review)
+
+One hop, `ttl` 1, `dst` is the prober. The replier's own `session` and `seq` are in the header. The payload echoes the probe so the prober can match it:
+
+| Offset | Size | Field | Meaning |
+| --- | --- | --- | --- |
+| 0 | 4 | `probe_session` | `session` of the PROBE being answered (non-zero). |
+| 4 | 4 | `probe_seq` | `seq` of the PROBE being answered. |
+
+There is **no timestamp** in either frame. See *Probes and link cost* below.
+
+### ROUTE_UPDATE (`0x12`) — payload 11 bytes (Phase 4a, pending Dev's review)
+
+An instruction from the controller. `src` is **C** (the gateway node originates it on the controller's behalf), `dst` is the node that must install it, `ttl` is the management default. The payload:
+
+| Offset | Size | Field | Meaning |
+| --- | --- | --- | --- |
+| 0 | 4 | `epoch` | Identifies one controller run; larger means newer. `0` is invalid. |
+| 4 | 4 | `version` | Route version within the epoch, from `1`. `0` is invalid. |
+| 8 | 1 | `destination` | Node id the entry is for (C in this project). |
+| 9 | 1 | `next_hop` | Node id to send frames for `destination` to, or `0` for **"no route" (told explicitly)**. |
+| 10 | 1 | `backup_next_hop` | Backup node id, or `0` for none. Phase 4a always sends `0`; Phase 4b will use it. A backup needs a primary and must differ from it. |
+
+### ROUTE_INSTALL_ACK (`0x13`) — payload 10 bytes (Phase 4a, pending Dev's review)
+
+The installing node's answer, created by that node (`src`), addressed to C, carried by management flooding.
+
+| Offset | Size | Field | Meaning |
+| --- | --- | --- | --- |
+| 0 | 4 | `epoch` | The update's epoch; for `status` 2 the epoch the node **holds**. |
+| 4 | 4 | `version` | The update's version; for `status` 2 the version the node **holds**. |
+| 8 | 1 | `destination` | Same as in the update. |
+| 9 | 1 | `status` | `1` installed (also sent again for a repeat of the held version), `2` stale (the node holds a newer pair and ignored the update), `3` rejected (the node cannot use it: next hop is not a permitted neighbor, or its route table is full). `0` and values above 3 are invalid. |
+
+### LOCAL_FAILOVER_REPORT (`0x16`) — payload 12 bytes (defined in Phase 4a, **not sent until Phase 4b**)
+
+Created by a node that switched to its backup; addressed to C; carried by management flooding. It is defined now so the format does not change twice.
+
+| Offset | Size | Field | Meaning |
+| --- | --- | --- | --- |
+| 0 | 4 | `epoch` | Epoch of the route the node was using. |
+| 4 | 4 | `version` | Version of that route. |
+| 8 | 1 | `destination` | Destination of the entry. |
+| 9 | 1 | `from_next_hop` | The primary next hop that was abandoned. |
+| 10 | 1 | `to_next_hop` | The backup now in use (must differ from `from_next_hop`). |
+| 11 | 1 | `reason` | `1` neighbor lost (the primary's HELLO timed out). Other values are invalid. |
 
 ## Decoding rules
 
@@ -121,10 +184,10 @@ A receiver must validate in this order and stop at the first failure. The frame 
 | 6 | `src` or `dst` is 0 or 255 | `bad_node_id` |
 | 7 | `session` is 0 | `bad_session` |
 | 8 | `payload_len` ≠ total length − 14 | `length_mismatch` |
-| 9 | Payload size is wrong for the type (DATA ≠ 4, DELIVERY_ACK ≠ 9); HELLO or TOPOLOGY_REPORT payload empty, `count` above 8, or length ≠ 1 + entry size × `count` | `bad_payload_length` |
-| 10 | (DELIVERY_ACK `origin`, HELLO `node`, report `neighbor`) is 0 or 255 | `bad_node_id` |
-| 11 | (DELIVERY_ACK, HELLO entry, report entry) session is 0 | `bad_session` |
-| 12 | (report entry) `state` is not 1, 2 or 3 | `bad_value` |
+| 9 | Payload size is wrong for the type (DATA ≠ 4, DELIVERY_ACK ≠ 9, PROBE ≠ 0, PROBE_REPLY ≠ 8, ROUTE_UPDATE ≠ 11, ROUTE_INSTALL_ACK ≠ 10, LOCAL_FAILOVER_REPORT ≠ 12); HELLO or TOPOLOGY_REPORT payload empty, `count` above 8, or length ≠ 1 + entry size × `count` (a report may add an RTT trailer of exactly `1 + 3 × rtt_count` bytes, `rtt_count` 1 to 8) | `bad_payload_length` |
+| 10 | (DELIVERY_ACK `origin`, HELLO `node`, report `neighbor`, report RTT `neighbor`, route `destination`, `next_hop` or `backup_next_hop` equal to 255, failover node ids) is 0 or 255 (`next_hop` and `backup_next_hop` may be 0 = none) | `bad_node_id` |
+| 11 | (DELIVERY_ACK, HELLO entry, report entry, PROBE_REPLY `probe_session`) session is 0 | `bad_session` |
+| 12 | (report entry) `state` is not 1, 2 or 3; (report RTT) `rtt_ms` is `0xFFFF`; (route messages) `epoch` or `version` is 0; (ROUTE_UPDATE) a backup without a primary or equal to it; (ROUTE_INSTALL_ACK) `status` not 1–3; (LOCAL_FAILOVER_REPORT) `from_next_hop` = `to_next_hop` or `reason` not 1 | `bad_value` |
 
 Whether a valid frame is *for this node*, from a *permitted neighbor*, or an *expected type* is behaviour, not decoding; see the next section.
 
@@ -202,8 +265,8 @@ Each node has a bounded outgoing queue (default 16 frames, including the one bei
 | Kind | Types | How it travels |
 | --- | --- | --- |
 | Data | DATA | Hop by hop by the routing tables. |
-| Local | HELLO | One hop only, never forwarded. |
-| Management | TOPOLOGY_REPORT, DELIVERY_ACK | Bounded flooding over permitted links; **ignores the routing tables**, so a broken data route cannot cut it off. Later route messages will join this class. |
+| Local | HELLO, PROBE, PROBE_REPLY | One hop only, never forwarded. |
+| Management | TOPOLOGY_REPORT, DELIVERY_ACK, ROUTE_UPDATE, ROUTE_INSTALL_ACK, LOCAL_FAILOVER_REPORT | Bounded flooding over permitted links; **ignores the routing tables**, so a broken data route cannot cut it off. |
 
 ### HELLO: one unicast per permitted neighbor (decision)
 
@@ -248,9 +311,9 @@ For a TOPOLOGY_REPORT (and a DELIVERY_ACK) a node:
 
 So each node handles a given management frame at most once, and TTL (default 8) ends the flood even if a cache has forgotten an identity. The cache holds the last 64 identities (9 bytes each); the oldest is evicted first. Frames follow permitted links only: management traffic never uses A–C as a shortcut.
 
-### Gateway and controller
+### Gateway and controller (Phase 3; commands added in Phase 4a)
 
-C hands every TOPOLOGY_REPORT addressed to it to the gateway interface as a plain event; the controller sees nothing else of the network. In the simulator that is a `SimulatedGateway`; on hardware it will be a line of JSON on C's USB serial port.
+C hands every TOPOLOGY_REPORT and ROUTE_INSTALL_ACK addressed to it to the gateway interface as a plain event; the controller sees nothing else of the network. In the simulator that is a `SimulatedGateway`; on hardware it will be a line of JSON on C's USB serial port. In the other direction the controller gives the gateway a *route update command* (node, epoch, version, destination, next hop, backup) and **C originates the ROUTE_UPDATE frame on the controller's behalf**: the frame's `src`, `session` and `seq` are C's own. The laptop never transmits on the radio itself, and nodes use `src` to check that a ROUTE_UPDATE came from the gateway (see below).
 
 ### Defaults
 
@@ -277,6 +340,103 @@ These are initial experiment settings, not hardware guarantees.
 
 This is small next to the 4 KB send queue from Phase 2 but should be checked against measured free heap in Phase 6.
 
+## Probes and link cost (Phase 4a)
+
+**Pending Dev's review.**
+
+### Why RTT, never one-way delay
+
+The ESP8266 boards have no shared clock. A frame stamped "sent at 1000 ms" by A means nothing to B, whose counter started at another moment and drifts at another rate. So no node ever subtracts a timestamp that another node wrote. A **probe** needs only the prober's own clock: it notes the time when it creates a PROBE, and the time when the matching PROBE_REPLY arrives, and the difference is the round trip, measured entirely on one board. Neither frame carries a time. The reply only echoes the probe's identity (`probe_session`, `probe_seq`).
+
+### Rules
+
+- Every `probe_interval` (default 1000 ms, jittered ±100 ms from a separate seeded generator, **0 = off**) a node sends one PROBE to each permitted neighbor.
+- One probe is outstanding per neighbor. A new probe replaces an unanswered one, so a silent neighbor costs one small record and never a growing list.
+- A PROBE is answered with a PROBE_REPLY to the link-layer sender. A PROBE whose `dst` is not the receiver, or whose `src` is not the link-layer sender, is rejected `probe_not_local`; one from a non-permitted neighbor is rejected `not_permitted_neighbor`.
+- A PROBE_REPLY is accepted only if it comes from the probed neighbor and echoes the outstanding probe's own `session` and `seq`; otherwise it is dropped `probe_unmatched`. A late reply for a replaced probe is therefore ignored, and a reply from before a reboot can never match.
+- The prober keeps the last `rtt_window` (default 5) samples per neighbor, each with the time it was taken. Samples older than `rtt_max_age` (default 10 s) are forgotten.
+- The reported value is the **median** of the fresh samples, and only when there are at least `rtt_min_samples` (default 3). Otherwise the neighbor is **unmeasured**. The median ignores one outlier; EWMA smoothing is Phase 9.
+- A report is requested when a neighbor *gains or loses* a measurement, not when a value changes (values ride on the next periodic report). This keeps measurement noise from generating traffic.
+
+The measured RTT includes the radio service time at both ends and queueing behind other frames on the same board. That is intended: it is what a frame on this link really experiences. It is a round trip, so a link whose two directions differ shows up as the sum.
+
+### Cost of a link at the controller
+
+Both ends of a link measure it independently, each on its own clock. The controller uses the **larger of the two measurements** as the link's cost, and only when **both** ends have one. A link with a missing end is *unmeasured*: it is left out of the route calculation altogether. It is never given a default or zero cost, because a free link would attract every route to the one link nobody has measured.
+
+## Route installation (Phase 4a)
+
+**Pending Dev's review.** Route messages are management frames: they travel by bounded flooding (rules above), not along the data route. That is the point: when B dies, the update that moves A to D must be able to reach A through D.
+
+### Who may install a route
+
+A node installs a ROUTE_UPDATE only if it is addressed to it (`dst`), it passed the permitted-neighbor check, and its header `src` is the **gateway node's id** (C). Anything else is rejected `not_from_gateway`. This stops a misbehaving or misconfigured node from rerouting the network, and it makes C the only entry point for commands.
+
+### Acceptance: epochs and versions
+
+A node keeps, per destination, the pair `(epoch, version, next_hop, backup)` it last installed (RAM only; lost on reboot). For an incoming update:
+
+1. A next hop that is not a permitted neighbor is **refused** (`status` 3) and not installed. So is a new destination when the table is full (`max_routes`, default 8).
+2. The pair `(epoch, version)` is compared with the held one, with wrap-safe (serial-number) arithmetic: **a newer epoch wins outright, whatever the version; within the same epoch the higher version wins.**
+3. Newer: install, acknowledge with `status` 1.
+4. Equal: do not install again; acknowledge with `status` 1 (the earlier acknowledgement may have been lost; without a fresh one the controller would retry until it gave up).
+5. Older: **ignore it** and answer `status` 2 carrying the *held* epoch and version. A late or duplicate old update can therefore never undo a newer route.
+
+A node with nothing held accepts any valid update (a rebooted node has lost its table; the controller notices the new session and installs again).
+
+### Why an epoch as well as a version
+
+Versions are just a counter in the controller's memory. If the controller restarts, that counter would restart at 1, below the version the nodes hold, and every update would look stale: the network would be stuck on old routes. The **epoch** names one controller run and always goes up across restarts, so a new run's version 1 beats the previous run's version 57. On hardware the epoch should be the controller's start time in seconds since 1970 (fits 32 bits until 2106; needs no storage). If a controller ever starts with an epoch no larger than what nodes hold (a laptop clock set backwards), the nodes answer `status` 2 with their held pair and the controller **advances its epoch past it** instead of staying stuck.
+
+### Order of installation and acknowledgements
+
+For a path `A → B → C` the controller sends, in this order:
+
+1. **Relays first**: ROUTE_UPDATE to every relay (B) telling it the next hop for C.
+2. It waits for each relay's ROUTE_INSTALL_ACK.
+3. **Only then** ROUTE_UPDATE to the source (A).
+4. The route is **active** only when the source has acknowledged too.
+
+Reason: until A is switched nothing sends toward the new relay, so installing a relay changes nothing for traffic. If A were switched first, A could transmit to a relay that does not yet know where to send the frame, which would silently drop it: a black hole.
+
+Each update is retried when no acknowledgement arrives within `install_timeout` (default 1 s), at most `install_max_attempts` (default 3) transmissions in total. If the attempts run out the route is `unconfirmed` and is never reported active; the controller re-plans after `replan_delay` (default 3 s) at most `max_failed_plans` (default 3) times in a row, then waits for a topology change. A route is reported active only with acknowledgements from every node that forwards on it; the destination C needs no entry. Entries on relays that are no longer on the route are left in place (harmless: nothing is sent to them, and they are replaced by version when the relay is used again).
+
+### No route
+
+If no usable measured path exists, the controller sends the source a ROUTE_UPDATE whose `next_hop` is `0`. This is an explicit statement ("there is no route"), distinct from never having been told. A source that holds it drops each new reading immediately with reason `no_route` (counted, nothing queued, no retries). Readings already pending finish their at most 3 attempts. A source that has *never* been told also holds no route and drops the same way, so the difference is visible only in the trace (`told_by_controller`).
+
+### Added RAM per node (estimate for the ESP8266, not measured)
+
+| Item | Bytes (2 neighbors, 1 destination) | Bytes (worst case: 8 neighbors, 8 destinations) |
+| --- | --- | --- |
+| Installed routes: epoch 4 + version 4 + next hop 1 + backup 1 + destination 1 = 11 each | 11 | 88 |
+| Outstanding probes: seq 4 + sent time 4 = 8 per neighbor | 16 | 64 |
+| RTT windows: 5 samples × (time 4 + rtt 2) per neighbor | 60 | 240 |
+| Measured flags | 2 | 8 |
+| Largest new frame buffer (report with trailer 104 B instead of 79 B) | 25 | 25 |
+| **Total** | **about 0.1 KB** | **about 0.4 KB** |
+
+These come on top of the earlier estimates (0.7 KB for discovery, about 4 KB for the send queue); check against measured free heap in Phase 6. Probes also consume sequence numbers from the node's single counter. At the default intervals A creates roughly 6 or 7 numbers per second, so a reading retried within its 3 s window is about 20 numbers behind: well inside the 64-number duplicate window at C, with about 10 s of headroom. A probe interval much shorter than 1 s would erode that headroom.
+
+### Defaults added in Phase 4a
+
+| Setting | Default | Where |
+| --- | --- | --- |
+| `probe_interval` | 1000 ms (0 = off) | node |
+| `probe_jitter` | ±100 ms | node |
+| `rtt_window` | 5 samples | node |
+| `rtt_min_samples` | 3 | node |
+| `rtt_max_age` | 10 s | node |
+| `max_routes` | 8 | node |
+| `hold_down` | 5 s | controller |
+| `install_timeout` | 1 s | controller |
+| `install_max_attempts` | 3 | controller |
+| `replan_delay` / `max_failed_plans` | 3 s / 3 | controller |
+| `initial_settle` | 1 s | controller |
+| `no_route_grace` | 5 s | controller |
+
+These are initial experiment settings, not hardware guarantees.
+
 ## Reference examples
 
 Each file in `tests/protocol-examples/` holds one case:
@@ -299,10 +459,16 @@ File names start with `valid-` or `invalid-`. The Python tests load every file i
 
 ### Change to an existing example (Phase 3)
 
-Defining HELLO made one Phase 1 example wrong by construction: `invalid-reserved-type-hello.json` expected HELLO (0x10) to be rejected as `reserved_type`. Its bytes are unchanged, but HELLO is now a defined type, so the same frame (header only, no `count` byte) is rejected as `bad_payload_length`. The file was renamed `invalid-hello-empty-payload.json` and its `reject_reason` changed; `invalid-reserved-type-route-update.json` takes over the "still reserved" case. All other Phase 1 and Phase 2 examples are untouched.
+Defining HELLO made one Phase 1 example wrong by construction: `invalid-reserved-type-hello.json` expected HELLO (0x10) to be rejected as `reserved_type`. Its bytes are unchanged, but HELLO is now a defined type, so the same frame (header only, no `count` byte) is rejected as `bad_payload_length`. The file was renamed `invalid-hello-empty-payload.json` and its `reject_reason` changed; `invalid-reserved-type-route-update.json` took over the "still reserved" case until Phase 4a (see below). All other Phase 1 and Phase 2 examples are untouched.
+
+### Change to an existing example (Phase 4a)
+
+Defining ROUTE_UPDATE made the last "still reserved" example wrong by construction, exactly as HELLO did in Phase 3. `invalid-reserved-type-route-update.json` held a header-only frame of type `0x12` and expected `reserved_type`. Its bytes are unchanged, but ROUTE_UPDATE is now a defined type with an 11-byte payload, so the same frame is rejected as `bad_payload_length`. The file was renamed `invalid-route-update-empty-payload.json` and its `reject_reason` changed. No code is reserved any more, so no example expects `reserved_type`; the test suite covers that path with a unit test. The Phase 3 TOPOLOGY_REPORT examples are unchanged (the RTT trailer is optional); 27 new examples cover the Phase 4a payloads. A firmware implementation written against the Phase 1 example must accept this change.
 
 ## Open for Dev's review
 
 - Is a 14-byte header with 32-bit session and sequence acceptable on the ESP8266, or should `seq` shrink?
 - Is `value` as int32 hundredths fine for the eventual sensor? (Phase 8 may refine this without changing the header.)
 - Rejection-reason names and order: confirm they are practical to implement and count in firmware.
+- **Phase 4a:** the optional RTT trailer on TOPOLOGY_REPORT (is a trailer easier or harder than a wider entry for the firmware packer?), `0` as "none" in the next-hop fields, the 11- and 10-byte route payloads, the epoch rule (start time in seconds), and whether `max_routes` 8 and the 5-sample RTT window fit the ESP8266's heap.
+- **Phase 4a:** a probe consumes a sequence number, like every created frame. If that is too many numbers per second for your counter or the duplicate window, say so and probes can use a separate counter.
