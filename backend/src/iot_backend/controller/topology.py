@@ -2,7 +2,8 @@
 
 It never sees node or simulator state: it takes a `Gateway` and nothing else. From topology
 reports it keeps nodes and links, each with a freshness-aware state, and emits an event
-whenever something changes. Nothing here calculates routes (Phase 4).
+whenever something changes. Nothing here calculates routes: `routable_links()` only hands the
+route calculation (controller/routing.py) the links it may use and what each costs.
 
 Rules (all times are the gateway clock):
 
@@ -20,6 +21,11 @@ Rules (all times are the gateway clock):
   fresh. It is **one_way** when only one direction is confirmed, **down** when neither
   direction is heard or an endpoint is lost contact, and **stale** when an end's report has
   expired. Only **up** links are usable.
+* A link is **routable** (Phase 4a) when it is up *and* both ends report a measured round-trip
+  time. Its cost is the larger of the two measurements: both ends measure the same round trip on
+  their own clocks, and taking the larger one never makes a link look better than either end saw
+  it. A link with a missing measurement is not routable, and is never given a default or zero
+  cost. Nothing here subtracts timestamps from different boards.
 """
 
 from collections import deque
@@ -69,7 +75,8 @@ class TopologyEvent:
 
     event_id: int
     time_ms: int
-    # node_seen, node_lost_contact, node_regained_contact, node_stale, link_state_changed
+    # node_seen, node_lost_contact, node_regained_contact, node_restarted, node_stale,
+    # link_state_changed
     type: str
     data: dict[str, Any]
 
@@ -107,6 +114,7 @@ class TopologyView:
         self._links: dict[tuple[int, int], _LinkState] = {}
         self._events: deque[TopologyEvent] = deque(maxlen=self._config.max_events)
         self._handlers: list[Callable[[TopologyEvent], None]] = []
+        self._update_handlers: list[Callable[[], None]] = []
         self._next_event_id = 1
         self._timer_at: int | None = None
         gateway.subscribe(self._on_gateway_event)
@@ -125,6 +133,14 @@ class TopologyView:
         """Call `handler` with every topology event (the stream the dashboard will use)."""
         self._handlers.append(handler)
 
+    def subscribe_updates(self, handler: Callable[[], None]) -> None:
+        """Call `handler` after each report has been absorbed and the view is consistent.
+
+        Events are emitted *while* the view is being re-evaluated, so a handler that wants to
+        read the view back (the route calculation) uses this instead.
+        """
+        self._update_handlers.append(handler)
+
     def node_status(self, name: str) -> str:
         return self._nodes[_id(name)].status if _id(name) in self._nodes else UNKNOWN
 
@@ -132,6 +148,45 @@ class TopologyView:
         key = tuple(sorted((_id(a), _id(b))))
         state = self._links.get(key)  # type: ignore[arg-type]
         return state.state if state else None
+
+    def node_sessions(self) -> dict[str, int]:
+        """Latest own session of each node that has reported. A change means it restarted."""
+        self._evaluate()
+        return {
+            _name(n): s.session for n, s in sorted(self._nodes.items()) if s.session is not None
+        }
+
+    def routable_links(self) -> list[tuple[str, str, int]]:
+        """(a, b, cost_ms) for every up link whose two ends both report a measured RTT."""
+        self._evaluate()
+        result = []
+        for (a, b), state in sorted(self._links.items()):
+            if state.state != LINK_UP:
+                continue
+            cost = self._link_cost(a, b)
+            if cost is not None:
+                result.append((_name(a), _name(b), cost))
+        return result
+
+    def unmeasured_links(self) -> list[tuple[str, str]]:
+        """Up links that are not routable because an end has no measurement."""
+        self._evaluate()
+        return [
+            (_name(a), _name(b))
+            for (a, b), state in sorted(self._links.items())
+            if state.state == LINK_UP and self._link_cost(a, b) is None
+        ]
+
+    def _rtt_from(self, reporter: int, neighbor: int) -> int | None:
+        report = self._reports.get(reporter)
+        entry = None if report is None else report.entries.get(neighbor)
+        return None if entry is None else entry.rtt_ms
+
+    def _link_cost(self, a: int, b: int) -> int | None:
+        rtt_a, rtt_b = self._rtt_from(a, b), self._rtt_from(b, a)
+        if rtt_a is None or rtt_b is None:
+            return None
+        return max(rtt_a, rtt_b)
 
     def usable_links(self) -> list[tuple[str, str]]:
         """Links confirmed in both directions by fresh reports. Nothing else is usable."""
@@ -169,6 +224,10 @@ class TopologyView:
                 "usable": s.state == LINK_UP,
                 "directions": dict(s.directions),
                 "since_ms": s.since_ms,
+                # Each end's own measurement of the round trip (None = unmeasured) and the
+                # cost the route calculation would use (None = not routable).
+                "rtt_ms": {_name(a): self._rtt_from(a, b), _name(b): self._rtt_from(b, a)},
+                "cost_ms": self._link_cost(a, b) if s.state == LINK_UP else None,
             }
             for (a, b), s in sorted(self._links.items())
         ]
@@ -194,6 +253,8 @@ class TopologyView:
             entries={o.neighbor: o for o in event.neighbors},
         )
         self._evaluate()
+        for handler in list(self._update_handlers):
+            handler()
 
     def _on_timer(self) -> None:
         self._timer_at = None
@@ -247,6 +308,18 @@ class TopologyView:
             if own is not None:
                 state.session = own.session
             state.observed_by, state.silent_for_ms = observers, silent
+            if (
+                status == old_status == REACHABLE
+                and old_session is not None
+                and own is not None
+                and own.session != old_session
+            ):
+                # Rebooted so quickly that nobody declared it lost: its RAM, including any
+                # installed routes, is gone even though it never looked unreachable.
+                self._emit(
+                    "node_restarted",
+                    {"node": _name(node), "old_session": old_session, "session": own.session},
+                )
             if status == old_status:
                 continue
             state.status, state.since_ms = status, now
