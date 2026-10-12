@@ -17,6 +17,10 @@ Two kinds of traffic (docs/ARCHITECTURE.md):
 * **Management** (TOPOLOGY_REPORT, ROUTE_UPDATE, ROUTE_INSTALL_ACK, and DELIVERY_ACK unless
   `ack_delivery="routed"`) is flooded over permitted links, once per node, independent of the
   routing tables. ROUTE_UPDATE is only accepted when it was created by the gateway node.
+* **Local failover** (Phase 4b, off unless `local_failover`): a node switches to the backup
+  next hop the controller installed when its current next hop stops being a two-way neighbor
+  (T1) or K consecutive unicast sends to it fail at the link layer (T2). It never calculates a
+  route and never switches back by itself.
 * **HELLO** and **PROBE / PROBE_REPLY** are local: one hop to a permitted neighbor, never
   forwarded. A probe's round trip is timed on the prober's own clock.
 """
@@ -32,9 +36,11 @@ from iot_backend.protocol import (
     DataPayload,
     DecodeError,
     DeliveryAckPayload,
+    FailoverReason,
     Frame,
     HelloNeighbor,
     HelloPayload,
+    LocalFailoverReportPayload,
     MessageType,
     NeighborCode,
     PacketIdentity,
@@ -65,7 +71,10 @@ from iot_backend.simulator.trace import (
     FRAME_FORWARDED,
     FRAME_RECEIVED,
     FRAME_REJECTED,
+    FRAME_REROUTED,
     FRAME_SENT,
+    LOCAL_FAILOVER,
+    LOCAL_NO_ROUTE,
     NEIGHBOR_CHANGED,
     NEIGHBOR_RESTARTED,
     NODE_BOOTED,
@@ -75,6 +84,7 @@ from iot_backend.simulator.trace import (
     ROUTE_INSTALLED,
     ROUTE_UPDATE_IGNORED,
     ROUTE_UPDATE_SENT,
+    SEND_FAILED,
     Trace,
 )
 from iot_backend.transports import RouteUpdateCommand
@@ -135,6 +145,12 @@ class NodeSettings:
     rtt_min_samples: int = 3  # fewer fresh samples than this = "unmeasured"
     rtt_max_age_ms: int = 10_000  # older samples are forgotten
     max_routes: int = 8  # installed route entries (one per destination)
+    # Phase 4b: local failover. Off by default so earlier scenarios behave exactly as before.
+    local_failover: bool = False
+    failover_t1: bool = True  # trigger T1: next hop no longer two-way (lost or one-way)
+    failover_t2_k: int = 3  # trigger T2: K consecutive failed sends to the next hop; 0 = off
+    send_fail_ms: int = 30  # how long the link layer takes to report a failed send
+    failover_report_repeats: int = 5  # extra copies of a failover report, one per report interval
 
 
 @dataclass
@@ -152,6 +168,10 @@ class NodeCounters:
     reports: int = 0  # TOPOLOGY_REPORT frames created
     probes: int = 0  # PROBE frames created
     dropped_no_route: int = 0  # readings dropped at creation because no route existed
+    failovers: int = 0  # switches to a backup (T1 or T2)
+    local_no_routes: int = 0  # times the node found no usable backup
+    failover_reports: int = 0  # LOCAL_FAILOVER_REPORT frames created (including repeats)
+    send_failures: int = 0  # link-layer failure callbacks received
 
 
 @dataclass
@@ -183,7 +203,10 @@ class _Installed:
     epoch: int
     version: int
     next_hop: int | None
-    backup_next_hop: int | None  # stored, never used in Phase 4a
+    backup_next_hop: int | None  # used only by local failover (Phase 4b)
+    failed_over: bool = False  # now sending to the backup; cleared only by a newer version
+    local_no_route: bool = False  # no usable backup; cleared only by a newer version
+    reports_left: int = 0  # repeats of the failover report still to send
 
 
 @dataclass
@@ -243,6 +266,13 @@ class Node:
         self._probes: dict[int, _Probe] = {}
         self._rtt: dict[int, deque[tuple[int, int]]] = {}  # neighbor -> (time, rtt) samples
         self._rtt_reported: dict[int, bool] = {}  # last "has a measurement" per neighbor
+        self._send_failures: dict[int, int] = {}  # neighbor -> consecutive failed sends
+        # Link-layer verdicts are processed in the order the frames were sent, like the single
+        # radio's callbacks: ticket numbers are issued per transmission.
+        self._tickets_issued = 0
+        self._next_ticket = 0
+        self._verdicts: dict[int, tuple[int, bool, bool | None]] = {}
+        self._first_failure_ms: dict[int, int] = {}  # neighbor -> time of the first of them
         # (identity, value, time) of accepted readings; bounded, oldest dropped.
         self.receipts: deque[tuple[PacketIdentity, int, int]] = deque(maxlen=settings.max_receipts)
 
@@ -262,6 +292,16 @@ class Node:
     @property
     def flood_cache_evictions(self) -> int:
         return self._flood.evictions
+
+    @property
+    def life(self) -> int:
+        """Changes at every boot and stop; callbacks from an earlier life are ignored."""
+        return self._epoch
+
+    @property
+    def wants_send_feedback(self) -> bool:
+        """Whether the link layer should report the outcome of each unicast send (for T2)."""
+        return self._settings.local_failover and self._settings.failover_t2_k > 0
 
     def boot(self) -> None:
         """Start the node with a new random session and empty RAM."""
@@ -285,6 +325,10 @@ class Node:
         self._probes.clear()
         self._rtt.clear()
         self._rtt_reported.clear()
+        self._send_failures.clear()
+        self._first_failure_ms.clear()
+        self._tickets_issued = self._next_ticket = 0
+        self._verdicts.clear()
         self.counters.boots += 1
         self._trace.record(
             self._engine.now_ms,
@@ -324,6 +368,10 @@ class Node:
         self._probes.clear()
         self._rtt.clear()
         self._rtt_reported.clear()
+        self._send_failures.clear()
+        self._first_failure_ms.clear()
+        self._tickets_issued = self._next_ticket = 0
+        self._verdicts.clear()
         self._trace.record(self._engine.now_ms, self.name, NODE_STOPPED)
 
     # ---- sending ----
@@ -359,8 +407,32 @@ class Node:
         """Next hop for `dst`: a controller-installed entry wins over a configured one."""
         installed = self._installed.get(dst)
         if installed is not None:
-            return installed.next_hop  # None = the controller told us there is no route
+            return self._current_hop(installed)  # None = no route (told, or local failover)
         return self.routes.get(dst)
+
+    @staticmethod
+    def _current_hop(entry: _Installed) -> int | None:
+        """Where frames go now: the primary, the backup after a local failover, or nowhere."""
+        if entry.local_no_route:
+            return None
+        if entry.failed_over:
+            return entry.backup_next_hop
+        return entry.next_hop
+
+    def forwarding_state(self, dst: int) -> dict[str, object] | None:
+        """The installed entry and what a local failover did to it, for tests and the CLI."""
+        held = self._installed.get(dst)
+        if held is None:
+            return None
+        return {
+            "epoch": held.epoch,
+            "version": held.version,
+            "primary": held.next_hop,
+            "backup": held.backup_next_hop,
+            "current": self._current_hop(held),
+            "failed_over": held.failed_over,
+            "local_no_route": held.local_no_route,
+        }
 
     def route_state(self, dst: int) -> tuple[int, int, int | None] | None:
         """(epoch, version, next_hop) of an installed entry, for tests and the dashboard."""
@@ -397,7 +469,43 @@ class Node:
     def _finish_service(self, epoch: int) -> None:
         if epoch != self._epoch or not self._queue:
             return
-        item = self._queue.popleft()
+        popped = self._queue.popleft()
+        item = self._reroute_if_needed(popped)
+        if item is not None:
+            self._transmit_item(item)
+        if self._queue:
+            self._start_service()
+        else:
+            self._busy = False
+
+    def _reroute_if_needed(self, item: _Outgoing) -> _Outgoing | None:
+        """Re-read the route for a queued DATA frame just before it is transmitted.
+
+        A frame queued for the primary while the node failed over would otherwise still be
+        sent to the dead relay. The decision is the node's current table, nothing is computed.
+        """
+        if not self._settings.local_failover or item.frame.msg_type is not MessageType.DATA:
+            return item
+        current = self._lookup(item.frame.dst)
+        if current == item.next_hop:
+            return item
+        if current is None:
+            self._drop("no_route", item.frame.identity, dst=self._name(item.frame.dst))
+            return None
+        if current not in self.permitted:
+            self._drop("not_permitted_neighbor", item.frame.identity, to=self._name(current))
+            return None
+        self._trace.record(
+            self._engine.now_ms,
+            self.name,
+            FRAME_REROUTED,
+            item.frame.identity,
+            was=self._name(item.next_hop),
+            now=self._name(current),
+        )
+        return replace(item, next_hop=current)
+
+    def _transmit_item(self, item: _Outgoing) -> None:
         data = encode(item.frame)
         self.counters.sent += 1
         if item.previous_hop is None:
@@ -426,10 +534,6 @@ class Node:
         self._transmit_bytes(
             self.id, item.next_hop, data, item.frame.identity, item.frame.msg_type.name
         )
-        if self._queue:
-            self._start_service()
-        else:
-            self._busy = False
 
     # ---- receiving ----
 
@@ -531,7 +635,11 @@ class Node:
 
     def _consume_management(self, frame: Frame) -> None:
         kind = frame.msg_type
-        if kind in (MessageType.TOPOLOGY_REPORT, MessageType.ROUTE_INSTALL_ACK):
+        if kind in (
+            MessageType.TOPOLOGY_REPORT,
+            MessageType.ROUTE_INSTALL_ACK,
+            MessageType.LOCAL_FAILOVER_REPORT,
+        ):
             if self.gateway_sink is not None:
                 self.gateway_sink(frame)
             else:
@@ -540,7 +648,7 @@ class Node:
             self._on_route_update(frame)
         elif kind is MessageType.DELIVERY_ACK:
             self._accept_ack(frame)
-        else:  # LOCAL_FAILOVER_REPORT: defined, but nothing handles it before Phase 4b
+        else:
             self._reject("unexpected_type", frame.identity, msg=kind.name)
 
     # ---- neighbor discovery (HELLO) ----
@@ -613,6 +721,7 @@ class Node:
                 new=new_state.name.lower(),
             )
             self._request_report()
+            self._check_failover(frame.src)
         epoch, source, heard_at = self._epoch, frame.src, now
         self._engine.schedule(
             self._settings.neighbor_timeout_ms,
@@ -638,6 +747,7 @@ class Node:
             silent_ms=self._engine.now_ms - heard_at,
         )
         self._request_report()
+        self._check_failover(neighbor_id)
 
     # ---- link probes (round-trip time on this node's own clock) ----
 
@@ -760,6 +870,7 @@ class Node:
             return
         held = self._installed.get(update.destination)
         status = RouteAckStatus.INSTALLED
+        installed_now = False
         report_epoch, report_version = update.epoch, update.version
         if held is not None and (held.epoch, held.version) == (update.epoch, update.version):
             self._trace.record(
@@ -796,6 +907,17 @@ class Node:
                 epoch=update.epoch,
                 version=update.version,
             )
+        elif update.backup_next_hop is not None and update.backup_next_hop not in self.permitted:
+            status = RouteAckStatus.REJECTED
+            self._trace.record(
+                self._engine.now_ms,
+                self.name,
+                ROUTE_UPDATE_IGNORED,
+                frame.identity,
+                reason="backup_not_permitted",
+                epoch=update.epoch,
+                version=update.version,
+            )
         elif held is None and len(self._installed) >= self._settings.max_routes:
             status = RouteAckStatus.REJECTED
             self._trace.record(
@@ -818,14 +940,22 @@ class Node:
                 frame.identity,
                 destination=self._name(update.destination),
                 next_hop=None if update.next_hop is None else self._name(update.next_hop),
+                backup=None
+                if update.backup_next_hop is None
+                else self._name(update.backup_next_hop),
                 epoch=update.epoch,
                 version=update.version,
             )
+            installed_now = True
         ack = self._new_frame(
             self._settings.gateway_id,
             RouteInstallAckPayload(report_epoch, report_version, update.destination, status),
         )
         self._send_management(ack)
+        if installed_now:
+            # A newly installed primary that is already not two-way, or already failing, is
+            # abandoned at once. A controller that re-installs a dead primary cannot fight this.
+            self._check_failover(update.next_hop)
 
     @staticmethod
     def _is_newer(epoch: int, version: int, held: _Installed) -> bool:
@@ -833,6 +963,193 @@ class Node:
         if epoch != held.epoch:
             return _newer(epoch, held.epoch)
         return _newer(version, held.version)
+
+    # ---- local failover (Phase 4b) ----
+
+    def begin_send(self) -> int:
+        """A ticket for one unicast transmission; its verdict comes back with this number."""
+        ticket = self._tickets_issued
+        self._tickets_issued += 1
+        return ticket
+
+    def send_result(
+        self, ticket: int, to_id: int, ok: bool, life: int, delivered: bool | None = None
+    ) -> None:
+        """The link layer's verdict on the unicast send that was given `ticket`.
+
+        Verdicts are applied in the order the frames were sent, even if one arrives early.
+
+        Modelled on the ESP-NOW send callback: it says whether the next hop's *radio*
+        acknowledged the frame, after a short delay. It is not an end-to-end confirmation, and
+        it can say "failed" for a frame that did arrive (the acknowledgement was lost).
+        `delivered` is simulator knowledge, used only in the trace.
+        """
+        if life != self._epoch or not self.running:
+            return
+        self._verdicts[ticket] = (to_id, ok, delivered)
+        while self._next_ticket in self._verdicts:
+            to, result, was_delivered = self._verdicts.pop(self._next_ticket)
+            self._next_ticket += 1
+            self._apply_verdict(to, result, was_delivered)
+
+    def _apply_verdict(self, to_id: int, ok: bool, delivered: bool | None) -> None:
+        if ok:
+            self._send_failures[to_id] = 0
+            self._first_failure_ms.pop(to_id, None)
+            return
+        count = self._send_failures.get(to_id, 0) + 1
+        self._send_failures[to_id] = count
+        now = self._engine.now_ms
+        if count == 1:
+            self._first_failure_ms[to_id] = now
+        self.counters.send_failures += 1
+        self._trace.record(
+            now,
+            self.name,
+            SEND_FAILED,
+            None,
+            to=self._name(to_id),
+            consecutive=count,
+            delivered=delivered,
+        )
+        self._check_failover(to_id)
+
+    def _backup_usable(self, neighbor_id: int) -> bool:
+        """A backup is usable only if this node currently sees it as a working two-way neighbor."""
+        neighbor = self._neighbors.get(neighbor_id)
+        if neighbor_id not in self.permitted or neighbor is None:
+            return False
+        if neighbor.state is not NeighborCode.TWO_WAY:
+            return False
+        k = self._settings.failover_t2_k
+        return not (k > 0 and self._send_failures.get(neighbor_id, 0) >= k)
+
+    def _trigger_for(self, neighbor_id: int) -> tuple[FailoverReason, dict[str, object]] | None:
+        now = self._engine.now_ms
+        neighbor = self._neighbors.get(neighbor_id)
+        if (
+            self._settings.failover_t1
+            and neighbor is not None
+            and neighbor.state is not NeighborCode.TWO_WAY
+        ):
+            return FailoverReason.NEIGHBOR_LOST, {
+                "state": neighbor.state.name.lower(),
+                "since_last_hello_ms": now - neighbor.last_heard_ms,
+            }
+        k = self._settings.failover_t2_k
+        failures = self._send_failures.get(neighbor_id, 0)
+        if k > 0 and failures >= k:
+            return FailoverReason.SEND_FAILURES, {
+                "consecutive_failures": failures,
+                "since_first_failure_ms": now - self._first_failure_ms.get(neighbor_id, now),
+            }
+        return None
+
+    def _check_failover(self, neighbor_id: int | None) -> None:
+        """Switch every installed route whose current next hop is `neighbor_id` and has failed."""
+        if not self._settings.local_failover or not self.running or neighbor_id is None:
+            return
+        for dst, entry in list(self._installed.items()):
+            if self._current_hop(entry) != neighbor_id:
+                continue
+            trigger = self._trigger_for(neighbor_id)
+            if trigger is not None:
+                self._failover(dst, entry, neighbor_id, trigger[0], trigger[1])
+
+    def _failover(
+        self,
+        dst: int,
+        entry: _Installed,
+        failed: int,
+        reason: FailoverReason,
+        detail: dict[str, object],
+    ) -> None:
+        """Use the installed backup, or declare no route. Never calculates anything."""
+        backup = entry.backup_next_hop
+        trigger = (
+            "T1_neighbor_state" if reason is FailoverReason.NEIGHBOR_LOST else "T2_send_failures"
+        )
+        common = {
+            "trigger": trigger,
+            "destination": self._name(dst),
+            "failed": self._name(failed),
+            "epoch": entry.epoch,
+            "version": entry.version,
+            **detail,
+        }
+        on_primary = failed == entry.next_hop and not entry.failed_over
+        if on_primary and backup is not None and self._backup_usable(backup):
+            entry.failed_over = True
+            self.counters.failovers += 1
+            self._trace.record(
+                self._engine.now_ms,
+                self.name,
+                LOCAL_FAILOVER,
+                None,
+                to=self._name(backup),
+                **common,
+            )
+            target: int | None = backup
+        else:
+            entry.local_no_route = True
+            self.counters.local_no_routes += 1
+            why = "no_backup" if backup is None else "backup_unusable"
+            if not on_primary:
+                why = "backup_failed"
+            self._trace.record(
+                self._engine.now_ms, self.name, LOCAL_NO_ROUTE, None, why=why, **common
+            )
+            target = None
+        entry.reports_left = self._settings.failover_report_repeats
+        self._send_failover_report(dst, entry, failed, target, reason)
+        if entry.reports_left > 0:
+            epoch, key = self._epoch, (entry.epoch, entry.version)
+            self._engine.schedule(
+                self._settings.report_interval_ms,
+                lambda: self._failover_repeat(epoch, dst, key, failed, target, reason),
+            )
+
+    def _send_failover_report(
+        self,
+        dst: int,
+        entry: _Installed,
+        failed: int,
+        target: int | None,
+        reason: FailoverReason,
+    ) -> None:
+        report = self._new_frame(
+            self._settings.gateway_id,
+            LocalFailoverReportPayload(entry.epoch, entry.version, dst, failed, target, reason),
+        )
+        self.counters.failover_reports += 1
+        self._send_management(report)
+
+    def _failover_repeat(
+        self,
+        life: int,
+        dst: int,
+        key: tuple[int, int],
+        failed: int,
+        target: int | None,
+        reason: FailoverReason,
+    ) -> None:
+        """Say it again while still failed over: the first copy may have met a detached controller.
+
+        Bounded (`failover_report_repeats`) and stopped as soon as a newer version replaces the
+        entry, so a controller that is working never sees a stream of them.
+        """
+        entry = self._installed.get(dst)
+        if life != self._epoch or entry is None or (entry.epoch, entry.version) != key:
+            return
+        if not (entry.failed_over or entry.local_no_route) or entry.reports_left <= 0:
+            return
+        entry.reports_left -= 1
+        self._send_failover_report(dst, entry, failed, target, reason)
+        if entry.reports_left > 0:
+            self._engine.schedule(
+                self._settings.report_interval_ms,
+                lambda: self._failover_repeat(life, dst, key, failed, target, reason),
+            )
 
     # ---- topology reports ----
 

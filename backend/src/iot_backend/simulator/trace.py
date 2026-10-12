@@ -27,6 +27,12 @@ ACK_TIMEOUT = "ack_timeout"  # one attempt went unacknowledged
 ROUTE_UPDATE_SENT = "route_update_sent"  # the gateway node originated a ROUTE_UPDATE
 ROUTE_INSTALLED = "route_installed"  # a node applied a ROUTE_UPDATE to its table
 ROUTE_UPDATE_IGNORED = "route_update_ignored"  # duplicate, stale, or refused by the node
+SEND_FAILED = "send_failed"  # the link-layer callback said the next hop's radio did not ack
+LOCAL_FAILOVER = "local_failover"  # a node switched to its installed backup (T1 or T2)
+LOCAL_NO_ROUTE = "local_no_route"  # no usable backup: the node now has no route
+FRAME_REROUTED = "frame_rerouted"  # a queued frame was sent to a different next hop
+GATEWAY_DETACHED = "gateway_detached"  # the controller can no longer see or command the network
+GATEWAY_ATTACHED = "gateway_attached"
 
 
 @dataclass(frozen=True)

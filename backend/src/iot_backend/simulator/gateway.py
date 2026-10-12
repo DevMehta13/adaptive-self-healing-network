@@ -9,7 +9,9 @@ originates on the controller's behalf (the frame's source is C).
 from collections.abc import Callable
 
 from iot_backend.protocol import (
+    FailoverReason,
     Frame,
+    LocalFailoverReportPayload,
     NeighborCode,
     RouteAckStatus,
     RouteInstallAckPayload,
@@ -18,6 +20,7 @@ from iot_backend.protocol import (
 from iot_backend.simulator.engine import Engine
 from iot_backend.transports import (
     GatewayHandler,
+    LocalFailoverEvent,
     NeighborObservation,
     RouteInstallAckEvent,
     RouteUpdateCommand,
@@ -30,6 +33,11 @@ class SimulatedGateway:
         self._engine = engine
         self._handlers: list[GatewayHandler] = []
         self._originate: Callable[[RouteUpdateCommand], None] | None = None
+        # False models a controller that cannot see the network or command it (Phase 4b test
+        # aid). Events and commands are discarded, not buffered; buffering is Phase 5.
+        self.connected = True
+        self.events_lost = 0
+        self.commands_lost = 0
 
     # ---- Gateway interface ----
 
@@ -45,6 +53,9 @@ class SimulatedGateway:
     def send_route_update(self, command: RouteUpdateCommand) -> None:
         if self._originate is None:
             raise RuntimeError("gateway is not attached to a node")
+        if not self.connected:
+            self.commands_lost += 1
+            return
         self._originate(command)
 
     # ---- node side ----
@@ -56,7 +67,10 @@ class SimulatedGateway:
     def deliver(self, frame: Frame) -> None:
         """Node C passes a received management frame up, as it would write a serial line."""
         payload = frame.payload
-        event: TopologyReportEvent | RouteInstallAckEvent
+        if not self.connected:
+            self.events_lost += 1
+            return
+        event: TopologyReportEvent | RouteInstallAckEvent | LocalFailoverEvent
         if isinstance(payload, TopologyReportPayload):
             event = TopologyReportEvent(
                 received_ms=self._engine.now_ms,
@@ -84,6 +98,19 @@ class SimulatedGateway:
                 version=payload.version,
                 destination=payload.destination,
                 status=RouteAckStatus(payload.status).name.lower(),
+            )
+        elif isinstance(payload, LocalFailoverReportPayload):
+            event = LocalFailoverEvent(
+                received_ms=self._engine.now_ms,
+                origin=frame.src,
+                session=frame.session,
+                seq=frame.seq,
+                epoch=payload.epoch,
+                version=payload.version,
+                destination=payload.destination,
+                from_next_hop=payload.from_next_hop,
+                to_next_hop=payload.to_next_hop,
+                reason=FailoverReason(payload.reason).name.lower(),
             )
         else:
             return

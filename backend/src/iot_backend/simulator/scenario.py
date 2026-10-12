@@ -6,6 +6,7 @@ that later needs to learn about the network (the controller) must do so through 
 gateway interface fed by events, never by reading these objects.
 """
 
+import random
 from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
@@ -15,7 +16,12 @@ from iot_backend.simulator.engine import Engine
 from iot_backend.simulator.gateway import SimulatedGateway
 from iot_backend.simulator.link import Link, LinkConfig
 from iot_backend.simulator.nodes import ACK_FLOODING, ACK_ROUTED, Node, NodeSettings
-from iot_backend.simulator.trace import FRAME_DROPPED, Trace
+from iot_backend.simulator.trace import (
+    FRAME_DROPPED,
+    GATEWAY_ATTACHED,
+    GATEWAY_DETACHED,
+    Trace,
+)
 
 NODE_LETTERS = tuple(sorted(NODE_IDS))  # ("A", "B", "C", "D")
 LINK_KEYS = tuple((s, d) for s in NODE_LETTERS for d in NODE_LETTERS if s != d)
@@ -58,6 +64,12 @@ class ScenarioConfig:
     rtt_min_samples: int = 3
     rtt_max_age_ms: int = 10_000
     max_routes: int = 8
+    # Phase 4b: local failover (off by default; earlier scenarios are unchanged)
+    local_failover: bool = False
+    failover_t1: bool = True
+    failover_t2_k: int = 3
+    send_fail_ms: int = 30
+    failover_report_repeats: int = 5
     gateway: str = "C"  # node whose USB link carries events to the controller
     reading_src: str = "A"
     reading_dst: str = "C"
@@ -104,6 +116,7 @@ class Simulation:
         self._nodes: dict[str, Node] = {}
         self._links: dict[tuple[str, str], Link] = {}
         self._no_link_drops: Counter[str] = Counter()
+        self._mac_rngs: dict[tuple[str, str], random.Random] = {}
 
         settings = NodeSettings(
             ttl=self.config.ttl,
@@ -127,6 +140,11 @@ class Simulation:
             rtt_min_samples=self.config.rtt_min_samples,
             rtt_max_age_ms=self.config.rtt_max_age_ms,
             max_routes=self.config.max_routes,
+            local_failover=self.config.local_failover,
+            failover_t1=self.config.failover_t1,
+            failover_t2_k=self.config.failover_t2_k,
+            send_fail_ms=self.config.send_fail_ms,
+            failover_report_repeats=self.config.failover_report_repeats,
         )
         self._gateway = SimulatedGateway(self._engine)
         for letter in NODE_LETTERS:
@@ -233,6 +251,43 @@ class Simulation:
             return None
         epoch, version, hop = state
         return epoch, version, None if hop is None else NODE_NAMES[hop]
+
+    def set_gateway_connected(self, connected: bool, at_ms: int | None = None) -> None:
+        """Cut or restore the controller's view of, and commands to, the network.
+
+        Models the controller process (or the USB link to C) being unreachable. Node C keeps
+        receiving, acknowledging and forwarding; only the controller is blind and mute. C does
+        not buffer anything while detached (that is Phase 5).
+        """
+
+        def apply() -> None:
+            self._gateway.connected = connected
+            self.trace.record(
+                self._engine.now_ms,
+                self.config.gateway,
+                GATEWAY_ATTACHED if connected else GATEWAY_DETACHED,
+            )
+
+        self._at(at_ms, apply)
+
+    def node_counters(self, node: str):  # noqa: ANN201 - NodeCounters, for tests and the CLI
+        """A node's counters (readings, failovers, failover reports, ...)."""
+        return self._nodes[node].counters
+
+    def forwarding_state(self, node: str, dst: str) -> dict[str, object] | None:
+        """A node's installed entry as strings (names), with failover flags; for tests and CLI."""
+        state = self._nodes[node].forwarding_state(NODE_IDS[dst])
+        if state is None:
+            return None
+        names = {
+            k: (None if state[k] is None else NODE_NAMES[state[k]])
+            for k in (
+                "primary",
+                "backup",
+                "current",
+            )
+        }  # type: ignore[index]
+        return {**state, **names}
 
     def stop_node(self, name: str, at_ms: int | None = None) -> None:
         """Power a node off (now, or at an absolute simulated time)."""
@@ -351,4 +406,49 @@ class Simulation:
                 reason="no_link",
             )
             return
-        link.transmit(data, identity, msg)
+        delivered = link.transmit(data, identity, msg)
+        sender = self._nodes[src]  # type: ignore[index]
+        if sender.wants_send_feedback:
+            self._send_feedback(sender, str(src), str(dst), link, delivered)
+
+    def _send_feedback(self, sender: Node, src: str, dst: str, link: Link, delivered: bool) -> None:
+        """Deliver the link layer's verdict on a unicast send, as the ESP-NOW callback would.
+
+        The verdict says whether the next hop's *radio* acknowledged the frame. It is "failed"
+        when the frame never arrived, when the receiver is powered off, or when the reverse
+        direction is down or loses the acknowledgement: so a frame can arrive and still be
+        reported failed. It is delayed: by the round trip on success, by `send_fail_ms` (the
+        radio's retries) on failure.
+        """
+        life = sender.life
+        ticket = sender.begin_send()
+        fail_after = self.config.send_fail_ms
+        forward_delay = link.config.delay_ms
+        receiver = self._nodes[dst]
+        reverse = self._links[(dst, src)]
+        rng = self._mac_rngs.setdefault(
+            (src, dst), random.Random(f"{self.config.seed}:macack:{src}->{dst}")
+        )
+        to_id = NODE_IDS[dst]
+
+        def verdict_on_arrival() -> None:
+            config = reverse.config
+            ack_ok = receiver.running and not config.down
+            if ack_ok and config.loss > 0 and rng.random() < config.loss:
+                ack_ok = False
+            if ack_ok:
+                self._engine.schedule(
+                    config.delay_ms, lambda: sender.send_result(ticket, to_id, True, life, True)
+                )
+            else:
+                wait = max(0, fail_after - forward_delay)
+                self._engine.schedule(
+                    wait, lambda: sender.send_result(ticket, to_id, False, life, receiver.running)
+                )
+
+        if delivered:
+            self._engine.schedule(forward_delay, verdict_on_arrival)
+        else:
+            self._engine.schedule(
+                fail_after, lambda: sender.send_result(ticket, to_id, False, life, False)
+            )

@@ -62,7 +62,8 @@ class Link:
         """Change delay, loss, drop list or up/down state from now on."""
         self.config = replace(self.config, **changes)  # type: ignore[arg-type]
 
-    def transmit(self, data: bytes, identity: PacketIdentity | None, msg: str = "") -> None:
+    def transmit(self, data: bytes, identity: PacketIdentity | None, msg: str = "") -> bool:
+        """Offer a frame. True if it will arrive, False if the link lost it."""
         counted = self.config.drop_msg is None or self.config.drop_msg == msg
         if counted:
             self._offered += 1
@@ -84,5 +85,6 @@ class Link:
                 ordinal=self._offered,
                 reason=reason,
             )
-            return
+            return False
         self._engine.schedule(self.config.delay_ms, lambda: self._deliver(data))
+        return True
