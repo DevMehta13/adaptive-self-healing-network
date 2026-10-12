@@ -9,7 +9,13 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any
 
-from iot_backend.simulator.trace import FRAME_SENT, READING_DELIVERED, observed_paths
+from iot_backend.simulator.trace import (
+    FRAME_SENT,
+    LOCAL_FAILOVER,
+    READING_DELIVERED,
+    ROUTE_INSTALLED,
+    observed_paths,
+)
 
 
 @dataclass(frozen=True)
@@ -78,6 +84,12 @@ class Recovery:
     first_delivery_ms: int | None  # first reading accepted at C over the new path
     last_delivery_before_ms: int | None  # last reading accepted at C at or before the failure
     readings_lost: int  # readings first sent in [failure, first delivery] never accepted at C
+    # Phase 4b: when did the source table start pointing at the replacement relay, by what
+    # means, and when did it first actually send a reading that way?
+    switch_ms: int | None = None
+    switch_by: str | None = None  # "local_failover" or "controller_route"
+    first_send_ms: int | None = None
+    local_failover_trigger: str | None = None  # "T1_neighbor_state" or "T2_send_failures"
 
     @staticmethod
     def _since(value: int | None, reference: int) -> int | None:
@@ -101,6 +113,14 @@ class Recovery:
     @property
     def service_recovery_ms(self) -> int | None:
         return self._since(self.first_delivery_ms, self.failure_ms)
+
+    @property
+    def switch_after_ms(self) -> int | None:
+        return self._since(self.switch_ms, self.failure_ms)
+
+    @property
+    def first_send_after_ms(self) -> int | None:
+        return self._since(self.first_send_ms, self.failure_ms)
 
     @property
     def delivery_gap_ms(self) -> int | None:
@@ -152,9 +172,14 @@ def recovery_measurement(
             )
 
     detected = next((e for e in topology if e.time_ms >= failure_ms and is_detection(e)), None)
-    computed = next(
-        (e for e in routes if e.type == "route_computed" and e.time_ms >= failure_ms), None
-    )
+
+    # the relay in use before the failure, and the replacement the controller settled on
+    before = [e for e in routes if e.type == "route_active" and e.time_ms <= failure_ms]
+    old_relay = before[-1].data["path"][1] if before and len(before[-1].data["path"]) > 2 else None
+    after = [e for e in routes if e.type == "route_computed" and e.time_ms >= failure_ms]
+    computed = next((e for e in after if e.data["path"][1:2] != [old_relay]), None)
+    if computed is None and after:
+        computed = after[0]
     active = None
     if computed is not None:
         active = next(
@@ -167,21 +192,53 @@ def recovery_measurement(
         )
     new_path = tuple(computed.data["path"]) if computed is not None else None
     relay = new_path[1] if new_path and len(new_path) > 2 else None
+    source = new_path[0] if new_path else "A"
+
+    # when the source table switched to the replacement relay, and by what means
+    switch_ms = switch_by = trigger = None
+    if relay is not None:
+        for e in sorted(trace, key=lambda x: x.time_ms):
+            if e.time_ms < failure_ms or e.node != source:
+                continue
+            if e.event == LOCAL_FAILOVER and e.info.get("to") == relay:
+                switch_ms, switch_by, trigger = e.time_ms, "local_failover", e.info["trigger"]
+                break
+            if e.event == ROUTE_INSTALLED and e.info.get("next_hop") == relay:
+                switch_ms, switch_by = e.time_ms, "controller_route"
+                break
+    first_send = None
+    if relay is not None:
+        first_send = next(
+            (
+                e.time_ms
+                for e in trace
+                if e.event == FRAME_SENT
+                and e.node == source
+                and e.info.get("msg") == "DATA"
+                and e.info.get("to") == relay
+                and e.time_ms >= failure_ms
+            ),
+            None,
+        )
 
     delivered = [e for e in trace if e.event == READING_DELIVERED and e.node == destination]
     delivered_ids = {e.identity for e in delivered}
+    # Readings still arriving over the old relay just after the failure are not recovery.
+    # If the replacement relay is the old one (a link failure that kept the same path shape),
+    # only receipts after the replacement route existed count.
+    cutoff = failure_ms
+    if relay == old_relay and computed is not None:
+        cutoff = computed.time_ms
     first_delivery = None
-    if computed is not None and active is not None and relay is not None:
+    if computed is not None and relay is not None:
         for e in delivered:
-            # Only receipts after the replacement route existed count as service on the new
-            # path; readings still arriving over the old path just after the failure do not.
-            if e.time_ms < computed.time_ms:
+            if e.time_ms < cutoff:
                 continue
             paths = observed_paths(trace, e.identity)
             if any(len(p) >= 3 and p[1] == relay and p[-1] == destination for p in paths):
                 first_delivery = e
                 break
-    before = [e.time_ms for e in delivered if e.time_ms <= failure_ms]
+    before_ms = [e.time_ms for e in delivered if e.time_ms <= failure_ms]
     end = first_delivery.time_ms if first_delivery is not None else None
     first_sent: dict[Any, int] = {}
     for e in trace:
@@ -201,6 +258,10 @@ def recovery_measurement(
         version=None if computed is None else computed.data["version"],
         new_path=new_path,
         first_delivery_ms=end,
-        last_delivery_before_ms=max(before) if before else None,
+        last_delivery_before_ms=max(before_ms) if before_ms else None,
         readings_lost=lost,
+        switch_ms=switch_ms,
+        switch_by=switch_by,
+        first_send_ms=first_send,
+        local_failover_trigger=trigger,
     )

@@ -1,0 +1,55 @@
+{
+  "name": "b-returns-after-failover",
+  "description": "SIMULATED SETTING, not a measurement: link delays are configured so that A-B and B-C (10 ms one way) are cheaper than A-D and D-C (25 ms one way). B stops at 10 s, A fails over to D, and the controller confirms A > D > C. B returns at 20 s. Nothing switches back by itself: A keeps using D until the controller, after the hold-down and because the simulated B links are cheaper, installs a route through B.",
+  "seed": 42,
+  "duration_s": 50,
+  "routing": "controller",
+  "settings": {
+    "probe_interval_ms": 1000,
+    "local_failover": true,
+    "failover_t1": true,
+    "failover_t2_k": 3
+  },
+  "controller": {
+    "epoch": 1000,
+    "backup_next_hops": true
+  },
+  "links": {
+    "A->B": {
+      "delay_ms": 10
+    },
+    "B->A": {
+      "delay_ms": 10
+    },
+    "B->C": {
+      "delay_ms": 10
+    },
+    "C->B": {
+      "delay_ms": 10
+    },
+    "A->D": {
+      "delay_ms": 25
+    },
+    "D->A": {
+      "delay_ms": 25
+    },
+    "D->C": {
+      "delay_ms": 25
+    },
+    "C->D": {
+      "delay_ms": 25
+    }
+  },
+  "actions": [
+    {
+      "at_ms": 10000,
+      "action": "stop_node",
+      "node": "B"
+    },
+    {
+      "at_ms": 20000,
+      "action": "start_node",
+      "node": "B"
+    }
+  ]
+}

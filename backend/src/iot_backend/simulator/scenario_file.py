@@ -43,6 +43,7 @@ _CONTROLLER_KEYS = {
     "max_failed_plans",
     "no_route_grace_ms",
     "initial_settle_ms",
+    "backup_next_hops",
 }
 _SETTING_KEYS = {
     "reading_interval_ms",
@@ -65,8 +66,13 @@ _SETTING_KEYS = {
     "rtt_min_samples",
     "rtt_max_age_ms",
     "max_routes",
+    "local_failover",
+    "failover_t1",
+    "failover_t2_k",
+    "send_fail_ms",
+    "failover_report_repeats",
 }
-_BOOL_SETTINGS = {"discovery"}
+_BOOL_SETTINGS = {"discovery", "local_failover", "failover_t1"}
 _STRING_SETTINGS = {"ack_delivery"}
 _LINK_KEYS = {"delay_ms", "loss", "drop_frames", "drop_msg", "down"}
 _ACTION_KEYS = {
@@ -79,6 +85,8 @@ _ACTION_KEYS = {
     "set_link": {"link", "delay_ms", "loss"},
     "inject_frame": {"node", "from", "hex"},
     "restart_controller": {"epoch"},
+    "detach_gateway": set(),
+    "attach_gateway": set(),
 }
 
 
@@ -153,7 +161,12 @@ def parse_scenario(raw: dict[str, Any]) -> ScenarioSpec:
     if controller_raw and routing != ROUTING_CONTROLLER:
         raise ScenarioError("a 'controller' section needs routing 'controller'")
     try:
-        controller = RoutingConfig(**{k: int(v) for k, v in controller_raw.items()})
+        controller = RoutingConfig(
+            **{
+                k: (bool(v) if k == "backup_next_hops" else int(v))
+                for k, v in controller_raw.items()
+            }
+        )
     except ValueError as error:
         raise ScenarioError(f"controller: {error}") from error
 
@@ -271,6 +284,10 @@ def apply_actions(
             sim.configure_link(src, dst, at, action.get("delay_ms"), action.get("loss"))
         elif kind == "inject_frame":
             sim.inject_frame(action["node"], bytes.fromhex(action["hex"]), at, action["from"])
+        elif kind == "detach_gateway":
+            sim.set_gateway_connected(False, at)
+        elif kind == "attach_gateway":
+            sim.set_gateway_connected(True, at)
         elif kind == "restart_controller":
             if host is None:
                 raise ScenarioError("restart_controller needs a controller host")

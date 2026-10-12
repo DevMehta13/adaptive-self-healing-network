@@ -22,6 +22,7 @@ from iot_backend.simulator.scenario_file import (
     load_scenario,
     parse_link,
 )
+from iot_backend.simulator.studies import MODES, compare_modes, false_triggers
 from iot_backend.simulator.trace import (
     ACK_RECEIVED,
     FRAME_SENT,
@@ -46,6 +47,7 @@ DROP_REASONS = (
     "probe_unmatched",
 )
 HIDDEN_BY_DEFAULT = {"HELLO", "PROBE", "PROBE_REPLY"}
+HIDDEN_EVENTS = {"send_failed"}  # one line per failed send; shown with --verbose
 
 
 def _link_value(text: str) -> tuple[tuple[str, str], str]:
@@ -121,6 +123,24 @@ def build_parser() -> argparse.ArgumentParser:
         help="deliver a corrupted 3-byte frame from A to B at this time",
     )
     parser.add_argument("--no-trace", action="store_true", help="print only paths and summary")
+    parser.add_argument(
+        "--compare-modes",
+        type=int,
+        metavar="N",
+        help=(
+            "replay the scenario's scripted failure with seeds 1..N under three modes "
+            "(controller-only, local failover T1, T1+T2) and print the comparison"
+        ),
+    )
+    parser.add_argument(
+        "--false-triggers",
+        type=int,
+        metavar="N",
+        help=(
+            "no failure at all: count local failovers under random A-B loss over seeds 1..N, "
+            "for several loss levels and K values (use --duration for the run length)"
+        ),
+    )
     parser.add_argument(
         "--measure-seeds",
         type=int,
@@ -229,8 +249,86 @@ def _measure(args: argparse.Namespace) -> int:
     return 0
 
 
+def _compare(args: argparse.Namespace) -> int:
+    if not args.scenario:
+        print("error: --compare-modes needs a scenario file")
+        return 2
+    results = compare_modes(args.scenario, range(1, args.compare_modes + 1), args.interval_ms)
+    first = next(iter(results.values()))
+    if not first:
+        print("error: the scenario has no scripted failure to measure")
+        return 2
+    interval = args.interval_ms or "scenario"
+    print(
+        f"scenario: {args.scenario}  seeds 1..{args.compare_modes}  reading interval {interval} "
+        f"(SIMULATION, not hardware)"
+    )
+    print(f"reference: scripted failure `{first[0].failure}` at {first[0].failure_ms / 1000:.3f} s")
+    print("min / median / max, milliseconds after the failure")
+    rows = (
+        ("A's table switched to the backup", lambda r: r.switch_after_ms),
+        ("A first sends a reading that way", lambda r: r.first_send_after_ms),
+        ("delivery gap at C (receipt to receipt)", lambda r: r.delivery_gap_ms),
+        ("controller's route confirmed active", lambda r: r.route_active_after_ms),
+    )
+    for name in MODES:
+        runs = results[name]
+        print(f"\n{name}")
+        for label, getter in rows:
+            print(f"  {label:<40} {_spread([getter(r) for r in runs])}")
+        lost = [r.readings_lost for r in runs]
+        spread = f"{min(lost)} / {int(statistics.median(lost))} / {max(lost)}"
+        print(f"  {'readings lost in recovery':<40} {spread}")
+        by = sorted({(r.switch_by, r.local_failover_trigger) for r in runs}, key=str)
+        print(f"  {'switch made by':<40} {', '.join(f'{b} {t or chr(8211)}' for b, t in by)}")
+    return 0
+
+
+def _false_triggers(args: argparse.Namespace) -> int:
+    if not args.scenario:
+        print("error: --false-triggers needs a scenario file")
+        return 2
+    duration_ms = round((args.duration or 120) * 1000)
+    rows = false_triggers(
+        args.scenario,
+        range(1, args.false_triggers + 1),
+        losses=(0.0, 0.02, 0.05, 0.10, 0.20),
+        ks=(2, 3, 4),
+        duration_ms=duration_ms,
+    )
+    seconds = duration_ms / 1000
+    print(
+        f"scenario: {args.scenario}  seeds 1..{args.false_triggers}  {seconds:.0f} s each "
+        f"(SIMULATION). No failure is scripted: every local failover below is false."
+    )
+    print("random loss on A-B in both directions; T1 on; T2 with the K shown")
+    header = ("loss", "K", "runs with any", "failovers", "T1", "T2", "per hour")
+    print(
+        f"{header[0]:>6} {header[1]:>3} {header[2]:>14} {header[3]:>10} "
+        f"{header[4]:>4} {header[5]:>4} {header[6]:>9}"
+    )
+    for r in rows:
+        print(
+            f"{r.loss:>6.0%} {r.k:>3} {r.runs_with_failover:>7}/{r.runs:<6} {r.failovers:>10} "
+            f"{r.t1:>4} {r.t2:>4} {r.per_hour:>9.1f}"
+        )
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.compare_modes:
+        try:
+            return _compare(args)
+        except (ScenarioError, ValueError) as error:
+            print(f"error: {error}")
+            return 2
+    if args.false_triggers:
+        try:
+            return _false_triggers(args)
+        except (ScenarioError, ValueError) as error:
+            print(f"error: {error}")
+            return 2
     if args.measure_seeds:
         try:
             return _measure(args)
@@ -260,6 +358,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"{'time':>9}  {'nd':<2}  {'event':<22}  {'packet':<18} details")
         for event in sim.trace.events:
             if not args.verbose and event.info.get("msg") in HIDDEN_BY_DEFAULT:
+                continue
+            if not args.verbose and event.event in HIDDEN_EVENTS:
                 continue
             print(format_event(event))
     if sim.trace.dropped:
@@ -316,7 +416,15 @@ def _print_routes(sim: Simulation, host: ControllerHost, actions: list) -> None:
     print("Routes held by nodes at the end (epoch, version, next hop for C)")
     for node in "ABCD":
         state = sim.route_state(node, "C")
-        print(f"  node {node}: {'none installed' if state is None else _route_text(state)}")
+        shown = "none installed" if state is None else _route_text(state)
+        detail = sim.forwarding_state(node, "C")
+        if detail and detail["backup"]:
+            shown += f", backup {detail['backup']}"
+        if detail and detail["local_no_route"]:
+            shown += "  [LOCAL NO ROUTE]"
+        elif detail and detail["failed_over"]:
+            shown += f"  [FAILED OVER: now sending to {detail['current']}]"
+        print(f"  node {node}: {shown}")
     print()
     print("Route events (controller)")
     for event in host.route_events:
