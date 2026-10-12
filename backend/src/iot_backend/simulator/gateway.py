@@ -15,6 +15,7 @@ from iot_backend.protocol import (
     NeighborCode,
     RouteAckStatus,
     RouteInstallAckPayload,
+    TelemetryPayload,
     TopologyReportPayload,
 )
 from iot_backend.simulator.engine import Engine
@@ -22,8 +23,10 @@ from iot_backend.transports import (
     GatewayHandler,
     LocalFailoverEvent,
     NeighborObservation,
+    ReadingEvent,
     RouteInstallAckEvent,
     RouteUpdateCommand,
+    TelemetryEvent,
     TopologyReportEvent,
 )
 
@@ -38,6 +41,7 @@ class SimulatedGateway:
         self.connected = True
         self.events_lost = 0
         self.commands_lost = 0
+        self.commands_sent = 0  # route updates actually handed to node C
 
     # ---- Gateway interface ----
 
@@ -56,6 +60,7 @@ class SimulatedGateway:
         if not self.connected:
             self.commands_lost += 1
             return
+        self.commands_sent += 1
         self._originate(command)
 
     # ---- node side ----
@@ -64,13 +69,21 @@ class SimulatedGateway:
         """Node C registers how it turns a command into a frame."""
         self._originate = originate
 
+    def deliver_reading(self, event: ReadingEvent) -> None:
+        """Node C reports a DATA frame it accepted, with its own link-layer evidence."""
+        if not self.connected:
+            self.events_lost += 1
+            return
+        for handler in list(self._handlers):
+            handler(event)
+
     def deliver(self, frame: Frame) -> None:
         """Node C passes a received management frame up, as it would write a serial line."""
         payload = frame.payload
         if not self.connected:
             self.events_lost += 1
             return
-        event: TopologyReportEvent | RouteInstallAckEvent | LocalFailoverEvent
+        event: TopologyReportEvent | RouteInstallAckEvent | LocalFailoverEvent | TelemetryEvent
         if isinstance(payload, TopologyReportPayload):
             event = TopologyReportEvent(
                 received_ms=self._engine.now_ms,
@@ -111,6 +124,22 @@ class SimulatedGateway:
                 from_next_hop=payload.from_next_hop,
                 to_next_hop=payload.to_next_hop,
                 reason=FailoverReason(payload.reason).name.lower(),
+            )
+        elif isinstance(payload, TelemetryPayload):
+            event = TelemetryEvent(
+                received_ms=self._engine.now_ms,
+                origin=frame.src,
+                session=frame.session,
+                seq=frame.seq,
+                created=payload.created,
+                acknowledged=payload.acknowledged,
+                lost=payload.lost,
+                no_route=payload.no_route,
+                delivered=payload.delivered,
+                forwarded=payload.forwarded,
+                dropped=payload.dropped,
+                failovers=payload.failovers,
+                send_failures=payload.send_failures,
             )
         else:
             return

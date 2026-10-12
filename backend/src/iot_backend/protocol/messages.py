@@ -137,6 +137,27 @@ class LocalFailoverReportPayload:
     msg_type = MessageType.LOCAL_FAILOVER_REPORT
 
 
+@dataclass(frozen=True)
+class TelemetryPayload:
+    """A node's own counters since its boot (cumulative, saturating).
+
+    Only the node knows these: A alone knows how many readings it created and how many were
+    never acknowledged. `session` in the frame header says which boot they belong to.
+    """
+
+    created: int = 0  # readings created (source only)
+    acknowledged: int = 0  # readings whose delivery ACK came back (source only)
+    lost: int = 0  # readings given up on after the last attempt (source only)
+    no_route: int = 0  # readings dropped at creation for lack of a route (source only)
+    delivered: int = 0  # unique readings accepted (destination only)
+    forwarded: int = 0  # frames relayed for others
+    dropped: int = 0  # frames discarded or rejected, all reasons
+    failovers: int = 0  # local failovers
+    send_failures: int = 0  # link-layer failure callbacks
+
+    msg_type = MessageType.TELEMETRY
+
+
 Payload = (
     DataPayload
     | DeliveryAckPayload
@@ -147,6 +168,7 @@ Payload = (
     | RouteUpdatePayload
     | RouteInstallAckPayload
     | LocalFailoverReportPayload
+    | TelemetryPayload
 )
 
 

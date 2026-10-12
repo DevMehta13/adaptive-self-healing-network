@@ -50,6 +50,7 @@ from iot_backend.protocol import (
     RouteAckStatus,
     RouteInstallAckPayload,
     RouteUpdatePayload,
+    TelemetryPayload,
     TopologyReportPayload,
     decode,
     encode,
@@ -87,7 +88,7 @@ from iot_backend.simulator.trace import (
     SEND_FAILED,
     Trace,
 )
-from iot_backend.transports import RouteUpdateCommand
+from iot_backend.transports import ReadingEvent, RouteUpdateCommand
 
 # transmit(from_id, to_id, data, identity, msg): put encoded bytes on the air towards `to_id`.
 # `msg` is the message-type name; only the simulated link uses it (to pick frames to drop).
@@ -109,6 +110,7 @@ _FLOODED_ALWAYS = frozenset(
         MessageType.ROUTE_UPDATE,
         MessageType.ROUTE_INSTALL_ACK,
         MessageType.LOCAL_FAILOVER_REPORT,
+        MessageType.TELEMETRY,
     }
 )
 
@@ -151,6 +153,8 @@ class NodeSettings:
     failover_t2_k: int = 3  # trigger T2: K consecutive failed sends to the next hop; 0 = off
     send_fail_ms: int = 30  # how long the link layer takes to report a failed send
     failover_report_repeats: int = 5  # extra copies of a failover report, one per report interval
+    # Phase 5a: periodic counters for the dashboard (0 = off)
+    telemetry_interval_ms: int = 0
 
 
 @dataclass
@@ -250,6 +254,10 @@ class Node:
         self._reading_dst = reading_dst
         self._initial_seq = initial_seq
         self.gateway_sink: GatewaySink | None = None
+        # Node C only: told about every DATA frame accepted or repeated, with C's own
+        # evidence (link-layer sender, remaining TTL).
+        self.reading_sink: Callable[[ReadingEvent], None] | None = None
+        self._telemetry_rng = random.Random(f"{seed}:telemetry:{self.name}")
 
         self.running = False
         self._epoch = 0  # incremented on boot and stop so timers from an earlier life do nothing
@@ -350,6 +358,11 @@ class Node:
             self._engine.schedule(first_hello, lambda: self._hello_tick(epoch))
             first_report = self._settings.hello_interval_ms + self._jitter_rng.randrange(100)
             self._engine.schedule(first_report, lambda: self._report_tick(epoch))
+        if self._settings.telemetry_interval_ms > 0:
+            first = self._settings.telemetry_interval_ms // 2 + self._telemetry_rng.randrange(
+                max(1, self._settings.telemetry_interval_ms // 2)
+            )
+            self._engine.schedule(first, lambda: self._telemetry_tick(epoch))
         if self._settings.probe_interval_ms > 0:
             first_probe = self._probe_rng.randrange(self._settings.probe_interval_ms)
             self._engine.schedule(first_probe, lambda: self._probe_tick(epoch))
@@ -576,7 +589,7 @@ class Node:
         elif frame.dst != self.id:
             self._forward(frame, from_node)
         elif frame.msg_type is MessageType.DATA:
-            self._accept_data(frame)
+            self._accept_data(frame, from_node)
         else:
             self._accept_ack(frame)
 
@@ -639,6 +652,7 @@ class Node:
             MessageType.TOPOLOGY_REPORT,
             MessageType.ROUTE_INSTALL_ACK,
             MessageType.LOCAL_FAILOVER_REPORT,
+            MessageType.TELEMETRY,
         ):
             if self.gateway_sink is not None:
                 self.gateway_sink(frame)
@@ -1151,6 +1165,32 @@ class Node:
                 lambda: self._failover_repeat(life, dst, key, failed, target, reason),
             )
 
+    # ---- telemetry (Phase 5a) ----
+
+    def _telemetry_tick(self, epoch: int) -> None:
+        if epoch != self._epoch:
+            return
+        c = self.counters
+        cap32, cap16 = 2**32 - 1, 0xFFFF
+        report = self._new_frame(
+            self._settings.gateway_id,
+            TelemetryPayload(
+                created=min(c.created, cap32),
+                acknowledged=min(c.acknowledged, cap32),
+                lost=min(c.lost, cap32),
+                no_route=min(c.dropped_no_route, cap32),
+                delivered=min(c.delivered_unique, cap32),
+                forwarded=min(c.forwarded, cap32),
+                dropped=min(sum(self.drops.values()), cap32),
+                failovers=min(c.failovers, cap16),
+                send_failures=min(c.send_failures, cap16),
+            ),
+        )
+        self._send_management(report)
+        interval = self._settings.telemetry_interval_ms
+        delay = interval + self._telemetry_rng.randint(-interval // 10, interval // 10)
+        self._engine.schedule(max(1, delay), lambda: self._telemetry_tick(epoch))
+
     # ---- topology reports ----
 
     def _report_tick(self, epoch: int) -> None:
@@ -1191,7 +1231,7 @@ class Node:
 
     # ---- destination behaviour ----
 
-    def _accept_data(self, frame: Frame) -> None:
+    def _accept_data(self, frame: Frame, via: int) -> None:
         assert isinstance(frame.payload, DataPayload)
         identity = frame.identity
         verdict = self._dedup.check(frame.src, frame.session, frame.seq)
@@ -1214,6 +1254,20 @@ class Node:
             self.counters.duplicates += 1
             self._trace.record(
                 self._engine.now_ms, self.name, DUPLICATE_RECEIVED, identity, ack="resent"
+            )
+        if self.reading_sink is not None:
+            self.reading_sink(
+                ReadingEvent(
+                    received_ms=self._engine.now_ms,
+                    origin=frame.src,
+                    session=frame.session,
+                    seq=frame.seq,
+                    value=frame.payload.value,
+                    via=via,
+                    ttl=frame.ttl,
+                    hops=self._settings.ttl - frame.ttl + 1,
+                    duplicate=verdict is not Verdict.NEW,
+                )
             )
         ack = self._new_frame(
             frame.src, DeliveryAckPayload(identity.src, identity.session, identity.seq)

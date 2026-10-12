@@ -33,6 +33,7 @@ from iot_backend.protocol.messages import (
     ReportEntry,
     RouteInstallAckPayload,
     RouteUpdatePayload,
+    TelemetryPayload,
     TopologyReportPayload,
 )
 
@@ -68,6 +69,7 @@ __all__ = [
     "RouteAckStatus",
     "RouteInstallAckPayload",
     "RouteUpdatePayload",
+    "TelemetryPayload",
     "TopologyReportPayload",
     "decode",
     "encode",

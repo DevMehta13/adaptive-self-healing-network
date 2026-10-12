@@ -4,6 +4,7 @@ The format is strict: unknown keys are errors, so a typo cannot silently change 
 """
 
 import json
+from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
@@ -71,6 +72,7 @@ _SETTING_KEYS = {
     "failover_t2_k",
     "send_fail_ms",
     "failover_report_repeats",
+    "telemetry_interval_ms",
 }
 _BOOL_SETTINGS = {"discovery", "local_failover", "failover_t1"}
 _STRING_SETTINGS = {"ack_delivery"}
@@ -217,9 +219,15 @@ class ControllerHost:
     version numbers starting again from 1. It touches the simulation only through its gateway.
     """
 
-    def __init__(self, sim: Simulation, config: RoutingConfig) -> None:
+    def __init__(
+        self,
+        sim: Simulation,
+        config: RoutingConfig,
+        on_start: Callable[[TopologyView, RouteController], None] | None = None,
+    ) -> None:
         self._sim = sim
         self.config = config
+        self._on_start = on_start  # called for the first run and after each restart
         self.views: list[TopologyView] = []
         self.controllers: list[RouteController] = []
         self._start(config)
@@ -227,7 +235,10 @@ class ControllerHost:
     def _start(self, config: RoutingConfig) -> None:
         view = TopologyView(self._sim.gateway)
         self.views.append(view)
-        self.controllers.append(RouteController(view, self._sim.gateway, config))
+        controller = RouteController(view, self._sim.gateway, config)
+        self.controllers.append(controller)
+        if self._on_start is not None:
+            self._on_start(view, controller)
 
     @property
     def view(self) -> TopologyView:

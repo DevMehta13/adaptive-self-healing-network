@@ -28,6 +28,7 @@ from iot_backend.protocol import (
     RouteAckStatus,
     RouteInstallAckPayload,
     RouteUpdatePayload,
+    TelemetryPayload,
     TopologyReportPayload,
     decode,
     encode,
@@ -62,6 +63,8 @@ def frame_from_fields(fields: dict) -> Frame:
                 for e in payload["entries"]
             )
         )
+    elif fields["type"] == "TELEMETRY":
+        body = TelemetryPayload(**payload)
     elif fields["type"] == "PROBE":
         body = ProbePayload()
     elif fields["type"] == "PROBE_REPLY":
@@ -226,7 +229,7 @@ def test_every_message_type_is_now_defined_and_a_code_without_payload_stays_rese
         decode(raw)
     assert caught.value.reason is RejectReason.RESERVED_TYPE
     with pytest.raises(DecodeError) as caught:  # a code that is not in the enum at all
-        decode(bytes([1, 0x17, 1, 2, 5, 0, 0, 0, 1, 0, 0, 0, 1, 0]))
+        decode(bytes([1, 0x18, 1, 2, 5, 0, 0, 0, 1, 0, 0, 0, 1, 0]))
     assert caught.value.reason is RejectReason.UNKNOWN_TYPE
 
 
@@ -360,3 +363,12 @@ def test_unmeasured_is_never_encoded_as_a_number():
 def test_encode_rejects_bad_phase4a_fields(payload):
     with pytest.raises(EncodeError):
         encode(Frame(3, 1, 5, 9, 8, payload))
+
+
+def test_telemetry_is_32_bytes_and_saturating_values_are_encoded_not_wrapped():
+    frame = Frame(1, 3, 5, 9, 8, TelemetryPayload(created=2**32 - 1, failovers=0xFFFF))
+    assert len(encode(frame)) == HEADER_SIZE + 32
+    assert decode(encode(frame)) == frame
+    for bad in (TelemetryPayload(created=2**32), TelemetryPayload(failovers=0x10000)):
+        with pytest.raises(EncodeError):
+            encode(Frame(1, 3, 5, 9, 8, bad))

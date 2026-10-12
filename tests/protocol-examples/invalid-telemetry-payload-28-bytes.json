@@ -1,0 +1,7 @@
+{
+  "name": "telemetry-payload-28-bytes",
+  "description": "TELEMETRY four bytes short.",
+  "valid": false,
+  "hex": "011701030d0c0b0a5b000000081c78000000750000000200000001000000000000000000000005000000",
+  "reject_reason": "bad_payload_length"
+}

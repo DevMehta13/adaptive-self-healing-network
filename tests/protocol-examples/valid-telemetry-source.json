@@ -1,0 +1,26 @@
+{
+  "name": "telemetry-source",
+  "description": "A reports its own counters: 120 readings created, 117 acknowledged, 2 lost, 1 dropped for no route, 5 frames dropped, 1 failover, 4 failed link-layer sends.",
+  "valid": true,
+  "frame": {
+    "version": 1,
+    "type": "TELEMETRY",
+    "src": 1,
+    "dst": 3,
+    "session": 168496141,
+    "seq": 90,
+    "ttl": 8,
+    "payload": {
+      "created": 120,
+      "acknowledged": 117,
+      "lost": 2,
+      "no_route": 1,
+      "delivered": 0,
+      "forwarded": 0,
+      "dropped": 5,
+      "failovers": 1,
+      "send_failures": 4
+    }
+  },
+  "hex": "011701030d0c0b0a5a00000008207800000075000000020000000100000000000000000000000500000001000400"
+}

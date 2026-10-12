@@ -26,6 +26,7 @@ from iot_backend.protocol.constants import (
     ROUTE_UPDATE_PAYLOAD_SIZE,
     RTT_ENTRY_SIZE,
     RTT_MAX_MS,
+    TELEMETRY_PAYLOAD_SIZE,
     U8_MAX,
     U32_MAX,
     FailoverReason,
@@ -47,6 +48,7 @@ from iot_backend.protocol.messages import (
     ReportEntry,
     RouteInstallAckPayload,
     RouteUpdatePayload,
+    TelemetryPayload,
     TopologyReportPayload,
 )
 
@@ -59,6 +61,7 @@ _PROBE_REPLY = struct.Struct("<II")
 _ROUTE_UPDATE = struct.Struct("<IIBBB")
 _ROUTE_ACK = struct.Struct("<IIBB")
 _FAILOVER = struct.Struct("<IIBBBB")
+_TELEMETRY = struct.Struct("<IIIIIIIHH")
 
 
 class DecodeError(ValueError):
@@ -178,6 +181,25 @@ def encode(frame: Frame) -> bytes:
             to_hop,
             payload.reason,
         )
+    elif isinstance(payload, TelemetryPayload):
+        values = (
+            payload.created,
+            payload.acknowledged,
+            payload.lost,
+            payload.no_route,
+            payload.delivered,
+            payload.forwarded,
+            payload.dropped,
+        )
+        for name, value in zip(
+            ("created", "acknowledged", "lost", "no_route", "delivered", "forwarded", "dropped"),
+            values,
+            strict=True,
+        ):
+            _check_range(name, value, 0, U32_MAX)
+        _check_range("failovers", payload.failovers, 0, 0xFFFF)
+        _check_range("send_failures", payload.send_failures, 0, 0xFFFF)
+        body = _TELEMETRY.pack(*values, payload.failovers, payload.send_failures)
     else:
         raise EncodeError(f"unsupported payload {type(payload).__name__}")
 
@@ -377,6 +399,9 @@ def decode(data: bytes) -> Frame:
         payload = _decode_route_update(body)
     elif msg_type is MessageType.ROUTE_INSTALL_ACK:
         payload = _decode_route_ack(body)
+    elif msg_type is MessageType.TELEMETRY:
+        _check_size("TELEMETRY", body, TELEMETRY_PAYLOAD_SIZE)
+        payload = TelemetryPayload(*_TELEMETRY.unpack(body))
     else:
         payload = _decode_failover(body)
 

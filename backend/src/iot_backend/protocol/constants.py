@@ -36,6 +36,7 @@ class MessageType(IntEnum):
     PROBE = 0x14
     PROBE_REPLY = 0x15
     LOCAL_FAILOVER_REPORT = 0x16  # defined in Phase 4a, sent from Phase 4b
+    TELEMETRY = 0x17  # Phase 5a: a node's own counters, for the dashboard
 
 
 # Every code above has a payload definition. A code added to MessageType before its payload is
@@ -69,6 +70,9 @@ ROUTE_UPDATE_PAYLOAD_SIZE = 11
 ROUTE_INSTALL_ACK_PAYLOAD_SIZE = 10
 # LOCAL_FAILOVER_REPORT: epoch u32, version u32, destination u8, from u8, to u8, reason u8.
 LOCAL_FAILOVER_REPORT_PAYLOAD_SIZE = 12
+# TELEMETRY: created, acknowledged, lost, no_route, delivered, forwarded, dropped (u32
+# each), failovers u16, send_failures u16. Counters since the node's boot, saturating.
+TELEMETRY_PAYLOAD_SIZE = 32
 
 
 class NeighborCode(IntEnum):

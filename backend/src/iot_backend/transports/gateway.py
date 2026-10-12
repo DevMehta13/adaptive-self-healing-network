@@ -91,7 +91,48 @@ class LocalFailoverEvent:
     reason: str
 
 
-GatewayEvent = TopologyReportEvent | RouteInstallAckEvent | LocalFailoverEvent
+@dataclass(frozen=True)
+class ReadingEvent:
+    """A DATA reading that arrived at C, with the evidence C itself has about its journey.
+
+    `via` is the link-layer sender (the neighbor that handed C the frame) and `ttl` is the
+    frame's remaining TTL. `hops` is derived from the TTL assuming the configured data TTL, so
+    it is the number of transmissions. Nothing else about the path is known to C.
+    """
+
+    received_ms: int
+    origin: int
+    session: int
+    seq: int
+    value: int  # hundredths of a unit, as on the wire
+    via: int
+    ttl: int
+    hops: int
+    duplicate: bool  # a repeat of a reading already counted (its ACK is sent again)
+
+
+@dataclass(frozen=True)
+class TelemetryEvent:
+    """A node's own counters, delivered by flooding. Only the node knows its true values."""
+
+    received_ms: int
+    origin: int
+    session: int
+    seq: int
+    created: int
+    acknowledged: int
+    lost: int
+    no_route: int
+    delivered: int
+    forwarded: int
+    dropped: int
+    failovers: int
+    send_failures: int
+
+
+GatewayEvent = (
+    TopologyReportEvent | RouteInstallAckEvent | LocalFailoverEvent | ReadingEvent | TelemetryEvent
+)
 GatewayHandler = Callable[[GatewayEvent], None]
 
 

@@ -70,6 +70,7 @@ class ScenarioConfig:
     failover_t2_k: int = 3
     send_fail_ms: int = 30
     failover_report_repeats: int = 5
+    telemetry_interval_ms: int = 0  # Phase 5a: 0 = nodes send no telemetry
     gateway: str = "C"  # node whose USB link carries events to the controller
     reading_src: str = "A"
     reading_dst: str = "C"
@@ -145,6 +146,7 @@ class Simulation:
             failover_t2_k=self.config.failover_t2_k,
             send_fail_ms=self.config.send_fail_ms,
             failover_report_repeats=self.config.failover_report_repeats,
+            telemetry_interval_ms=self.config.telemetry_interval_ms,
         )
         self._gateway = SimulatedGateway(self._engine)
         for letter in NODE_LETTERS:
@@ -184,6 +186,7 @@ class Simulation:
 
         self._nodes[self.config.gateway].gateway_sink = self._gateway.deliver
         self._gateway.attach_originator(self._nodes[self.config.gateway].originate_route_update)
+        self._nodes[self.config.gateway].reading_sink = self._gateway.deliver_reading
 
         for letter in NODE_LETTERS:
             self._nodes[letter].boot()
