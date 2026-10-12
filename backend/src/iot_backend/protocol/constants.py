@@ -90,7 +90,8 @@ class RouteAckStatus(IntEnum):
 class FailoverReason(IntEnum):
     """Why a node switched to its backup (LOCAL_FAILOVER_REPORT; sent from Phase 4b)."""
 
-    NEIGHBOR_LOST = 1  # the primary next hop's HELLO timed out
+    NEIGHBOR_LOST = 1  # T1: the next hop is no longer a two-way neighbor (lost or one-way)
+    SEND_FAILURES = 2  # T2: K consecutive link-layer delivery failures to the next hop
 
 
 class RejectReason(StrEnum):

@@ -131,7 +131,7 @@ class LocalFailoverReportPayload:
     version: int
     destination: int
     from_next_hop: int
-    to_next_hop: int
+    to_next_hop: int | None  # None: no usable backup, the node now has no route
     reason: int  # FailoverReason
 
     msg_type = MessageType.LOCAL_FAILOVER_REPORT

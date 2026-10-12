@@ -1,0 +1,7 @@
+{
+  "name": "failover-to-255",
+  "description": "LOCAL_FAILOVER_REPORT whose target is the reserved id 255.",
+  "valid": false,
+  "hex": "011601030d0c0b0a4b000000080c00f15365040000000302ff01",
+  "reject_reason": "bad_node_id"
+}

@@ -165,8 +165,8 @@ def encode(frame: Frame) -> bytes:
         _check_range("version", payload.version, 1, U32_MAX)
         _check_node("destination", payload.destination)
         _check_node("from_next_hop", payload.from_next_hop)
-        _check_node("to_next_hop", payload.to_next_hop)
-        if payload.from_next_hop == payload.to_next_hop:
+        to_hop = _encode_hop("to_next_hop", payload.to_next_hop)
+        if payload.from_next_hop == to_hop:
             raise EncodeError("a failover must change the next hop")
         if payload.reason not in tuple(FailoverReason):
             raise EncodeError(f"reason={payload.reason!r} is not a FailoverReason")
@@ -175,7 +175,7 @@ def encode(frame: Frame) -> bytes:
             payload.version,
             payload.destination,
             payload.from_next_hop,
-            payload.to_next_hop,
+            to_hop,
             payload.reason,
         )
     else:
@@ -302,11 +302,14 @@ def _decode_route_ack(body: bytes) -> RouteInstallAckPayload:
 def _decode_failover(body: bytes) -> LocalFailoverReportPayload:
     _check_size("LOCAL_FAILOVER_REPORT", body, LOCAL_FAILOVER_REPORT_PAYLOAD_SIZE)
     epoch, version, destination, from_hop, to_hop, reason = _FAILOVER.unpack(body)
-    if any(n in INVALID_NODE_IDS for n in (destination, from_hop, to_hop)):
+    # to_hop 0 means "no usable backup": the node now has no route (Phase 4b)
+    if destination in INVALID_NODE_IDS or from_hop in INVALID_NODE_IDS or to_hop == U8_MAX:
         raise DecodeError(RejectReason.BAD_NODE_ID, "LOCAL_FAILOVER_REPORT node id")
     if epoch == 0 or version == 0 or from_hop == to_hop or reason not in tuple(FailoverReason):
         raise DecodeError(RejectReason.BAD_VALUE, "LOCAL_FAILOVER_REPORT value")
-    return LocalFailoverReportPayload(epoch, version, destination, from_hop, to_hop, reason)
+    return LocalFailoverReportPayload(
+        epoch, version, destination, from_hop, None if to_hop == NO_NODE else to_hop, reason
+    )
 
 
 def decode(data: bytes) -> Frame:

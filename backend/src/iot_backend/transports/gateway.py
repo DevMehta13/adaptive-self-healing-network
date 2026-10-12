@@ -71,7 +71,27 @@ class RouteUpdateCommand:
     backup_next_hop: int | None = None
 
 
-GatewayEvent = TopologyReportEvent | RouteInstallAckEvent
+@dataclass(frozen=True)
+class LocalFailoverEvent:
+    """A LOCAL_FAILOVER_REPORT delivered to the gateway (Phase 4b).
+
+    `to_next_hop` None means the node found no usable backup and now has no route.
+    `reason` is "neighbor_lost" (T1: primary no longer two-way) or "send_failures" (T2).
+    """
+
+    received_ms: int
+    origin: int
+    session: int
+    seq: int
+    epoch: int
+    version: int
+    destination: int
+    from_next_hop: int
+    to_next_hop: int | None
+    reason: str
+
+
+GatewayEvent = TopologyReportEvent | RouteInstallAckEvent | LocalFailoverEvent
 GatewayHandler = Callable[[GatewayEvent], None]
 
 
