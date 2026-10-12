@@ -1,0 +1,1286 @@
+{
+  "v": 1,
+  "mode": "simulation",
+  "backend": {
+    "status": "ok",
+    "version": "fixture"
+  },
+  "server_time": "2026-01-01T00:00:20.000Z",
+  "run_id": 1,
+  "scenario": "live-demo",
+  "label": "SIMULATION: nodes, links and delays are simulated. Link delays are configured settings (B's links are set cheaper than D's), not measurements.",
+  "last_event_id": 50,
+  "clock": {
+    "sim_ms": 20000,
+    "speed": 1.0,
+    "paused": false
+  },
+  "nodes": [
+    {
+      "id": "A",
+      "status": "reachable",
+      "since_ms": 450,
+      "session": 1664252997,
+      "last_report_age_ms": 3897,
+      "telemetry": {
+        "session": 1664252997,
+        "counters": {
+          "created": 9,
+          "acknowledged": 7,
+          "lost": 0,
+          "no_route": 2,
+          "delivered": 0,
+          "forwarded": 26,
+          "dropped": 6,
+          "failovers": 1,
+          "send_failures": 25
+        },
+        "received_ms": 19198,
+        "age_ms": 802,
+        "known_by": "A (own counters, delivered by flooding)"
+      }
+    },
+    {
+      "id": "B",
+      "status": "lost_contact",
+      "since_ms": 14521,
+      "session": 3170526542,
+      "last_report_age_ms": 8980,
+      "source": {
+        "kind": "neighbor_reports",
+        "observed_by": [
+          "A",
+          "C"
+        ],
+        "silent_for_ms": 4632
+      },
+      "telemetry": {
+        "session": 3170526542,
+        "counters": {
+          "created": 0,
+          "acknowledged": 0,
+          "lost": 0,
+          "no_route": 0,
+          "delivered": 0,
+          "forwarded": 25,
+          "dropped": 1,
+          "failovers": 0,
+          "send_failures": 0
+        },
+        "received_ms": 9722,
+        "age_ms": 10278,
+        "known_by": "B (own counters, delivered by flooding)"
+      }
+    },
+    {
+      "id": "C",
+      "status": "reachable",
+      "since_ms": 425,
+      "session": 4145609530,
+      "last_report_age_ms": 3985,
+      "telemetry": {
+        "session": 4145609530,
+        "counters": {
+          "created": 0,
+          "acknowledged": 0,
+          "lost": 0,
+          "no_route": 0,
+          "delivered": 5,
+          "forwarded": 0,
+          "dropped": 31,
+          "failovers": 0,
+          "send_failures": 11
+        },
+        "received_ms": 15432,
+        "age_ms": 4568,
+        "known_by": "C (own counters, delivered by flooding)"
+      }
+    },
+    {
+      "id": "D",
+      "status": "reachable",
+      "since_ms": 261,
+      "session": 3729682789,
+      "last_report_age_ms": 3887,
+      "telemetry": {
+        "session": 3729682789,
+        "counters": {
+          "created": 0,
+          "acknowledged": 0,
+          "lost": 0,
+          "no_route": 0,
+          "delivered": 0,
+          "forwarded": 40,
+          "dropped": 1,
+          "failovers": 0,
+          "send_failures": 0
+        },
+        "received_ms": 18457,
+        "age_ms": 1543,
+        "known_by": "D (own counters, delivered by flooding)"
+      }
+    }
+  ],
+  "links": [
+    {
+      "a": "A",
+      "b": "B",
+      "state": "down",
+      "usable": false,
+      "directions": {
+        "B->A": false,
+        "A->B": false
+      },
+      "since_ms": 14521,
+      "rtt_ms": {
+        "A": 30,
+        "B": 30
+      },
+      "cost_ms": null
+    },
+    {
+      "a": "A",
+      "b": "D",
+      "state": "up",
+      "usable": true,
+      "directions": {
+        "D->A": true,
+        "A->D": true
+      },
+      "since_ms": 1882,
+      "rtt_ms": {
+        "A": 65,
+        "D": 60
+      },
+      "cost_ms": 65
+    },
+    {
+      "a": "B",
+      "b": "C",
+      "state": "down",
+      "usable": false,
+      "directions": {
+        "C->B": false,
+        "B->C": false
+      },
+      "since_ms": 14521,
+      "rtt_ms": {
+        "B": 35,
+        "C": 30
+      },
+      "cost_ms": null
+    },
+    {
+      "a": "C",
+      "b": "D",
+      "state": "up",
+      "usable": true,
+      "directions": {
+        "D->C": true,
+        "C->D": true
+      },
+      "since_ms": 1214,
+      "rtt_ms": {
+        "C": 65,
+        "D": 65
+      },
+      "cost_ms": 65
+    }
+  ],
+  "route": {
+    "flow": "A->C",
+    "epoch": 1000,
+    "version": 2,
+    "kind": "route",
+    "state": "active",
+    "path": [
+      "A",
+      "D",
+      "C"
+    ],
+    "cost_ms": 130,
+    "confirmed_by": [
+      "D",
+      "A"
+    ],
+    "waiting_for": [],
+    "backups": {},
+    "backup_entries": {}
+  },
+  "readings": {
+    "delivered_unique": 7,
+    "duplicates": 0,
+    "recent": [
+      {
+        "origin": "A",
+        "session": 1664252997,
+        "seq": 45,
+        "value": 20.13,
+        "value_hundredths": 2013,
+        "via": "B",
+        "hops": 2,
+        "ttl": 7,
+        "observed_path": [
+          "A",
+          "B",
+          "C"
+        ],
+        "received_ms": 6030
+      },
+      {
+        "origin": "A",
+        "session": 1664252997,
+        "seq": 59,
+        "value": 20.19,
+        "value_hundredths": 2019,
+        "via": "B",
+        "hops": 2,
+        "ttl": 7,
+        "observed_path": [
+          "A",
+          "B",
+          "C"
+        ],
+        "received_ms": 8037
+      },
+      {
+        "origin": "A",
+        "session": 1664252997,
+        "seq": 73,
+        "value": 20.42,
+        "value_hundredths": 2042,
+        "via": "B",
+        "hops": 2,
+        "ttl": 7,
+        "observed_path": [
+          "A",
+          "B",
+          "C"
+        ],
+        "received_ms": 10030
+      },
+      {
+        "origin": "A",
+        "session": 1664252997,
+        "seq": 87,
+        "value": 19.57,
+        "value_hundredths": 1957,
+        "via": "D",
+        "hops": 2,
+        "ttl": 7,
+        "observed_path": [
+          "A",
+          "D",
+          "C"
+        ],
+        "received_ms": 13067
+      },
+      {
+        "origin": "A",
+        "session": 1664252997,
+        "seq": 102,
+        "value": 20.21,
+        "value_hundredths": 2021,
+        "via": "D",
+        "hops": 2,
+        "ttl": 7,
+        "observed_path": [
+          "A",
+          "D",
+          "C"
+        ],
+        "received_ms": 14064
+      },
+      {
+        "origin": "A",
+        "session": 1664252997,
+        "seq": 113,
+        "value": 20.09,
+        "value_hundredths": 2009,
+        "via": "D",
+        "hops": 2,
+        "ttl": 7,
+        "observed_path": [
+          "A",
+          "D",
+          "C"
+        ],
+        "received_ms": 16060
+      },
+      {
+        "origin": "A",
+        "session": 1664252997,
+        "seq": 126,
+        "value": 20.19,
+        "value_hundredths": 2019,
+        "via": "D",
+        "hops": 2,
+        "ttl": 7,
+        "observed_path": [
+          "A",
+          "D",
+          "C"
+        ],
+        "received_ms": 18063
+      }
+    ]
+  },
+  "counts": {
+    "delivered": {
+      "value": 7,
+      "known_by": "C",
+      "as_of_ms": 18063,
+      "age_ms": 1937
+    },
+    "duplicates": {
+      "value": 0,
+      "known_by": "C"
+    },
+    "created": {
+      "value": 9,
+      "known_by": "A (telemetry)",
+      "as_of_ms": 19198,
+      "age_ms": 802
+    },
+    "acknowledged": {
+      "value": 7,
+      "known_by": "A (telemetry)",
+      "as_of_ms": 19198,
+      "age_ms": 802
+    },
+    "lost": {
+      "value": 0,
+      "known_by": "A (telemetry)",
+      "as_of_ms": 19198,
+      "age_ms": 802
+    },
+    "no_route": {
+      "value": 2,
+      "known_by": "A (telemetry)",
+      "as_of_ms": 19198,
+      "age_ms": 802
+    },
+    "pending": {
+      "value": 0,
+      "known_by": "A (telemetry, derived)",
+      "as_of_ms": 19198,
+      "age_ms": 802
+    }
+  },
+  "presenter": {
+    "channel": "environment",
+    "note": "What the presenter did to the simulated environment. This is not something the controller knows.",
+    "conditions": {
+      "stopped_nodes": [
+        "B"
+      ],
+      "links_down": [],
+      "link_overrides": {},
+      "gateway_attached": true
+    }
+  },
+  "recent_events": [
+    {
+      "event_id": 1,
+      "type": "node_seen",
+      "data": {
+        "sim_ms": 226,
+        "node": "B",
+        "session": 3170526542
+      }
+    },
+    {
+      "event_id": 2,
+      "type": "link_state_changed",
+      "data": {
+        "sim_ms": 226,
+        "link": "B-C",
+        "old": null,
+        "new": "stale",
+        "usable": false,
+        "directions": {
+          "C->B": true,
+          "B->C": false
+        }
+      }
+    },
+    {
+      "event_id": 3,
+      "type": "node_seen",
+      "data": {
+        "sim_ms": 261,
+        "node": "D",
+        "session": 3729682789
+      }
+    },
+    {
+      "event_id": 4,
+      "type": "link_state_changed",
+      "data": {
+        "sim_ms": 261,
+        "link": "C-D",
+        "old": null,
+        "new": "stale",
+        "usable": false,
+        "directions": {
+          "D->C": false,
+          "C->D": true
+        }
+      }
+    },
+    {
+      "event_id": 5,
+      "type": "node_seen",
+      "data": {
+        "sim_ms": 425,
+        "node": "C",
+        "session": 4145609530
+      }
+    },
+    {
+      "event_id": 6,
+      "type": "link_state_changed",
+      "data": {
+        "sim_ms": 425,
+        "link": "B-C",
+        "old": "stale",
+        "new": "one_way",
+        "usable": false,
+        "directions": {
+          "C->B": true,
+          "B->C": true
+        }
+      }
+    },
+    {
+      "event_id": 7,
+      "type": "link_state_changed",
+      "data": {
+        "sim_ms": 425,
+        "link": "C-D",
+        "old": "stale",
+        "new": "one_way",
+        "usable": false,
+        "directions": {
+          "D->C": false,
+          "C->D": true
+        }
+      }
+    },
+    {
+      "event_id": 8,
+      "type": "node_seen",
+      "data": {
+        "sim_ms": 450,
+        "node": "A",
+        "session": 1664252997
+      }
+    },
+    {
+      "event_id": 9,
+      "type": "link_state_changed",
+      "data": {
+        "sim_ms": 450,
+        "link": "A-B",
+        "old": null,
+        "new": "one_way",
+        "usable": false,
+        "directions": {
+          "B->A": true,
+          "A->B": false
+        }
+      }
+    },
+    {
+      "event_id": 10,
+      "type": "link_state_changed",
+      "data": {
+        "sim_ms": 807,
+        "link": "A-D",
+        "old": null,
+        "new": "one_way",
+        "usable": false,
+        "directions": {
+          "D->A": true,
+          "A->D": false
+        }
+      }
+    },
+    {
+      "event_id": 11,
+      "type": "link_state_changed",
+      "data": {
+        "sim_ms": 1179,
+        "link": "B-C",
+        "old": "one_way",
+        "new": "up",
+        "usable": true,
+        "directions": {
+          "C->B": true,
+          "B->C": true
+        }
+      }
+    },
+    {
+      "event_id": 12,
+      "type": "link_state_changed",
+      "data": {
+        "sim_ms": 1214,
+        "link": "C-D",
+        "old": "one_way",
+        "new": "up",
+        "usable": true,
+        "directions": {
+          "D->C": true,
+          "C->D": true
+        }
+      }
+    },
+    {
+      "event_id": 13,
+      "type": "link_state_changed",
+      "data": {
+        "sim_ms": 1516,
+        "link": "A-B",
+        "old": "one_way",
+        "new": "up",
+        "usable": true,
+        "directions": {
+          "B->A": true,
+          "A->B": true
+        }
+      }
+    },
+    {
+      "event_id": 14,
+      "type": "link_state_changed",
+      "data": {
+        "sim_ms": 1882,
+        "link": "A-D",
+        "old": "one_way",
+        "new": "up",
+        "usable": true,
+        "directions": {
+          "D->A": true,
+          "A->D": true
+        }
+      }
+    },
+    {
+      "event_id": 15,
+      "type": "telemetry",
+      "data": {
+        "sim_ms": 3890,
+        "node": "D",
+        "session": 3729682789,
+        "counters": {
+          "created": 0,
+          "acknowledged": 0,
+          "lost": 0,
+          "no_route": 0,
+          "delivered": 0,
+          "forwarded": 11,
+          "dropped": 0,
+          "failovers": 0,
+          "send_failures": 0
+        },
+        "received_ms": 3890
+      }
+    },
+    {
+      "event_id": 16,
+      "type": "telemetry",
+      "data": {
+        "sim_ms": 3896,
+        "node": "A",
+        "session": 1664252997,
+        "counters": {
+          "created": 1,
+          "acknowledged": 0,
+          "lost": 0,
+          "no_route": 1,
+          "delivered": 0,
+          "forwarded": 10,
+          "dropped": 1,
+          "failovers": 0,
+          "send_failures": 0
+        },
+        "received_ms": 3896
+      }
+    },
+    {
+      "event_id": 17,
+      "type": "route_computed",
+      "data": {
+        "sim_ms": 3947,
+        "flow": "A->C",
+        "epoch": 1000,
+        "version": 1,
+        "path": [
+          "A",
+          "B",
+          "C"
+        ],
+        "cost_ms": 65,
+        "graph": [
+          {
+            "link": "A-B",
+            "cost_ms": 30
+          },
+          {
+            "link": "A-D",
+            "cost_ms": 65
+          },
+          {
+            "link": "B-C",
+            "cost_ms": 35
+          },
+          {
+            "link": "C-D",
+            "cost_ms": 65
+          }
+        ],
+        "held_down": [],
+        "trigger": "initial",
+        "backups": {
+          "A": "D"
+        },
+        "backup_entries": {
+          "D": "C"
+        }
+      }
+    },
+    {
+      "event_id": 18,
+      "type": "route_installing",
+      "data": {
+        "sim_ms": 3947,
+        "version": 1,
+        "epoch": 1000,
+        "kind": "route",
+        "phase": "backup_relays",
+        "nodes": [
+          "D"
+        ]
+      }
+    },
+    {
+      "event_id": 19,
+      "type": "route_installing",
+      "data": {
+        "sim_ms": 4017,
+        "version": 1,
+        "epoch": 1000,
+        "kind": "route",
+        "phase": "relays",
+        "nodes": [
+          "B"
+        ]
+      }
+    },
+    {
+      "event_id": 20,
+      "type": "route_installing",
+      "data": {
+        "sim_ms": 4052,
+        "version": 1,
+        "epoch": 1000,
+        "kind": "route",
+        "phase": "source",
+        "nodes": [
+          "A"
+        ]
+      }
+    },
+    {
+      "event_id": 21,
+      "type": "route_active",
+      "data": {
+        "sim_ms": 4117,
+        "version": 1,
+        "epoch": 1000,
+        "path": [
+          "A",
+          "B",
+          "C"
+        ],
+        "cost_ms": 65,
+        "confirmed_by": [
+          "D",
+          "B",
+          "A"
+        ],
+        "distribution_ms": 170,
+        "trigger": "initial",
+        "backups": {
+          "A": "D"
+        }
+      }
+    },
+    {
+      "event_id": 22,
+      "type": "telemetry",
+      "data": {
+        "sim_ms": 4309,
+        "node": "B",
+        "session": 3170526542,
+        "counters": {
+          "created": 0,
+          "acknowledged": 0,
+          "lost": 0,
+          "no_route": 0,
+          "delivered": 0,
+          "forwarded": 17,
+          "dropped": 1,
+          "failovers": 0,
+          "send_failures": 0
+        },
+        "received_ms": 4309
+      }
+    },
+    {
+      "event_id": 23,
+      "type": "telemetry",
+      "data": {
+        "sim_ms": 4617,
+        "node": "C",
+        "session": 4145609530,
+        "counters": {
+          "created": 0,
+          "acknowledged": 0,
+          "lost": 0,
+          "no_route": 0,
+          "delivered": 0,
+          "forwarded": 0,
+          "dropped": 22,
+          "failovers": 0,
+          "send_failures": 0
+        },
+        "received_ms": 4617
+      }
+    },
+    {
+      "event_id": 24,
+      "type": "reading_received",
+      "data": {
+        "sim_ms": 6030,
+        "origin": "A",
+        "session": 1664252997,
+        "seq": 45,
+        "value": 20.13,
+        "value_hundredths": 2013,
+        "via": "B",
+        "hops": 2,
+        "ttl": 7,
+        "observed_path": [
+          "A",
+          "B",
+          "C"
+        ],
+        "received_ms": 6030
+      }
+    },
+    {
+      "event_id": 25,
+      "type": "reading_received",
+      "data": {
+        "sim_ms": 8037,
+        "origin": "A",
+        "session": 1664252997,
+        "seq": 59,
+        "value": 20.19,
+        "value_hundredths": 2019,
+        "via": "B",
+        "hops": 2,
+        "ttl": 7,
+        "observed_path": [
+          "A",
+          "B",
+          "C"
+        ],
+        "received_ms": 8037
+      }
+    },
+    {
+      "event_id": 26,
+      "type": "telemetry",
+      "data": {
+        "sim_ms": 8990,
+        "node": "A",
+        "session": 1664252997,
+        "counters": {
+          "created": 4,
+          "acknowledged": 2,
+          "lost": 0,
+          "no_route": 2,
+          "delivered": 0,
+          "forwarded": 18,
+          "dropped": 5,
+          "failovers": 0,
+          "send_failures": 0
+        },
+        "received_ms": 8990
+      }
+    },
+    {
+      "event_id": 27,
+      "type": "telemetry",
+      "data": {
+        "sim_ms": 9160,
+        "node": "D",
+        "session": 3729682789,
+        "counters": {
+          "created": 0,
+          "acknowledged": 0,
+          "lost": 0,
+          "no_route": 0,
+          "delivered": 0,
+          "forwarded": 22,
+          "dropped": 1,
+          "failovers": 0,
+          "send_failures": 0
+        },
+        "received_ms": 9160
+      }
+    },
+    {
+      "event_id": 28,
+      "type": "telemetry",
+      "data": {
+        "sim_ms": 9722,
+        "node": "B",
+        "session": 3170526542,
+        "counters": {
+          "created": 0,
+          "acknowledged": 0,
+          "lost": 0,
+          "no_route": 0,
+          "delivered": 0,
+          "forwarded": 25,
+          "dropped": 1,
+          "failovers": 0,
+          "send_failures": 0
+        },
+        "received_ms": 9722
+      }
+    },
+    {
+      "event_id": 29,
+      "type": "telemetry",
+      "data": {
+        "sim_ms": 9976,
+        "node": "C",
+        "session": 4145609530,
+        "counters": {
+          "created": 0,
+          "acknowledged": 0,
+          "lost": 0,
+          "no_route": 0,
+          "delivered": 2,
+          "forwarded": 0,
+          "dropped": 28,
+          "failovers": 0,
+          "send_failures": 0
+        },
+        "received_ms": 9976
+      }
+    },
+    {
+      "event_id": 30,
+      "type": "reading_received",
+      "data": {
+        "sim_ms": 10030,
+        "origin": "A",
+        "session": 1664252997,
+        "seq": 73,
+        "value": 20.42,
+        "value_hundredths": 2042,
+        "via": "B",
+        "hops": 2,
+        "ttl": 7,
+        "observed_path": [
+          "A",
+          "B",
+          "C"
+        ],
+        "received_ms": 10030
+      }
+    },
+    {
+      "event_id": 31,
+      "type": "environment",
+      "data": {
+        "sim_ms": 12000,
+        "channel": "environment",
+        "source": "presenter",
+        "action": "stop_node",
+        "target": "B",
+        "detail": {},
+        "label": "Stop B (injected by presenter, simulation)"
+      }
+    },
+    {
+      "event_id": 32,
+      "type": "local_failover",
+      "data": {
+        "sim_ms": 12992,
+        "node": "A",
+        "from": "B",
+        "to": "D",
+        "reason": "send_failures",
+        "epoch": 1000,
+        "version": 1,
+        "link": "A-B",
+        "matches_current_route": true,
+        "outcome": "backup_in_use"
+      }
+    },
+    {
+      "event_id": 33,
+      "type": "link_held_down",
+      "data": {
+        "sim_ms": 12992,
+        "link": "A-B",
+        "hold_down_ms": 5000,
+        "eligible_at_ms": 17992
+      }
+    },
+    {
+      "event_id": 34,
+      "type": "route_computed",
+      "data": {
+        "sim_ms": 12992,
+        "flow": "A->C",
+        "epoch": 1000,
+        "version": 2,
+        "path": [
+          "A",
+          "D",
+          "C"
+        ],
+        "cost_ms": 130,
+        "graph": [
+          {
+            "link": "A-D",
+            "cost_ms": 65
+          },
+          {
+            "link": "B-C",
+            "cost_ms": 35
+          },
+          {
+            "link": "C-D",
+            "cost_ms": 65
+          }
+        ],
+        "held_down": [
+          {
+            "link": "A-B",
+            "eligible_in_ms": 5000
+          }
+        ],
+        "trigger": "local_failover_report",
+        "backups": {},
+        "backup_entries": {}
+      }
+    },
+    {
+      "event_id": 35,
+      "type": "route_installing",
+      "data": {
+        "sim_ms": 12992,
+        "version": 2,
+        "epoch": 1000,
+        "kind": "route",
+        "phase": "relays",
+        "nodes": [
+          "D"
+        ]
+      }
+    },
+    {
+      "event_id": 36,
+      "type": "route_installing",
+      "data": {
+        "sim_ms": 13062,
+        "version": 2,
+        "epoch": 1000,
+        "kind": "route",
+        "phase": "source",
+        "nodes": [
+          "A"
+        ]
+      }
+    },
+    {
+      "event_id": 37,
+      "type": "reading_received",
+      "data": {
+        "sim_ms": 13067,
+        "origin": "A",
+        "session": 1664252997,
+        "seq": 87,
+        "value": 19.57,
+        "value_hundredths": 1957,
+        "via": "D",
+        "hops": 2,
+        "ttl": 7,
+        "observed_path": [
+          "A",
+          "D",
+          "C"
+        ],
+        "received_ms": 13067
+      }
+    },
+    {
+      "event_id": 38,
+      "type": "route_active",
+      "data": {
+        "sim_ms": 13192,
+        "version": 2,
+        "epoch": 1000,
+        "path": [
+          "A",
+          "D",
+          "C"
+        ],
+        "cost_ms": 130,
+        "confirmed_by": [
+          "D",
+          "A"
+        ],
+        "distribution_ms": 200,
+        "trigger": "local_failover_report",
+        "backups": {}
+      }
+    },
+    {
+      "event_id": 39,
+      "type": "telemetry",
+      "data": {
+        "sim_ms": 13743,
+        "node": "A",
+        "session": 1664252997,
+        "counters": {
+          "created": 6,
+          "acknowledged": 4,
+          "lost": 0,
+          "no_route": 2,
+          "delivered": 0,
+          "forwarded": 23,
+          "dropped": 6,
+          "failovers": 1,
+          "send_failures": 7
+        },
+        "received_ms": 13743
+      }
+    },
+    {
+      "event_id": 40,
+      "type": "telemetry",
+      "data": {
+        "sim_ms": 13939,
+        "node": "D",
+        "session": 3729682789,
+        "counters": {
+          "created": 0,
+          "acknowledged": 0,
+          "lost": 0,
+          "no_route": 0,
+          "delivered": 0,
+          "forwarded": 32,
+          "dropped": 1,
+          "failovers": 0,
+          "send_failures": 0
+        },
+        "received_ms": 13939
+      }
+    },
+    {
+      "event_id": 41,
+      "type": "reading_received",
+      "data": {
+        "sim_ms": 14064,
+        "origin": "A",
+        "session": 1664252997,
+        "seq": 102,
+        "value": 20.21,
+        "value_hundredths": 2021,
+        "via": "D",
+        "hops": 2,
+        "ttl": 7,
+        "observed_path": [
+          "A",
+          "D",
+          "C"
+        ],
+        "received_ms": 14064
+      }
+    },
+    {
+      "event_id": 42,
+      "type": "link_state_changed",
+      "data": {
+        "sim_ms": 14461,
+        "link": "B-C",
+        "old": "up",
+        "new": "one_way",
+        "usable": false,
+        "directions": {
+          "C->B": true,
+          "B->C": false
+        }
+      }
+    },
+    {
+      "event_id": 43,
+      "type": "node_lost_contact",
+      "data": {
+        "sim_ms": 14521,
+        "node": "B",
+        "observed_by": [
+          "A",
+          "C"
+        ],
+        "silent_for_ms": 3050,
+        "basis": "fresh neighbor reports list it as lost (no HELLO heard)"
+      }
+    },
+    {
+      "event_id": 44,
+      "type": "link_state_changed",
+      "data": {
+        "sim_ms": 14521,
+        "link": "A-B",
+        "old": "up",
+        "new": "down",
+        "usable": false,
+        "directions": {
+          "B->A": false,
+          "A->B": false
+        }
+      }
+    },
+    {
+      "event_id": 45,
+      "type": "link_state_changed",
+      "data": {
+        "sim_ms": 14521,
+        "link": "B-C",
+        "old": "one_way",
+        "new": "down",
+        "usable": false,
+        "directions": {
+          "C->B": false,
+          "B->C": false
+        }
+      }
+    },
+    {
+      "event_id": 46,
+      "type": "telemetry",
+      "data": {
+        "sim_ms": 15432,
+        "node": "C",
+        "session": 4145609530,
+        "counters": {
+          "created": 0,
+          "acknowledged": 0,
+          "lost": 0,
+          "no_route": 0,
+          "delivered": 5,
+          "forwarded": 0,
+          "dropped": 31,
+          "failovers": 0,
+          "send_failures": 11
+        },
+        "received_ms": 15432
+      }
+    },
+    {
+      "event_id": 47,
+      "type": "reading_received",
+      "data": {
+        "sim_ms": 16060,
+        "origin": "A",
+        "session": 1664252997,
+        "seq": 113,
+        "value": 20.09,
+        "value_hundredths": 2009,
+        "via": "D",
+        "hops": 2,
+        "ttl": 7,
+        "observed_path": [
+          "A",
+          "D",
+          "C"
+        ],
+        "received_ms": 16060
+      }
+    },
+    {
+      "event_id": 48,
+      "type": "reading_received",
+      "data": {
+        "sim_ms": 18063,
+        "origin": "A",
+        "session": 1664252997,
+        "seq": 126,
+        "value": 20.19,
+        "value_hundredths": 2019,
+        "via": "D",
+        "hops": 2,
+        "ttl": 7,
+        "observed_path": [
+          "A",
+          "D",
+          "C"
+        ],
+        "received_ms": 18063
+      }
+    },
+    {
+      "event_id": 49,
+      "type": "telemetry",
+      "data": {
+        "sim_ms": 18457,
+        "node": "D",
+        "session": 3729682789,
+        "counters": {
+          "created": 0,
+          "acknowledged": 0,
+          "lost": 0,
+          "no_route": 0,
+          "delivered": 0,
+          "forwarded": 40,
+          "dropped": 1,
+          "failovers": 0,
+          "send_failures": 0
+        },
+        "received_ms": 18457
+      }
+    },
+    {
+      "event_id": 50,
+      "type": "telemetry",
+      "data": {
+        "sim_ms": 19198,
+        "node": "A",
+        "session": 1664252997,
+        "counters": {
+          "created": 9,
+          "acknowledged": 7,
+          "lost": 0,
+          "no_route": 2,
+          "delivered": 0,
+          "forwarded": 26,
+          "dropped": 6,
+          "failovers": 1,
+          "send_failures": 25
+        },
+        "received_ms": 19198
+      }
+    }
+  ]
+}

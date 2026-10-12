@@ -15,15 +15,25 @@ def test_health():
     assert response.json() == {"status": "ok", "mode": "simulation", "version": __version__}
 
 
-def test_snapshot_is_minimal_and_empty():
-    body = make_client().get("/api/snapshot").json()
+def test_snapshot_has_the_common_fields_and_nothing_is_known_at_time_zero():
+    body = make_client(live_autostart=False).get("/api/snapshot").json()
     assert body["v"] == 1
     assert body["mode"] == "simulation"
     assert body["backend"] == {"status": "ok", "version": __version__}
     assert body["server_time"].endswith("Z")
     assert body["last_event_id"] == 0
-    assert body["nodes"] == []
+    assert {n["status"] for n in body["nodes"]} == {"unknown"}  # the controller has heard nothing
     assert body["links"] == []
+    assert body["clock"]["sim_ms"] == 0
+
+
+def test_hardware_mode_has_no_simulation_and_says_so():
+    client = make_client(mode="hardware")
+    body = client.get("/api/snapshot").json()
+    assert body["mode"] == "hardware" and body["nodes"] == [] and body["last_event_id"] == 0
+    refused = client.post("/api/control/pause", json={})
+    assert refused.status_code == 409
+    assert refused.json()["error"]["code"] == "not_available_in_hardware_mode"
 
 
 def test_cors_allows_configured_origin_only():

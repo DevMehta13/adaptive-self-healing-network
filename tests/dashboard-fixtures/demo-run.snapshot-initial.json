@@ -1,0 +1,93 @@
+{
+  "v": 1,
+  "mode": "simulation",
+  "backend": {
+    "status": "ok",
+    "version": "fixture"
+  },
+  "server_time": "2026-01-01T00:00:00.000Z",
+  "run_id": 1,
+  "scenario": "live-demo",
+  "label": "SIMULATION: nodes, links and delays are simulated. Link delays are configured settings (B's links are set cheaper than D's), not measurements.",
+  "last_event_id": 0,
+  "clock": {
+    "sim_ms": 0,
+    "speed": 1.0,
+    "paused": false
+  },
+  "nodes": [
+    {
+      "id": "A",
+      "status": "unknown",
+      "since_ms": 0,
+      "session": null,
+      "last_report_age_ms": null,
+      "telemetry": null
+    },
+    {
+      "id": "B",
+      "status": "unknown",
+      "since_ms": 0,
+      "session": null,
+      "last_report_age_ms": null,
+      "telemetry": null
+    },
+    {
+      "id": "C",
+      "status": "unknown",
+      "since_ms": 0,
+      "session": null,
+      "last_report_age_ms": null,
+      "telemetry": null
+    },
+    {
+      "id": "D",
+      "status": "unknown",
+      "since_ms": 0,
+      "session": null,
+      "last_report_age_ms": null,
+      "telemetry": null
+    }
+  ],
+  "links": [],
+  "route": {
+    "flow": "A->C",
+    "epoch": 1000,
+    "state": "waiting",
+    "kind": null,
+    "version": null
+  },
+  "readings": {
+    "delivered_unique": 0,
+    "duplicates": 0,
+    "recent": []
+  },
+  "counts": {
+    "delivered": {
+      "value": 0,
+      "known_by": "C",
+      "as_of_ms": 0,
+      "age_ms": null
+    },
+    "duplicates": {
+      "value": 0,
+      "known_by": "C"
+    },
+    "created": null,
+    "acknowledged": null,
+    "lost": null,
+    "no_route": null,
+    "pending": null
+  },
+  "presenter": {
+    "channel": "environment",
+    "note": "What the presenter did to the simulated environment. This is not something the controller knows.",
+    "conditions": {
+      "stopped_nodes": [],
+      "links_down": [],
+      "link_overrides": {},
+      "gateway_attached": true
+    }
+  },
+  "recent_events": []
+}

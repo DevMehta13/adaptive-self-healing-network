@@ -11,5 +11,21 @@ def utc_now() -> str:
     return datetime.now(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
 
-def make_envelope(seq: int, event_type: str, data: dict[str, Any]) -> dict[str, Any]:
-    return {"v": PROTOCOL_VERSION, "seq": seq, "ts": utc_now(), "type": event_type, "data": data}
+def make_envelope(
+    seq: int,
+    event_type: str,
+    data: dict[str, Any],
+    event_id: int | None = None,
+    ts: str | None = None,
+) -> dict[str, Any]:
+    """Wrap one event. `event_id` is present only for state-changing events."""
+    envelope: dict[str, Any] = {
+        "v": PROTOCOL_VERSION,
+        "seq": seq,
+        "ts": ts if ts is not None else utc_now(),
+        "type": event_type,
+        "data": data,
+    }
+    if event_id is not None:
+        envelope["event_id"] = event_id
+    return envelope

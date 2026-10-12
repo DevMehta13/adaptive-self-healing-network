@@ -12,7 +12,9 @@ ENVELOPE_KEYS = {"v", "seq", "ts", "type", "data"}
 
 def make_client() -> TestClient:
     # A short interval keeps the tests fast.
-    return TestClient(create_app(Settings(_env_file=None, heartbeat_interval_seconds=0.05)))
+    return TestClient(
+        create_app(Settings(_env_file=None, heartbeat_interval_seconds=0.05, live_autostart=False))
+    )
 
 
 def test_status_event_first_with_envelope():
@@ -36,7 +38,9 @@ def test_heartbeats_follow_with_increasing_seq():
     assert [m["seq"] for m in messages] == [1, 2, 3, 4]
     for m in messages[1:]:
         assert set(m) == ENVELOPE_KEYS
-        assert m["data"] == {"interval_s": 0.05}
+        assert m["data"]["interval_s"] == 0.05
+        assert set(m["data"]) == {"interval_s", "sim_ms", "speed", "paused"}
+        assert "event_id" not in m  # heartbeats are not state-changing
 
 
 def test_foreign_origin_is_rejected():
@@ -52,7 +56,11 @@ def test_allowed_origin_is_accepted():
 
 def test_client_messages_do_not_speed_up_heartbeats():
     interval = 0.3
-    client = TestClient(create_app(Settings(_env_file=None, heartbeat_interval_seconds=interval)))
+    client = TestClient(
+        create_app(
+            Settings(_env_file=None, heartbeat_interval_seconds=interval, live_autostart=False)
+        )
+    )
     with client.websocket_connect("/ws") as ws:
         ws.receive_json()  # status
         started = time.monotonic()

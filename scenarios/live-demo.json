@@ -1,0 +1,26 @@
+{
+  "name": "live-demo",
+  "description": "SIMULATED SETTING, not a measurement: link delays are configured so that A-B and B-C (10 ms one way) are cheaper than A-D and D-C (25 ms one way). The live demo: discovery, automatic routing, backup next hops, local failover (T1 + T2) and telemetry are on; the controller learns only through the gateway. The scenario duration is ignored by the live runtime, which runs indefinitely; presenter controls change the simulated environment.",
+  "seed": 7,
+  "duration_s": 60,
+  "routing": "controller",
+  "settings": {
+    "probe_interval_ms": 1000,
+    "local_failover": true,
+    "failover_t1": true,
+    "failover_t2_k": 3,
+    "telemetry_interval_ms": 5000
+  },
+  "controller": { "epoch": 1000, "backup_next_hops": true },
+  "links": {
+    "A->B": { "delay_ms": 10 },
+    "B->A": { "delay_ms": 10 },
+    "B->C": { "delay_ms": 10 },
+    "C->B": { "delay_ms": 10 },
+    "A->D": { "delay_ms": 25 },
+    "D->A": { "delay_ms": 25 },
+    "D->C": { "delay_ms": 25 },
+    "C->D": { "delay_ms": 25 }
+  },
+  "actions": []
+}
