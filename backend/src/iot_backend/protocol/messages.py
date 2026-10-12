@@ -63,6 +63,9 @@ class ReportEntry:
     state: int
     session: int
     age_ms: int
+    # Round-trip time to this neighbor measured by the reporter on its own clock (median of a
+    # small window), or None if there is no fresh measurement. None is never a zero cost.
+    rtt_ms: int | None = None
 
 
 @dataclass(frozen=True)
@@ -74,7 +77,77 @@ class TopologyReportPayload:
     msg_type = MessageType.TOPOLOGY_REPORT
 
 
-Payload = DataPayload | DeliveryAckPayload | HelloPayload | TopologyReportPayload
+@dataclass(frozen=True)
+class ProbePayload:
+    """One-hop round-trip probe. Empty: the frame header's session and seq identify it."""
+
+    msg_type = MessageType.PROBE
+
+
+@dataclass(frozen=True)
+class ProbeReplyPayload:
+    """Echoes the probe's session and seq so the prober can match it on its own clock."""
+
+    probe_session: int
+    probe_seq: int
+
+    msg_type = MessageType.PROBE_REPLY
+
+
+@dataclass(frozen=True)
+class RouteUpdatePayload:
+    """Controller instruction (header dst = the node that must install it).
+
+    `next_hop` None means "no route to the destination" (explicitly told). `backup_next_hop` is
+    carried now so the format does not change in Phase 4b; Phase 4a always sends None.
+    """
+
+    epoch: int
+    version: int
+    destination: int
+    next_hop: int | None
+    backup_next_hop: int | None = None
+
+    msg_type = MessageType.ROUTE_UPDATE
+
+
+@dataclass(frozen=True)
+class RouteInstallAckPayload:
+    """A node's answer to a ROUTE_UPDATE. For status STALE, epoch/version are the held values."""
+
+    epoch: int
+    version: int
+    destination: int
+    status: int  # RouteAckStatus
+
+    msg_type = MessageType.ROUTE_INSTALL_ACK
+
+
+@dataclass(frozen=True)
+class LocalFailoverReportPayload:
+    """A node reports that it switched from its primary to its backup (defined; sent in 4b)."""
+
+    epoch: int
+    version: int
+    destination: int
+    from_next_hop: int
+    to_next_hop: int
+    reason: int  # FailoverReason
+
+    msg_type = MessageType.LOCAL_FAILOVER_REPORT
+
+
+Payload = (
+    DataPayload
+    | DeliveryAckPayload
+    | HelloPayload
+    | TopologyReportPayload
+    | ProbePayload
+    | ProbeReplyPayload
+    | RouteUpdatePayload
+    | RouteInstallAckPayload
+    | LocalFailoverReportPayload
+)
 
 
 @dataclass(frozen=True)

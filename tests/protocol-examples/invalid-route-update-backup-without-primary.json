@@ -1,0 +1,7 @@
+{
+  "name": "route-update-backup-without-primary",
+  "description": "ROUTE_UPDATE with a backup next hop but no primary.",
+  "valid": false,
+  "hex": "011203018877665516000000080b00f1536504000000030004",
+  "reject_reason": "bad_value"
+}

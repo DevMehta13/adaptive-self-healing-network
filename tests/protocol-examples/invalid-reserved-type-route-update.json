@@ -1,7 +1,0 @@
-{
-  "name": "reserved-type-route-update",
-  "description": "ROUTE_UPDATE (0x12) is still reserved and not accepted.",
-  "valid": false,
-  "hex": "011201020d0c0b0a010000000800",
-  "reject_reason": "reserved_type"
-}

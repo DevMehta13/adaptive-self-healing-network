@@ -1,0 +1,19 @@
+{
+  "name": "probe-reply-basic",
+  "description": "B answers A's probe by echoing its session and seq; B's own session and seq are in the header.",
+  "valid": true,
+  "frame": {
+    "version": 1,
+    "type": "PROBE_REPLY",
+    "src": 2,
+    "dst": 1,
+    "session": 287454020,
+    "seq": 9,
+    "ttl": 1,
+    "payload": {
+      "probe_session": 168496141,
+      "probe_seq": 40
+    }
+  },
+  "hex": "01150201443322110900000001080d0c0b0a28000000"
+}

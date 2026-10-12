@@ -1,0 +1,7 @@
+{
+  "name": "report-rtt-unmeasured-value",
+  "description": "An RTT entry of 65535 ms: that value means 'unmeasured' and is never sent.",
+  "valid": false,
+  "hex": "011101030d0c0b0a1f00000008150202022222222278000402444444445a000102ffff",
+  "reject_reason": "bad_value"
+}

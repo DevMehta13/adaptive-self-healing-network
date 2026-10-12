@@ -1,0 +1,22 @@
+{
+  "name": "route-update-relay",
+  "description": "C asks relay B to send frames for C straight to C (route version 3, epoch 1700000000).",
+  "valid": true,
+  "frame": {
+    "version": 1,
+    "type": "ROUTE_UPDATE",
+    "src": 3,
+    "dst": 2,
+    "session": 1432778632,
+    "seq": 21,
+    "ttl": 8,
+    "payload": {
+      "epoch": 1700000000,
+      "version": 3,
+      "destination": 3,
+      "next_hop": 3,
+      "backup_next_hop": null
+    }
+  },
+  "hex": "011203028877665515000000080b00f1536503000000030300"
+}

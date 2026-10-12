@@ -14,17 +14,25 @@ from iot_backend.protocol import (
     DecodeError,
     DeliveryAckPayload,
     EncodeError,
+    FailoverReason,
     Frame,
     HelloNeighbor,
     HelloPayload,
+    LocalFailoverReportPayload,
     MessageType,
     NeighborCode,
+    ProbePayload,
+    ProbeReplyPayload,
     RejectReason,
     ReportEntry,
+    RouteAckStatus,
+    RouteInstallAckPayload,
+    RouteUpdatePayload,
     TopologyReportPayload,
     decode,
     encode,
 )
+from iot_backend.protocol import codec as codec_module
 
 EXAMPLES_DIR = Path(__file__).resolve().parents[2] / "tests" / "protocol-examples"
 EXAMPLE_FILES = sorted(EXAMPLES_DIR.glob("*.json"))
@@ -44,9 +52,43 @@ def frame_from_fields(fields: dict) -> Frame:
     elif fields["type"] == "TOPOLOGY_REPORT":
         body = TopologyReportPayload(
             tuple(
-                ReportEntry(e["neighbor"], NeighborCode[e["state"]], e["session"], e["age_ms"])
+                ReportEntry(
+                    e["neighbor"],
+                    NeighborCode[e["state"]],
+                    e["session"],
+                    e["age_ms"],
+                    e.get("rtt_ms"),
+                )
                 for e in payload["entries"]
             )
+        )
+    elif fields["type"] == "PROBE":
+        body = ProbePayload()
+    elif fields["type"] == "PROBE_REPLY":
+        body = ProbeReplyPayload(payload["probe_session"], payload["probe_seq"])
+    elif fields["type"] == "ROUTE_UPDATE":
+        body = RouteUpdatePayload(
+            payload["epoch"],
+            payload["version"],
+            payload["destination"],
+            payload["next_hop"],
+            payload["backup_next_hop"],
+        )
+    elif fields["type"] == "ROUTE_INSTALL_ACK":
+        body = RouteInstallAckPayload(
+            payload["epoch"],
+            payload["version"],
+            payload["destination"],
+            RouteAckStatus[payload["status"]],
+        )
+    elif fields["type"] == "LOCAL_FAILOVER_REPORT":
+        body = LocalFailoverReportPayload(
+            payload["epoch"],
+            payload["version"],
+            payload["destination"],
+            payload["from_next_hop"],
+            payload["to_next_hop"],
+            FailoverReason[payload["reason"]],
         )
     else:
         raise AssertionError(f"unexpected example type {fields['type']}")
@@ -65,9 +107,11 @@ def test_examples_exist():
     invalid = [p for p in EXAMPLE_FILES if p.name.startswith("invalid-")]
     assert len(valid) >= 10
     assert len(invalid) >= 20
-    # every rejection reason the decoder can produce is exercised by at least one example
+    # Every rejection reason the decoder can produce for a *defined* type is exercised by an
+    # example. `reserved_type` needs a code that has no payload definition yet; since Phase 4a
+    # defines the last reserved code there is none, and it is covered by a unit test below.
     reasons = {json.loads(p.read_text())["reject_reason"] for p in invalid}
-    assert reasons == {r.value for r in RejectReason}
+    assert reasons == {r.value for r in RejectReason} - {RejectReason.RESERVED_TYPE.value}
 
 
 @pytest.mark.parametrize("path", EXAMPLE_FILES, ids=lambda p: p.stem)
@@ -169,12 +213,21 @@ def test_frame_at_limit_is_checked_by_type_not_just_size():
     assert caught.value.reason is RejectReason.OVERSIZE
 
 
-@pytest.mark.parametrize("type_code", [0x12, 0x13, 0x14, 0x15, 0x16])
-def test_reserved_types_are_rejected(type_code):
-    raw = bytes([1, type_code, 1, 2, 5, 0, 0, 0, 1, 0, 0, 0, 8, 0])
+def test_every_message_type_is_now_defined_and_a_code_without_payload_stays_reserved(monkeypatch):
+    """Phase 4a defined the last reserved codes. The `reserved_type` path still works for a
+    future code that is added to MessageType before its payload is specified."""
+    assert codec_module.IMPLEMENTED_TYPES == frozenset(MessageType)
+    raw = bytes([1, 0x14, 1, 2, 5, 0, 0, 0, 1, 0, 0, 0, 1, 0])  # a PROBE
+    assert decode(raw).msg_type is MessageType.PROBE
+    monkeypatch.setattr(
+        codec_module, "IMPLEMENTED_TYPES", frozenset(MessageType) - {MessageType.PROBE}
+    )
     with pytest.raises(DecodeError) as caught:
         decode(raw)
     assert caught.value.reason is RejectReason.RESERVED_TYPE
+    with pytest.raises(DecodeError) as caught:  # a code that is not in the enum at all
+        decode(bytes([1, 0x17, 1, 2, 5, 0, 0, 0, 1, 0, 0, 0, 1, 0]))
+    assert caught.value.reason is RejectReason.UNKNOWN_TYPE
 
 
 def test_decoder_never_raises_anything_but_decode_error():
@@ -240,3 +293,70 @@ def test_hello_and_report_round_trip():
 def test_encode_rejects_bad_hello_and_report_fields(frame):
     with pytest.raises(EncodeError):
         encode(frame)
+
+
+# ---- Phase 4a payloads ----
+
+
+def test_phase4a_sizes_are_small_and_bounded():
+    probe = Frame(1, 2, 5, 9, 1, ProbePayload())
+    assert len(encode(probe)) == HEADER_SIZE
+    reply = Frame(2, 1, 5, 9, 1, ProbeReplyPayload(5, 9))
+    assert len(encode(reply)) == HEADER_SIZE + 8
+    update = Frame(3, 1, 5, 9, 8, RouteUpdatePayload(1, 1, 3, 2, 4))
+    assert len(encode(update)) == HEADER_SIZE + 11
+    ack = Frame(1, 3, 5, 9, 8, RouteInstallAckPayload(1, 1, 3, RouteAckStatus.INSTALLED))
+    assert len(encode(ack)) == HEADER_SIZE + 10
+    failover = Frame(1, 3, 5, 9, 8, LocalFailoverReportPayload(1, 1, 3, 2, 4, 1))
+    assert len(encode(failover)) == HEADER_SIZE + 12
+    # the largest report: 8 entries, every one with a measured RTT
+    full = Frame(
+        1,
+        3,
+        5,
+        9,
+        8,
+        TopologyReportPayload(
+            tuple(ReportEntry(i, NeighborCode.TWO_WAY, 1, 0, 100 + i) for i in range(1, 9))
+        ),
+    )
+    assert len(encode(full)) == HEADER_SIZE + 1 + 8 * 8 + 1 + 8 * 3 <= MAX_FRAME_SIZE
+    assert decode(encode(full)) == full
+
+
+def test_report_without_measurements_keeps_its_phase3_bytes():
+    entries = (ReportEntry(2, NeighborCode.TWO_WAY, 7, 100),)
+    assert encode(report_frame(entries)) == encode(
+        report_frame((ReportEntry(2, NeighborCode.TWO_WAY, 7, 100, None),))
+    )
+    assert len(encode(report_frame(entries))) == HEADER_SIZE + 1 + 8  # no trailer at all
+
+
+def test_unmeasured_is_never_encoded_as_a_number():
+    with pytest.raises(EncodeError):
+        encode(report_frame((ReportEntry(2, NeighborCode.TWO_WAY, 7, 100, 0xFFFF),)))
+    with pytest.raises(EncodeError):
+        encode(report_frame((ReportEntry(2, NeighborCode.TWO_WAY, 7, 100, -1),)))
+    decoded = decode(encode(report_frame((ReportEntry(2, NeighborCode.TWO_WAY, 7, 100, 0),))))
+    assert decoded.payload.entries[0].rtt_ms == 0  # a measured zero is still "measured"
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        RouteUpdatePayload(0, 1, 3, 2),  # epoch 0
+        RouteUpdatePayload(1, 0, 3, 2),  # version 0
+        RouteUpdatePayload(1, 1, 0, 2),  # destination 0
+        RouteUpdatePayload(1, 1, 3, 255),
+        RouteUpdatePayload(1, 1, 3, None, 4),  # backup without a primary
+        RouteUpdatePayload(1, 1, 3, 2, 2),  # backup equals primary
+        RouteInstallAckPayload(1, 1, 3, 0),
+        RouteInstallAckPayload(1, 1, 3, 4),
+        LocalFailoverReportPayload(1, 1, 3, 2, 2, 1),
+        LocalFailoverReportPayload(1, 1, 3, 2, 4, 9),
+        ProbeReplyPayload(0, 1),
+    ],
+)
+def test_encode_rejects_bad_phase4a_fields(payload):
+    with pytest.raises(EncodeError):
+        encode(Frame(3, 1, 5, 9, 8, payload))

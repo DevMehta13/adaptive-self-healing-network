@@ -1,0 +1,7 @@
+{
+  "name": "probe-with-payload",
+  "description": "PROBE must have no payload; a stray byte is rejected.",
+  "valid": false,
+  "hex": "011401020d0c0b0a28000000010100",
+  "reject_reason": "bad_payload_length"
+}

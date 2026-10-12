@@ -1,0 +1,7 @@
+{
+  "name": "probe-reply-session-zero",
+  "description": "PROBE_REPLY that echoes session 0 (reserved).",
+  "valid": false,
+  "hex": "01150201443322110900000001080000000028000000",
+  "reject_reason": "bad_session"
+}
