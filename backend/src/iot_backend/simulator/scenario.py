@@ -22,6 +22,8 @@ LINK_KEYS = tuple((s, d) for s in NODE_LETTERS for d in NODE_LETTERS if s != d)
 
 # The classroom topology. Physically every board hears every other; this is the *logical* rule.
 DIAMOND = {"A": {"B", "D"}, "B": {"A", "C"}, "C": {"B", "D"}, "D": {"A", "C"}}
+ROUTING_MANUAL = "manual"
+ROUTING_CONTROLLER = "controller"
 # Default manual routes: the normal path goes through B in both directions. Direct neighbors
 # are always reachable directly (added automatically).
 DEFAULT_ROUTES = {"A": {"C": "B"}, "C": {"A": "B"}}
@@ -47,6 +49,15 @@ class ScenarioConfig:
     report_interval_ms: int = 5000
     report_coalesce_ms: int = 50
     flood_cache_size: int = 64
+    # Phase 4a. routing="manual": routing tables are configured (Phase 2/3 behaviour).
+    # routing="controller": nodes start with no data routes; the controller installs them.
+    routing: str = "manual"
+    probe_interval_ms: int = 0  # 0 = no probes, so no link is ever measured
+    probe_jitter_ms: int = 100
+    rtt_window: int = 5
+    rtt_min_samples: int = 3
+    rtt_max_age_ms: int = 10_000
+    max_routes: int = 8
     gateway: str = "C"  # node whose USB link carries events to the controller
     reading_src: str = "A"
     reading_dst: str = "C"
@@ -74,9 +85,11 @@ class Summary:
     duplicates: int  # repeat copies received (and re-acknowledged) at the destination
     acknowledged: int  # readings whose ACK reached the source
     lost: int  # readings the source gave up on after its last attempt
+    dropped_no_route: int  # readings dropped at creation because the source had no route
     unresolved: int  # still waiting at the end, or forgotten when the source stopped
     hellos: int  # HELLO frames created
     reports: int  # TOPOLOGY_REPORT frames created
+    probes: int  # PROBE frames created
     flood_cache_evictions: int  # management identities forgotten because the cache was full
     drops: dict[str, int]  # discarded or rejected frames by reason
 
@@ -108,13 +121,23 @@ class Simulation:
             report_coalesce_ms=self.config.report_coalesce_ms,
             flood_cache_size=self.config.flood_cache_size,
             gateway_id=NODE_IDS[self.config.gateway],
+            probe_interval_ms=self.config.probe_interval_ms,
+            probe_jitter_ms=self.config.probe_jitter_ms,
+            rtt_window=self.config.rtt_window,
+            rtt_min_samples=self.config.rtt_min_samples,
+            rtt_max_age_ms=self.config.rtt_max_age_ms,
+            max_routes=self.config.max_routes,
         )
         self._gateway = SimulatedGateway(self._engine)
         for letter in NODE_LETTERS:
             permitted = {NODE_IDS[n] for n in self.config.permitted.get(letter, set())}
-            routes = {NODE_IDS[n]: NODE_IDS[n] for n in DIAMOND[letter]}  # direct neighbors
-            for dst, hop in self.config.routes.get(letter, {}).items():
-                routes[NODE_IDS[dst]] = NODE_IDS[hop]
+            routes: dict[int, int] = {}
+            if self.config.routing == ROUTING_MANUAL:
+                routes = {NODE_IDS[n]: NODE_IDS[n] for n in DIAMOND[letter]}  # direct neighbors
+                for dst, hop in self.config.routes.get(letter, {}).items():
+                    routes[NODE_IDS[dst]] = NODE_IDS[hop]
+            # With routing="controller" the table starts empty: no data route exists until the
+            # controller installs one, so nothing is forwarded by a hidden default.
             is_source = letter == self.config.reading_src
             self._nodes[letter] = Node(
                 NODE_IDS[letter],
@@ -142,6 +165,7 @@ class Simulation:
             )
 
         self._nodes[self.config.gateway].gateway_sink = self._gateway.deliver
+        self._gateway.attach_originator(self._nodes[self.config.gateway].originate_route_update)
 
         for letter in NODE_LETTERS:
             self._nodes[letter].boot()
@@ -158,6 +182,10 @@ class Simulation:
             raise ValueError(f"unknown gateway {self.config.gateway!r}")
         if self.config.ack_delivery not in (ACK_FLOODING, ACK_ROUTED):
             raise ValueError("ack_delivery must be 'flooding' or 'routed'")
+        if self.config.routing not in (ROUTING_MANUAL, ROUTING_CONTROLLER):
+            raise ValueError("routing must be 'manual' or 'controller'")
+        if self.config.probe_interval_ms < 0:
+            raise ValueError("probe_interval_ms must be >= 0")
         if self.config.reading_src == self.config.reading_dst:
             raise ValueError("reading source and destination must differ")
         for table in (self.config.permitted, self.config.initial_seq):
@@ -190,6 +218,21 @@ class Simulation:
             action()
         else:
             self._engine.schedule(max(0, at_ms - self._engine.now_ms), action)
+
+    def call_at(self, at_ms: int | None, action: Callable[[], None]) -> None:
+        """Run `action` now, or at an absolute simulated time (for scripted controller actions)."""
+        self._at(at_ms, action)
+
+    def route_state(self, node: str, dst: str) -> tuple[int, int, str | None] | None:
+        """What a node holds for `dst`: (epoch, version, next hop name or None), or None.
+
+        An observation aid for tests and the CLI. The controller must not use it.
+        """
+        state = self._nodes[node].route_state(NODE_IDS[dst])
+        if state is None:
+            return None
+        epoch, version, hop = state
+        return epoch, version, None if hop is None else NODE_NAMES[hop]
 
     def stop_node(self, name: str, at_ms: int | None = None) -> None:
         """Power a node off (now, or at an absolute simulated time)."""
@@ -268,6 +311,7 @@ class Simulation:
         created = sum(c.created for c in counters)
         acknowledged = sum(c.acknowledged for c in counters)
         lost = sum(c.lost for c in counters)
+        no_route = sum(c.dropped_no_route for c in counters)
         return Summary(
             readings_created=created,
             attempts=sum(c.attempts for c in counters),
@@ -277,9 +321,11 @@ class Simulation:
             duplicates=sum(c.duplicates for c in counters),
             acknowledged=acknowledged,
             lost=lost,
-            unresolved=created - acknowledged - lost,
+            dropped_no_route=no_route,
+            unresolved=created - acknowledged - lost - no_route,
             hellos=sum(c.hellos for c in counters),
             reports=sum(c.reports for c in counters),
+            probes=sum(c.probes for c in counters),
             flood_cache_evictions=sum(n.flood_cache_evictions for n in self._nodes.values()),
             drops=dict(sorted(drops.items())),
         )

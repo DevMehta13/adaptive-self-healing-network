@@ -24,6 +24,9 @@ READING_LOST = "reading_lost"  # the source gave up after its last attempt
 ACK_RECEIVED = "ack_received"
 ACK_IGNORED = "ack_ignored"
 ACK_TIMEOUT = "ack_timeout"  # one attempt went unacknowledged
+ROUTE_UPDATE_SENT = "route_update_sent"  # the gateway node originated a ROUTE_UPDATE
+ROUTE_INSTALLED = "route_installed"  # a node applied a ROUTE_UPDATE to its table
+ROUTE_UPDATE_IGNORED = "route_update_ignored"  # duplicate, stale, or refused by the node
 
 
 @dataclass(frozen=True)

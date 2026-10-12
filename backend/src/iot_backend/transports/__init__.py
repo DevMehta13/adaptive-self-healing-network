@@ -5,6 +5,8 @@ from iot_backend.transports.gateway import (
     GatewayEvent,
     GatewayHandler,
     NeighborObservation,
+    RouteInstallAckEvent,
+    RouteUpdateCommand,
     TopologyReportEvent,
 )
 
@@ -13,5 +15,7 @@ __all__ = [
     "GatewayEvent",
     "GatewayHandler",
     "NeighborObservation",
+    "RouteInstallAckEvent",
+    "RouteUpdateCommand",
     "TopologyReportEvent",
 ]
