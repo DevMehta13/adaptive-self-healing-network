@@ -53,6 +53,22 @@ class FakeGateway:
             callback()
         self.now = end
 
+    def report_at(self, origin, entries, received_ms, session=None, seq=1):
+        """A replayed report: `received_ms` is its estimated original time, not now."""
+        event = TopologyReportEvent(
+            received_ms=received_ms,
+            origin=origin,
+            session=session or origin * 1000,
+            seq=seq,
+            neighbors=tuple(
+                NeighborObservation(n, state, sess, 100) for n, (state, sess) in entries.items()
+            ),
+            age_ms=self.now - received_ms,
+            replayed=True,
+        )
+        for handler in self._handlers:
+            handler(event)
+
     def report(self, origin, entries, session=None, seq=1):
         """entries: {neighbor: (state, session)}"""
         event = TopologyReportEvent(
@@ -218,3 +234,27 @@ def test_one_neighbors_claim_is_not_enough_while_another_still_hears_the_node(wo
     assert view.node_status("B") == REACHABLE
     gw.report(C, {B: ("lost", 2000)}, seq=2)  # now every observer agrees
     assert view.node_status("B") == LOST_CONTACT
+
+
+def test_a_replayed_report_older_than_what_is_held_is_ignored_even_from_another_session(world):
+    """C replays a report from before a restart after a newer one has arrived: the older one
+    (different session, so its sequence number proves nothing) must not undo the newer state."""
+    gw, view = world
+    gw.advance(20_000)
+    gw.report(A, {B: ("two_way", 2000)}, session=7000, seq=1)  # newer: A after a restart
+    gw.report(B, {A: ("two_way", 7000)})
+    assert view.link_state("A", "B") == LINK_UP
+    # an old report from A's previous life, replayed late, claiming B was lost; its real age
+    # puts it 10 s ago on the laptop's clock
+    gw.report_at(A, {B: ("lost", 2000)}, received_ms=10_000, session=1000, seq=99)
+    assert view.link_state("A", "B") == LINK_UP
+    assert view.node_status("B") == REACHABLE
+
+
+def test_a_replayed_report_keeps_its_real_age_and_is_stale_when_old_enough(world):
+    gw, view = world
+    gw.advance(40_000)
+    gw.report_at(A, {B: ("two_way", 2000)}, received_ms=10_000)  # 30 s old on arrival
+    gw.report_at(B, {A: ("two_way", 1000)}, received_ms=10_000)
+    assert view.node_status("A") == STALE and view.link_state("A", "B") == LINK_STALE
+    assert view.usable_links() == []
