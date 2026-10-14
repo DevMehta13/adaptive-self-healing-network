@@ -22,7 +22,7 @@ from iot_backend.simulator.scenario_file import (
     load_scenario,
     parse_link,
 )
-from iot_backend.simulator.studies import MODES, compare_modes, false_triggers
+from iot_backend.simulator.studies import MODES, compare_modes, false_triggers, outage_study
 from iot_backend.simulator.trace import (
     ACK_RECEIVED,
     FRAME_SENT,
@@ -132,6 +132,16 @@ def build_parser() -> argparse.ArgumentParser:
             "(controller-only, local failover T1, T1+T2) and print the comparison"
         ),
     )
+    parser.add_argument(
+        "--outage-study",
+        type=int,
+        metavar="N",
+        help=(
+            "detach the controller for several outage lengths (seeds 1..N) and report how many "
+            "readings were delivered late vs lost; use --interval-ms and --buffer to vary"
+        ),
+    )
+    parser.add_argument("--buffer", type=int, help="C buffer capacity for --outage-study")
     parser.add_argument(
         "--false-triggers",
         type=int,
@@ -315,8 +325,43 @@ def _false_triggers(args: argparse.Namespace) -> int:
     return 0
 
 
+def _outage(args: argparse.Namespace) -> int:
+    if not args.scenario:
+        print("error: --outage-study needs a scenario file (e.g. controller-outage-replay.json)")
+        return 2
+    rows = outage_study(
+        args.scenario,
+        range(1, args.outage_study + 1),
+        durations_s=(5, 10, 20, 40, 80, 160),
+        capacity=args.buffer,
+        reading_interval_ms=args.interval_ms,
+    )
+    first = rows[0]
+    print(
+        f"scenario: {args.scenario}  seeds 1..{args.outage_study}  buffer {first.buffer_capacity}"
+        f"  reading interval {first.reading_interval_ms} ms  (SIMULATION)"
+    )
+    print(
+        f"{'outage':>7} {'made':>6} {'late':>6} {'lost':>6} {'unexpl.':>8} {'dup':>4} "
+        f"{'median delay':>13} {'max delay':>10}"
+    )
+    for r in rows:
+        print(
+            f"{r.outage_s:>6}s {r.made:>6} {r.delivered_late:>6} {r.lost_overflow:>6} "
+            f"{r.unexplained:>8} {r.duplicates:>4} {r.median_delay_ms:>10} ms "
+            f"{r.max_delay_ms:>7} ms"
+        )
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.outage_study:
+        try:
+            return _outage(args)
+        except (ScenarioError, ValueError) as error:
+            print(f"error: {error}")
+            return 2
     if args.compare_modes:
         try:
             return _compare(args)
@@ -432,6 +477,16 @@ def _print_routes(sim: Simulation, host: ControllerHost, actions: list) -> None:
             f"  #{event.event_id:<3} {event.time_ms / 1000:8.3f} s  {event.type:<20} {event.data}"
         )
     stats = host.controller.stats
+    bridge = sim.gateway.bridge
+    session = host.session.describe()
+    if session["heartbeat_interval_ms"]:
+        c = bridge.counters
+        print(
+            f"  gateway link: {session['state']} (heartbeats sent {host.session.heartbeats_sent}); "
+            f"C buffer: {c.outages} outage(s), {c.buffered} buffered, {c.replayed} replayed, "
+            f"{c.dropped_overflow} dropped by overflow, {c.coalesced} coalesced, "
+            f"{bridge.size} held now"
+        )
     print(
         f"  updates sent {stats.updates_sent}, retries {stats.retries}, "
         f"acks ignored {stats.acks_ignored}, plans {stats.plans}"

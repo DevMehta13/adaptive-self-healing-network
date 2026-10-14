@@ -9,7 +9,13 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
-from iot_backend.controller import RouteController, RoutingConfig, TopologyView
+from iot_backend.controller import (
+    GatewaySession,
+    ReadingLedger,
+    RouteController,
+    RoutingConfig,
+    TopologyView,
+)
 from iot_backend.simulator.link import LinkConfig
 from iot_backend.simulator.scenario import (
     LINK_KEYS,
@@ -45,6 +51,8 @@ _CONTROLLER_KEYS = {
     "no_route_grace_ms",
     "initial_settle_ms",
     "backup_next_hops",
+    "heartbeat_interval_ms",
+    "link_timeout_ms",
 }
 _SETTING_KEYS = {
     "reading_interval_ms",
@@ -73,6 +81,9 @@ _SETTING_KEYS = {
     "send_fail_ms",
     "failover_report_repeats",
     "telemetry_interval_ms",
+    "controller_timeout_ms",
+    "buffer_capacity",
+    "replay_spacing_ms",
 }
 _BOOL_SETTINGS = {"discovery", "local_failover", "failover_t1"}
 _STRING_SETTINGS = {"ack_delivery"}
@@ -223,13 +234,16 @@ class ControllerHost:
         self,
         sim: Simulation,
         config: RoutingConfig,
-        on_start: Callable[[TopologyView, RouteController], None] | None = None,
+        on_start: Callable[[TopologyView, RouteController, GatewaySession, ReadingLedger], None]
+        | None = None,
     ) -> None:
         self._sim = sim
         self.config = config
         self._on_start = on_start  # called for the first run and after each restart
         self.views: list[TopologyView] = []
         self.controllers: list[RouteController] = []
+        self.sessions: list[GatewaySession] = []
+        self.ledgers: list[ReadingLedger] = []
         self._start(config)
 
     def _start(self, config: RoutingConfig) -> None:
@@ -237,8 +251,15 @@ class ControllerHost:
         self.views.append(view)
         controller = RouteController(view, self._sim.gateway, config)
         self.controllers.append(controller)
+        ledger = ReadingLedger(self._sim.gateway)
+        self.ledgers.append(ledger)
+        # The heartbeat starts with the controller process and ends with it.
+        session = GatewaySession(
+            self._sim.gateway, config.heartbeat_interval_ms, config.link_timeout_ms
+        )
+        self.sessions.append(session)
         if self._on_start is not None:
-            self._on_start(view, controller)
+            self._on_start(view, controller, session, ledger)
 
     @property
     def view(self) -> TopologyView:
@@ -257,8 +278,17 @@ class ControllerHost:
     def topology_events(self) -> list:
         return [e for v in self.views for e in v.events]
 
+    @property
+    def session(self) -> GatewaySession:
+        return self.sessions[-1]
+
+    @property
+    def ledger(self) -> ReadingLedger:
+        return self.ledgers[-1]
+
     def restart(self, epoch: int) -> None:
         self.controller.stop()
+        self.session.stop()  # the heartbeat dies with the process
         self.config = replace(self.config, epoch=epoch)
         self._start(self.config)
 
