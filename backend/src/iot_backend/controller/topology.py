@@ -257,6 +257,11 @@ class TopologyView:
         previous = self._reports.get(event.origin)
         if previous and previous.session == event.session and not _newer(event.seq, previous.seq):
             return  # an older copy of a report we already have
+        if previous and event.received_ms < previous.received_ms:
+            # Older information, whatever its numbers say (a replayed report from before a
+            # restart has a different session, so the sequence check above cannot catch
+            # it). It must neither refresh a link nor undo newer state.
+            return
         self._reports[event.origin] = _Report(
             received_ms=event.received_ms,
             session=event.session,

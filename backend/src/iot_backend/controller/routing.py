@@ -198,6 +198,10 @@ class RoutingConfig:
     # Phase 4b: compute and install backup next hops. Off by default, so Phase 4a scenarios
     # keep their exact behaviour; nodes use backups only if they also run local failover.
     backup_next_hops: bool = False
+    # Phase 5b: the heartbeat to node C (0 = none) and how long silence from C means the
+    # gateway link is lost. These are between the laptop and C, never on the radio.
+    heartbeat_interval_ms: int = 0
+    link_timeout_ms: int = 3_000
     max_events: int = 1_000
 
     def __post_init__(self) -> None:
