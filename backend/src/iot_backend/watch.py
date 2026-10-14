@@ -42,6 +42,12 @@ def describe(envelope: dict[str, Any]) -> str:
     elif kind == "reading_received":
         via = "->".join("?" if n is None else n for n in data["observed_path"])
         body = f"reading A#{data['seq']} value={data['value']:.2f} via {data['via']} path {via}"
+        if data.get("replayed"):
+            body = (
+                f"REPLAYED reading A#{data['seq']} value={data['value']:.2f} via {data['via']} "
+                f"path {via}  (made at {_clock(data['received_ms'])}, "
+                f"{data['delay_ms'] / 1000:.1f} s late)"
+            )
     elif kind == "telemetry":
         c = data["counters"]
         body = (
@@ -73,6 +79,24 @@ def describe(envelope: dict[str, Any]) -> str:
         body = f"link {data['link']} held down {data['hold_down_ms']} ms"
     elif kind in ("node_seen", "node_regained_contact", "node_restarted", "node_stale"):
         body = f"{kind} {data['node']}"
+    elif kind == "gateway_link_lost":
+        body = (
+            f"GATEWAY LINK LOST: nothing from C since {_clock(data['since_ms'])} "
+            f"(the network view is stale from here)"
+        )
+    elif kind == "gateway_link_restored":
+        body = f"GATEWAY LINK RESTORED after {data['lost_for_ms'] / 1000:.1f} s"
+    elif kind == "replay_started":
+        body = (
+            f"REPLAY START: {data['entries']} entries ({data['held']} made during the outage), "
+            f"{data['dropped_overflow']} dropped by overflow, {data['coalesced']} coalesced, "
+            f"outage {data['outage_ms'] / 1000:.1f} s"
+        )
+    elif kind == "replay_finished":
+        body = (
+            f"REPLAY END: {data['replayed']} replayed, {data['dropped_overflow']} dropped by "
+            f"overflow, {data['coalesced']} coalesced"
+        )
     elif kind == "runtime":
         body = f"runtime {data['change']} paused={data['paused']} speed={data['speed']}"
     elif kind == "reset":
@@ -96,11 +120,14 @@ def summarize_snapshot(snapshot: dict[str, Any]) -> str:
     route = snapshot.get("route", {})
     path = ">".join(route.get("path", [])) or "-"
     clock = snapshot.get("clock", {})
+    gateway = snapshot.get("gateway", {})
+    link = f"{gateway.get('state', '?')}"
     return (
         f"snapshot: run {snapshot.get('run_id')} scenario {snapshot.get('scenario')} "
         f"sim={_clock(clock.get('sim_ms', 0))} last_event_id={snapshot.get('last_event_id')}\n"
         f"          nodes: {nodes}\n"
-        f"          route: {route.get('state')} {path} v{route.get('version')}"
+        f"          route: {route.get('state')} {path} v{route.get('version')}\n"
+        f"          gateway link: {link}"
     )
 
 

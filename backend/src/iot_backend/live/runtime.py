@@ -28,7 +28,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from iot_backend.controller import RouteController, TopologyView
+from iot_backend.controller import (
+    GatewayLinkEvent,
+    GatewaySession,
+    ReadingLedger,
+    ReadingRecord,
+    RouteController,
+    TopologyView,
+)
 from iot_backend.controller.routing import RouteEvent
 from iot_backend.controller.topology import TopologyEvent
 from iot_backend.protocol import NODE_NAMES
@@ -41,7 +48,7 @@ from iot_backend.simulator.scenario_file import (
     load_scenario,
     parse_link,
 )
-from iot_backend.transports import GatewayEvent, ReadingEvent, TelemetryEvent
+from iot_backend.transports import GatewayEvent, TelemetryEvent
 
 MIN_SPEED = 0.1
 MAX_SPEED = 1000.0
@@ -128,7 +135,9 @@ class LiveSimulation:
         self._telemetry: dict[str, dict[str, Any]] = {}
         self._readings: deque[dict[str, Any]] = deque(maxlen=self._config.recent_readings)
         self._delivered_unique = 0
-        self._duplicates = 0
+        self._replayed = 0
+        self._session: GatewaySession | None = None
+        self._ledger: ReadingLedger | None = None
         self._last_reading_ms: int | None = None
         self._presenter_conditions: dict[str, Any] = {
             "stopped_nodes": [],
@@ -141,17 +150,31 @@ class LiveSimulation:
         if spec.config.routing == "controller":
             self._host = ControllerHost(self._sim, spec.controller, on_start=self._on_controller)
         elif spec.config.discovery:
-            self._on_controller(TopologyView(self._sim.gateway), None)
+            self._on_controller(
+                TopologyView(self._sim.gateway), None, None, ReadingLedger(self._sim.gateway)
+            )
         apply_actions(self._sim, spec.actions, self._host)
         for action in spec.actions:  # scripted actions are announced as such, on their own channel
             self._sim.call_at(int(action["at_ms"]), lambda a=action: self._announce_scripted(a))
 
-    def _on_controller(self, view: TopologyView, controller: RouteController | None) -> None:
+    def _on_controller(
+        self,
+        view: TopologyView,
+        controller: RouteController | None,
+        session: GatewaySession | None = None,
+        ledger: ReadingLedger | None = None,
+    ) -> None:
         self._view = view
         self._controller = controller
+        self._session = session
+        self._ledger = ledger
         view.subscribe(self._on_topology_event)
         if controller is not None:
             controller.subscribe(self._on_route_event)
+        if session is not None:
+            session.subscribe(self._on_link_event)
+        if ledger is not None:
+            ledger.subscribe(self._on_reading_record)
 
     # ------------------------------------------------------------------ events
 
@@ -196,38 +219,48 @@ class LiveSimulation:
         self._emit(event.type, dict(event.data))
 
     def _on_gateway_event(self, event: GatewayEvent) -> None:
-        if isinstance(event, ReadingEvent):
-            self._on_reading(event)
-        elif isinstance(event, TelemetryEvent):
+        if isinstance(event, TelemetryEvent):
             self._on_telemetry(event)
 
-    def _on_reading(self, event: ReadingEvent) -> None:
-        if event.duplicate:
-            self._duplicates += 1
-            return
-        origin, via = _name(event.origin), _name(event.via)
+    def _on_reading_record(self, record: ReadingRecord) -> None:
+        """A reading counted once by the ledger (the controller side), with C's evidence."""
+        origin, via = _name(record.origin), _name(record.via)
         # Only what node C observed: the neighbor that handed it the frame and the TTL left.
         # Relays further back are unknown to C, so they are null, not guessed.
-        if event.hops <= 1:
+        if record.hops <= 1:
             path: list[str | None] = [origin, "C"]
         else:
-            path = [origin, *([None] * (event.hops - 2)), via, "C"]
+            path = [origin, *([None] * (record.hops - 2)), via, "C"]
         data = {
             "origin": origin,
-            "session": event.session,
-            "seq": event.seq,
-            "value": event.value / 100,
-            "value_hundredths": event.value,
+            "session": record.session,
+            "seq": record.seq,
+            "value": record.value / 100,
+            "value_hundredths": record.value,
             "via": via,
-            "hops": event.hops,
-            "ttl": event.ttl,
+            "hops": record.hops,
+            "ttl": record.ttl,
             "observed_path": path,
-            "received_ms": event.received_ms,
+            "received_ms": record.received_ms,
+            "replayed": record.replayed,
+            "delay_ms": record.delay_ms,
         }
         self._delivered_unique += 1
-        self._last_reading_ms = event.received_ms
+        if record.replayed:
+            self._replayed += 1
+        self._last_reading_ms = max(self._last_reading_ms or 0, record.received_ms)
         self._readings.append(data)
         self._emit("reading_received", data)
+
+    def _on_link_event(self, event: GatewayLinkEvent) -> None:
+        """What the laptop knows about its link to C (the controller-view channel)."""
+        names = {
+            "link_lost": "gateway_link_lost",
+            "link_restored": "gateway_link_restored",
+            "replay_started": "replay_started",
+            "replay_finished": "replay_finished",
+        }
+        self._emit(names[event.kind], dict(event.data))
 
     def _on_telemetry(self, event: TelemetryEvent) -> None:
         counters = {
@@ -242,6 +275,9 @@ class LiveSimulation:
             "send_failures": event.send_failures,
         }
         node = _name(event.origin)
+        held = self._telemetry.get(node)
+        if held is not None and event.received_ms < held["received_ms"]:
+            return  # a replayed counter set older than the one already shown
         self._telemetry[node] = {
             "session": event.session,
             "counters": counters,
@@ -478,7 +514,16 @@ class LiveSimulation:
                 "as_of_ms": self._last_reading_ms if self._last_reading_ms is not None else 0,
                 "age_ms": None if self._last_reading_ms is None else now - self._last_reading_ms,
             },
-            "duplicates": {"value": self._duplicates, "known_by": "C"},
+            "duplicates": {
+                "value": self._ledger.repeats_from_c + self._ledger.repeats_seen_again
+                if self._ledger is not None
+                else 0,
+                "known_by": "C and the controller",
+            },
+            "delivered_late": {
+                "value": self._replayed,
+                "known_by": "C (held while the controller was unreachable)",
+            },
         }
         source = self._telemetry.get("A")
         for key in ("created", "acknowledged", "lost", "no_route"):
@@ -504,6 +549,23 @@ class LiveSimulation:
             counts["pending"] = None
         return counts
 
+    def _gateway_state(self) -> dict[str, Any]:
+        """The controller's knowledge of its link to C (never the simulator's flag)."""
+        if self._session is None or not self._session.active:
+            return {
+                "state": "unmonitored",
+                "since_ms": 0,
+                "last_heard_ms": None,
+                "note": "no heartbeat is configured, so the controller cannot tell",
+            }
+        described = self._session.describe()
+        described["network_view"] = (
+            "stale: nothing has arrived from C since the link was lost"
+            if described["state"] == "lost"
+            else "live"
+        )
+        return described
+
     def snapshot(self) -> dict[str, Any]:
         view = self._view.snapshot() if self._view is not None else {"links": []}
         route = (
@@ -521,9 +583,15 @@ class LiveSimulation:
             "nodes": self._nodes(),
             "links": view["links"],
             "route": route,
+            "gateway": self._gateway_state(),
             "readings": {
                 "delivered_unique": self._delivered_unique,
-                "duplicates": self._duplicates,
+                "duplicates": (
+                    self._ledger.repeats_from_c + self._ledger.repeats_seen_again
+                    if self._ledger is not None
+                    else 0
+                ),
+                "replayed": self._replayed,
                 "recent": list(self._readings),
             },
             "counts": self._counts(),

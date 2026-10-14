@@ -207,9 +207,28 @@
     "backups": {},
     "backup_entries": {}
   },
+  "gateway": {
+    "state": "connected",
+    "since_ms": 0,
+    "last_heard_ms": 20000,
+    "heartbeat_interval_ms": 1000,
+    "link_timeout_ms": 3000,
+    "c_reports_controller_reachable": true,
+    "c_buffer": {
+      "held": 0,
+      "capacity": 50,
+      "dropped_overflow": 0,
+      "coalesced": 0,
+      "replayed": 0,
+      "outages": 0
+    },
+    "last_replay": null,
+    "network_view": "live"
+  },
   "readings": {
     "delivered_unique": 7,
     "duplicates": 0,
+    "replayed": 0,
     "recent": [
       {
         "origin": "A",
@@ -225,7 +244,9 @@
           "B",
           "C"
         ],
-        "received_ms": 6030
+        "received_ms": 6030,
+        "replayed": false,
+        "delay_ms": 0
       },
       {
         "origin": "A",
@@ -241,7 +262,9 @@
           "B",
           "C"
         ],
-        "received_ms": 8037
+        "received_ms": 8037,
+        "replayed": false,
+        "delay_ms": 0
       },
       {
         "origin": "A",
@@ -257,7 +280,9 @@
           "B",
           "C"
         ],
-        "received_ms": 10030
+        "received_ms": 10030,
+        "replayed": false,
+        "delay_ms": 0
       },
       {
         "origin": "A",
@@ -273,7 +298,9 @@
           "D",
           "C"
         ],
-        "received_ms": 13067
+        "received_ms": 13067,
+        "replayed": false,
+        "delay_ms": 0
       },
       {
         "origin": "A",
@@ -289,7 +316,9 @@
           "D",
           "C"
         ],
-        "received_ms": 14064
+        "received_ms": 14064,
+        "replayed": false,
+        "delay_ms": 0
       },
       {
         "origin": "A",
@@ -305,7 +334,9 @@
           "D",
           "C"
         ],
-        "received_ms": 16060
+        "received_ms": 16060,
+        "replayed": false,
+        "delay_ms": 0
       },
       {
         "origin": "A",
@@ -321,7 +352,9 @@
           "D",
           "C"
         ],
-        "received_ms": 18063
+        "received_ms": 18063,
+        "replayed": false,
+        "delay_ms": 0
       }
     ]
   },
@@ -334,7 +367,11 @@
     },
     "duplicates": {
       "value": 0,
-      "known_by": "C"
+      "known_by": "C and the controller"
+    },
+    "delivered_late": {
+      "value": 0,
+      "known_by": "C (held while the controller was unreachable)"
     },
     "created": {
       "value": 9,
@@ -777,7 +814,9 @@
           "B",
           "C"
         ],
-        "received_ms": 6030
+        "received_ms": 6030,
+        "replayed": false,
+        "delay_ms": 0
       }
     },
     {
@@ -798,7 +837,9 @@
           "B",
           "C"
         ],
-        "received_ms": 8037
+        "received_ms": 8037,
+        "replayed": false,
+        "delay_ms": 0
       }
     },
     {
@@ -903,7 +944,9 @@
           "B",
           "C"
         ],
-        "received_ms": 10030
+        "received_ms": 10030,
+        "replayed": false,
+        "delay_ms": 0
       }
     },
     {
@@ -1030,7 +1073,9 @@
           "D",
           "C"
         ],
-        "received_ms": 13067
+        "received_ms": 13067,
+        "replayed": false,
+        "delay_ms": 0
       }
     },
     {
@@ -1115,7 +1160,9 @@
           "D",
           "C"
         ],
-        "received_ms": 14064
+        "received_ms": 14064,
+        "replayed": false,
+        "delay_ms": 0
       }
     },
     {
@@ -1216,7 +1263,9 @@
           "D",
           "C"
         ],
-        "received_ms": 16060
+        "received_ms": 16060,
+        "replayed": false,
+        "delay_ms": 0
       }
     },
     {
@@ -1237,7 +1286,9 @@
           "D",
           "C"
         ],
-        "received_ms": 18063
+        "received_ms": 18063,
+        "replayed": false,
+        "delay_ms": 0
       }
     },
     {

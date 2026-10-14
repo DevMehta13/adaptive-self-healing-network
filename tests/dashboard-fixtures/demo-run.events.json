@@ -1,5 +1,5 @@
 {
-  "description": "A recorded simulated run of the live demo. Events are the WebSocket messages in order, as sent. Apply demo-run.snapshot-initial.json first, then the events; or start from demo-run.snapshot-mid.json and discard events with event_id <= its last_event_id.",
+  "description": "A recorded simulated run of the live demo: normal operation, Stop B, local failover, the controller confirms, Start B, hold-down, back to B. Events are the WebSocket messages in order, as sent. Apply demo-run.snapshot-initial.json first, then the events; or start from demo-run.snapshot-mid.json and discard events with event_id <= its last_event_id.",
   "scenario": "live-demo",
   "presenter_script": [
     {
@@ -530,7 +530,9 @@
           "B",
           "C"
         ],
-        "received_ms": 6030
+        "received_ms": 6030,
+        "replayed": false,
+        "delay_ms": 0
       },
       "event_id": 24
     },
@@ -566,7 +568,9 @@
           "B",
           "C"
         ],
-        "received_ms": 8037
+        "received_ms": 8037,
+        "replayed": false,
+        "delay_ms": 0
       },
       "event_id": 25
     },
@@ -698,7 +702,9 @@
           "B",
           "C"
         ],
-        "received_ms": 10030
+        "received_ms": 10030,
+        "replayed": false,
+        "delay_ms": 0
       },
       "event_id": 30
     },
@@ -858,7 +864,9 @@
           "D",
           "C"
         ],
-        "received_ms": 13067
+        "received_ms": 13067,
+        "replayed": false,
+        "delay_ms": 0
       },
       "event_id": 37
     },
@@ -967,7 +975,9 @@
           "D",
           "C"
         ],
-        "received_ms": 14064
+        "received_ms": 14064,
+        "replayed": false,
+        "delay_ms": 0
       },
       "event_id": 41
     },
@@ -1098,7 +1108,9 @@
           "D",
           "C"
         ],
-        "received_ms": 16060
+        "received_ms": 16060,
+        "replayed": false,
+        "delay_ms": 0
       },
       "event_id": 47
     },
@@ -1134,7 +1146,9 @@
           "D",
           "C"
         ],
-        "received_ms": 18063
+        "received_ms": 18063,
+        "replayed": false,
+        "delay_ms": 0
       },
       "event_id": 48
     },
@@ -1218,7 +1232,9 @@
           "D",
           "C"
         ],
-        "received_ms": 20060
+        "received_ms": 20060,
+        "replayed": false,
+        "delay_ms": 0
       },
       "event_id": 51
     },
@@ -1278,7 +1294,9 @@
           "D",
           "C"
         ],
-        "received_ms": 22060
+        "received_ms": 22060,
+        "replayed": false,
+        "delay_ms": 0
       },
       "event_id": 53
     },
@@ -1362,7 +1380,9 @@
           "D",
           "C"
         ],
-        "received_ms": 24060
+        "received_ms": 24060,
+        "replayed": false,
+        "delay_ms": 0
       },
       "event_id": 56
     },
@@ -1422,7 +1442,9 @@
           "D",
           "C"
         ],
-        "received_ms": 26060
+        "received_ms": 26060,
+        "replayed": false,
+        "delay_ms": 0
       },
       "event_id": 58
     },
@@ -1458,7 +1480,9 @@
           "D",
           "C"
         ],
-        "received_ms": 28060
+        "received_ms": 28060,
+        "replayed": false,
+        "delay_ms": 0
       },
       "event_id": 59
     },
@@ -1566,7 +1590,9 @@
           "D",
           "C"
         ],
-        "received_ms": 30060
+        "received_ms": 30060,
+        "replayed": false,
+        "delay_ms": 0
       },
       "event_id": 63
     },
@@ -1618,7 +1644,9 @@
           "D",
           "C"
         ],
-        "received_ms": 32060
+        "received_ms": 32060,
+        "replayed": false,
+        "delay_ms": 0
       },
       "event_id": 65
     },
@@ -1834,7 +1862,9 @@
           "D",
           "C"
         ],
-        "received_ms": 34060
+        "received_ms": 34060,
+        "replayed": false,
+        "delay_ms": 0
       },
       "event_id": 76
     },
@@ -1944,7 +1974,9 @@
           "D",
           "C"
         ],
-        "received_ms": 36060
+        "received_ms": 36060,
+        "replayed": false,
+        "delay_ms": 0
       },
       "event_id": 81
     },
@@ -2004,7 +2036,9 @@
           "D",
           "C"
         ],
-        "received_ms": 38060
+        "received_ms": 38060,
+        "replayed": false,
+        "delay_ms": 0
       },
       "event_id": 83
     },
@@ -2212,7 +2246,9 @@
           "B",
           "C"
         ],
-        "received_ms": 40030
+        "received_ms": 40030,
+        "replayed": false,
+        "delay_ms": 0
       },
       "event_id": 91
     },
@@ -2272,7 +2308,9 @@
           "B",
           "C"
         ],
-        "received_ms": 42030
+        "received_ms": 42030,
+        "replayed": false,
+        "delay_ms": 0
       },
       "event_id": 93
     },
@@ -2356,7 +2394,9 @@
           "B",
           "C"
         ],
-        "received_ms": 44030
+        "received_ms": 44030,
+        "replayed": false,
+        "delay_ms": 0
       },
       "event_id": 96
     },
@@ -2440,7 +2480,9 @@
           "B",
           "C"
         ],
-        "received_ms": 46030
+        "received_ms": 46030,
+        "replayed": false,
+        "delay_ms": 0
       },
       "event_id": 99
     },
@@ -2524,7 +2566,9 @@
           "B",
           "C"
         ],
-        "received_ms": 48030
+        "received_ms": 48030,
+        "replayed": false,
+        "delay_ms": 0
       },
       "event_id": 102
     },
@@ -2584,7 +2628,9 @@
           "B",
           "C"
         ],
-        "received_ms": 50030
+        "received_ms": 50030,
+        "replayed": false,
+        "delay_ms": 0
       },
       "event_id": 104
     },
@@ -2644,7 +2690,9 @@
           "B",
           "C"
         ],
-        "received_ms": 52030
+        "received_ms": 52030,
+        "replayed": false,
+        "delay_ms": 0
       },
       "event_id": 106
     },
@@ -2752,7 +2800,9 @@
           "B",
           "C"
         ],
-        "received_ms": 54030
+        "received_ms": 54030,
+        "replayed": false,
+        "delay_ms": 0
       },
       "event_id": 110
     },
@@ -2788,7 +2838,9 @@
           "B",
           "C"
         ],
-        "received_ms": 56030
+        "received_ms": 56030,
+        "replayed": false,
+        "delay_ms": 0
       },
       "event_id": 111
     },
@@ -2872,7 +2924,9 @@
           "B",
           "C"
         ],
-        "received_ms": 58030
+        "received_ms": 58030,
+        "replayed": false,
+        "delay_ms": 0
       },
       "event_id": 114
     },

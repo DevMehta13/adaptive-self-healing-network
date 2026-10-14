@@ -103,8 +103,22 @@ EVENT_SCHEMAS: dict[str, dict[str, Any]] = {
         "ttl": Int,
         "observed_path": List,
         "received_ms": Int,
+        "replayed": Bool,
+        "delay_ms": Int,
     },
     "telemetry": {"node": Str, "session": Int, "counters": Dict, "received_ms": Int},
+    # --- the controller's link to node C (Phase 5b) ---
+    "gateway_link_lost": {"since_ms": Int, "silent_for_ms": Int},
+    "gateway_link_restored": {"lost_since_ms": Int, "lost_for_ms": Int},
+    "replay_started": {
+        "started_ms": Int,
+        "entries": Int,
+        "held": Int,
+        "dropped_overflow": Int,
+        "coalesced": Int,
+        "outage_ms": Int,
+    },
+    "replay_finished": {"replayed": Int, "dropped_overflow": Int, "coalesced": Int},
     # --- the environment channel and the runtime ---
     "environment": {
         "channel": Str,
@@ -143,6 +157,7 @@ SNAPSHOT_FIELDS: dict[str, Any] = {
     "nodes": List,
     "links": List,
     "route": Dict,
+    "gateway": Dict,
     "readings": Dict,
     "counts": Dict,
     "presenter": Dict,

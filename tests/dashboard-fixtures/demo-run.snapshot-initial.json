@@ -57,9 +57,21 @@
     "kind": null,
     "version": null
   },
+  "gateway": {
+    "state": "connecting",
+    "since_ms": 0,
+    "last_heard_ms": null,
+    "heartbeat_interval_ms": 1000,
+    "link_timeout_ms": 3000,
+    "c_reports_controller_reachable": null,
+    "c_buffer": null,
+    "last_replay": null,
+    "network_view": "live"
+  },
   "readings": {
     "delivered_unique": 0,
     "duplicates": 0,
+    "replayed": 0,
     "recent": []
   },
   "counts": {
@@ -71,7 +83,11 @@
     },
     "duplicates": {
       "value": 0,
-      "known_by": "C"
+      "known_by": "C and the controller"
+    },
+    "delivered_late": {
+      "value": 0,
+      "known_by": "C (held while the controller was unreachable)"
     },
     "created": null,
     "acknowledged": null,

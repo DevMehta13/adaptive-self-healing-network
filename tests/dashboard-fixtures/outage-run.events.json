@@ -1,0 +1,2488 @@
+{
+  "description": "A recorded simulated controller outage: detach, Stop B, A fails over to D alone, reattach, C replays what it held, the controller catches up and confirms the route. Events are the WebSocket messages in order, as sent. Apply outage-run.snapshot-initial.json first, then the events; or start from outage-run.snapshot-mid.json and discard events with event_id <= its last_event_id.",
+  "scenario": "live-demo",
+  "presenter_script": [
+    {
+      "sim_ms": 12000,
+      "what": "presenter detaches the gateway (the controller is away)"
+    },
+    {
+      "sim_ms": 20000,
+      "what": "presenter stops node B"
+    },
+    {
+      "sim_ms": 40000,
+      "what": "presenter reattaches the gateway"
+    }
+  ],
+  "events": [
+    {
+      "v": 1,
+      "seq": 1,
+      "ts": "2026-01-01T00:00:00.000Z",
+      "type": "status",
+      "data": {
+        "backend": "ok",
+        "mode": "simulation",
+        "version": "fixture",
+        "heartbeat_interval_s": 2.0,
+        "snapshot_required": true,
+        "run_id": 1
+      }
+    },
+    {
+      "v": 1,
+      "seq": 2,
+      "ts": "2026-01-01T00:00:00.226Z",
+      "type": "node_seen",
+      "data": {
+        "sim_ms": 226,
+        "node": "B",
+        "session": 3170526542
+      },
+      "event_id": 1
+    },
+    {
+      "v": 1,
+      "seq": 3,
+      "ts": "2026-01-01T00:00:00.226Z",
+      "type": "link_state_changed",
+      "data": {
+        "sim_ms": 226,
+        "link": "B-C",
+        "old": null,
+        "new": "stale",
+        "usable": false,
+        "directions": {
+          "C->B": true,
+          "B->C": false
+        }
+      },
+      "event_id": 2
+    },
+    {
+      "v": 1,
+      "seq": 4,
+      "ts": "2026-01-01T00:00:00.261Z",
+      "type": "node_seen",
+      "data": {
+        "sim_ms": 261,
+        "node": "D",
+        "session": 3729682789
+      },
+      "event_id": 3
+    },
+    {
+      "v": 1,
+      "seq": 5,
+      "ts": "2026-01-01T00:00:00.261Z",
+      "type": "link_state_changed",
+      "data": {
+        "sim_ms": 261,
+        "link": "C-D",
+        "old": null,
+        "new": "stale",
+        "usable": false,
+        "directions": {
+          "D->C": false,
+          "C->D": true
+        }
+      },
+      "event_id": 4
+    },
+    {
+      "v": 1,
+      "seq": 6,
+      "ts": "2026-01-01T00:00:00.425Z",
+      "type": "node_seen",
+      "data": {
+        "sim_ms": 425,
+        "node": "C",
+        "session": 4145609530
+      },
+      "event_id": 5
+    },
+    {
+      "v": 1,
+      "seq": 7,
+      "ts": "2026-01-01T00:00:00.425Z",
+      "type": "link_state_changed",
+      "data": {
+        "sim_ms": 425,
+        "link": "B-C",
+        "old": "stale",
+        "new": "one_way",
+        "usable": false,
+        "directions": {
+          "C->B": true,
+          "B->C": true
+        }
+      },
+      "event_id": 6
+    },
+    {
+      "v": 1,
+      "seq": 8,
+      "ts": "2026-01-01T00:00:00.425Z",
+      "type": "link_state_changed",
+      "data": {
+        "sim_ms": 425,
+        "link": "C-D",
+        "old": "stale",
+        "new": "one_way",
+        "usable": false,
+        "directions": {
+          "D->C": false,
+          "C->D": true
+        }
+      },
+      "event_id": 7
+    },
+    {
+      "v": 1,
+      "seq": 9,
+      "ts": "2026-01-01T00:00:00.450Z",
+      "type": "node_seen",
+      "data": {
+        "sim_ms": 450,
+        "node": "A",
+        "session": 1664252997
+      },
+      "event_id": 8
+    },
+    {
+      "v": 1,
+      "seq": 10,
+      "ts": "2026-01-01T00:00:00.450Z",
+      "type": "link_state_changed",
+      "data": {
+        "sim_ms": 450,
+        "link": "A-B",
+        "old": null,
+        "new": "one_way",
+        "usable": false,
+        "directions": {
+          "B->A": true,
+          "A->B": false
+        }
+      },
+      "event_id": 9
+    },
+    {
+      "v": 1,
+      "seq": 11,
+      "ts": "2026-01-01T00:00:00.807Z",
+      "type": "link_state_changed",
+      "data": {
+        "sim_ms": 807,
+        "link": "A-D",
+        "old": null,
+        "new": "one_way",
+        "usable": false,
+        "directions": {
+          "D->A": true,
+          "A->D": false
+        }
+      },
+      "event_id": 10
+    },
+    {
+      "v": 1,
+      "seq": 12,
+      "ts": "2026-01-01T00:00:01.179Z",
+      "type": "link_state_changed",
+      "data": {
+        "sim_ms": 1179,
+        "link": "B-C",
+        "old": "one_way",
+        "new": "up",
+        "usable": true,
+        "directions": {
+          "C->B": true,
+          "B->C": true
+        }
+      },
+      "event_id": 11
+    },
+    {
+      "v": 1,
+      "seq": 13,
+      "ts": "2026-01-01T00:00:01.214Z",
+      "type": "link_state_changed",
+      "data": {
+        "sim_ms": 1214,
+        "link": "C-D",
+        "old": "one_way",
+        "new": "up",
+        "usable": true,
+        "directions": {
+          "D->C": true,
+          "C->D": true
+        }
+      },
+      "event_id": 12
+    },
+    {
+      "v": 1,
+      "seq": 14,
+      "ts": "2026-01-01T00:00:01.516Z",
+      "type": "link_state_changed",
+      "data": {
+        "sim_ms": 1516,
+        "link": "A-B",
+        "old": "one_way",
+        "new": "up",
+        "usable": true,
+        "directions": {
+          "B->A": true,
+          "A->B": true
+        }
+      },
+      "event_id": 13
+    },
+    {
+      "v": 1,
+      "seq": 15,
+      "ts": "2026-01-01T00:00:01.882Z",
+      "type": "link_state_changed",
+      "data": {
+        "sim_ms": 1882,
+        "link": "A-D",
+        "old": "one_way",
+        "new": "up",
+        "usable": true,
+        "directions": {
+          "D->A": true,
+          "A->D": true
+        }
+      },
+      "event_id": 14
+    },
+    {
+      "v": 1,
+      "seq": 16,
+      "ts": "2026-01-01T00:00:02.000Z",
+      "type": "heartbeat",
+      "data": {
+        "interval_s": 2.0,
+        "sim_ms": 2000,
+        "speed": 1.0,
+        "paused": false
+      }
+    },
+    {
+      "v": 1,
+      "seq": 17,
+      "ts": "2026-01-01T00:00:03.890Z",
+      "type": "telemetry",
+      "data": {
+        "sim_ms": 3890,
+        "node": "D",
+        "session": 3729682789,
+        "counters": {
+          "created": 0,
+          "acknowledged": 0,
+          "lost": 0,
+          "no_route": 0,
+          "delivered": 0,
+          "forwarded": 11,
+          "dropped": 0,
+          "failovers": 0,
+          "send_failures": 0
+        },
+        "received_ms": 3890
+      },
+      "event_id": 15
+    },
+    {
+      "v": 1,
+      "seq": 18,
+      "ts": "2026-01-01T00:00:03.896Z",
+      "type": "telemetry",
+      "data": {
+        "sim_ms": 3896,
+        "node": "A",
+        "session": 1664252997,
+        "counters": {
+          "created": 1,
+          "acknowledged": 0,
+          "lost": 0,
+          "no_route": 1,
+          "delivered": 0,
+          "forwarded": 10,
+          "dropped": 1,
+          "failovers": 0,
+          "send_failures": 0
+        },
+        "received_ms": 3896
+      },
+      "event_id": 16
+    },
+    {
+      "v": 1,
+      "seq": 19,
+      "ts": "2026-01-01T00:00:03.947Z",
+      "type": "route_computed",
+      "data": {
+        "sim_ms": 3947,
+        "flow": "A->C",
+        "epoch": 1000,
+        "version": 1,
+        "path": [
+          "A",
+          "B",
+          "C"
+        ],
+        "cost_ms": 65,
+        "graph": [
+          {
+            "link": "A-B",
+            "cost_ms": 30
+          },
+          {
+            "link": "A-D",
+            "cost_ms": 65
+          },
+          {
+            "link": "B-C",
+            "cost_ms": 35
+          },
+          {
+            "link": "C-D",
+            "cost_ms": 65
+          }
+        ],
+        "held_down": [],
+        "trigger": "initial",
+        "backups": {
+          "A": "D"
+        },
+        "backup_entries": {
+          "D": "C"
+        }
+      },
+      "event_id": 17
+    },
+    {
+      "v": 1,
+      "seq": 20,
+      "ts": "2026-01-01T00:00:03.947Z",
+      "type": "route_installing",
+      "data": {
+        "sim_ms": 3947,
+        "version": 1,
+        "epoch": 1000,
+        "kind": "route",
+        "phase": "backup_relays",
+        "nodes": [
+          "D"
+        ]
+      },
+      "event_id": 18
+    },
+    {
+      "v": 1,
+      "seq": 21,
+      "ts": "2026-01-01T00:00:04.000Z",
+      "type": "heartbeat",
+      "data": {
+        "interval_s": 2.0,
+        "sim_ms": 4000,
+        "speed": 1.0,
+        "paused": false
+      }
+    },
+    {
+      "v": 1,
+      "seq": 22,
+      "ts": "2026-01-01T00:00:04.017Z",
+      "type": "route_installing",
+      "data": {
+        "sim_ms": 4017,
+        "version": 1,
+        "epoch": 1000,
+        "kind": "route",
+        "phase": "relays",
+        "nodes": [
+          "B"
+        ]
+      },
+      "event_id": 19
+    },
+    {
+      "v": 1,
+      "seq": 23,
+      "ts": "2026-01-01T00:00:04.052Z",
+      "type": "route_installing",
+      "data": {
+        "sim_ms": 4052,
+        "version": 1,
+        "epoch": 1000,
+        "kind": "route",
+        "phase": "source",
+        "nodes": [
+          "A"
+        ]
+      },
+      "event_id": 20
+    },
+    {
+      "v": 1,
+      "seq": 24,
+      "ts": "2026-01-01T00:00:04.117Z",
+      "type": "route_active",
+      "data": {
+        "sim_ms": 4117,
+        "version": 1,
+        "epoch": 1000,
+        "path": [
+          "A",
+          "B",
+          "C"
+        ],
+        "cost_ms": 65,
+        "confirmed_by": [
+          "D",
+          "B",
+          "A"
+        ],
+        "distribution_ms": 170,
+        "trigger": "initial",
+        "backups": {
+          "A": "D"
+        }
+      },
+      "event_id": 21
+    },
+    {
+      "v": 1,
+      "seq": 25,
+      "ts": "2026-01-01T00:00:04.309Z",
+      "type": "telemetry",
+      "data": {
+        "sim_ms": 4309,
+        "node": "B",
+        "session": 3170526542,
+        "counters": {
+          "created": 0,
+          "acknowledged": 0,
+          "lost": 0,
+          "no_route": 0,
+          "delivered": 0,
+          "forwarded": 17,
+          "dropped": 1,
+          "failovers": 0,
+          "send_failures": 0
+        },
+        "received_ms": 4309
+      },
+      "event_id": 22
+    },
+    {
+      "v": 1,
+      "seq": 26,
+      "ts": "2026-01-01T00:00:04.617Z",
+      "type": "telemetry",
+      "data": {
+        "sim_ms": 4617,
+        "node": "C",
+        "session": 4145609530,
+        "counters": {
+          "created": 0,
+          "acknowledged": 0,
+          "lost": 0,
+          "no_route": 0,
+          "delivered": 0,
+          "forwarded": 0,
+          "dropped": 22,
+          "failovers": 0,
+          "send_failures": 0
+        },
+        "received_ms": 4617
+      },
+      "event_id": 23
+    },
+    {
+      "v": 1,
+      "seq": 27,
+      "ts": "2026-01-01T00:00:06.000Z",
+      "type": "heartbeat",
+      "data": {
+        "interval_s": 2.0,
+        "sim_ms": 6000,
+        "speed": 1.0,
+        "paused": false
+      }
+    },
+    {
+      "v": 1,
+      "seq": 28,
+      "ts": "2026-01-01T00:00:06.030Z",
+      "type": "reading_received",
+      "data": {
+        "sim_ms": 6030,
+        "origin": "A",
+        "session": 1664252997,
+        "seq": 45,
+        "value": 20.13,
+        "value_hundredths": 2013,
+        "via": "B",
+        "hops": 2,
+        "ttl": 7,
+        "observed_path": [
+          "A",
+          "B",
+          "C"
+        ],
+        "received_ms": 6030,
+        "replayed": false,
+        "delay_ms": 0
+      },
+      "event_id": 24
+    },
+    {
+      "v": 1,
+      "seq": 29,
+      "ts": "2026-01-01T00:00:08.000Z",
+      "type": "heartbeat",
+      "data": {
+        "interval_s": 2.0,
+        "sim_ms": 8000,
+        "speed": 1.0,
+        "paused": false
+      }
+    },
+    {
+      "v": 1,
+      "seq": 30,
+      "ts": "2026-01-01T00:00:08.037Z",
+      "type": "reading_received",
+      "data": {
+        "sim_ms": 8037,
+        "origin": "A",
+        "session": 1664252997,
+        "seq": 59,
+        "value": 20.19,
+        "value_hundredths": 2019,
+        "via": "B",
+        "hops": 2,
+        "ttl": 7,
+        "observed_path": [
+          "A",
+          "B",
+          "C"
+        ],
+        "received_ms": 8037,
+        "replayed": false,
+        "delay_ms": 0
+      },
+      "event_id": 25
+    },
+    {
+      "v": 1,
+      "seq": 31,
+      "ts": "2026-01-01T00:00:08.990Z",
+      "type": "telemetry",
+      "data": {
+        "sim_ms": 8990,
+        "node": "A",
+        "session": 1664252997,
+        "counters": {
+          "created": 4,
+          "acknowledged": 2,
+          "lost": 0,
+          "no_route": 2,
+          "delivered": 0,
+          "forwarded": 18,
+          "dropped": 5,
+          "failovers": 0,
+          "send_failures": 0
+        },
+        "received_ms": 8990
+      },
+      "event_id": 26
+    },
+    {
+      "v": 1,
+      "seq": 32,
+      "ts": "2026-01-01T00:00:09.160Z",
+      "type": "telemetry",
+      "data": {
+        "sim_ms": 9160,
+        "node": "D",
+        "session": 3729682789,
+        "counters": {
+          "created": 0,
+          "acknowledged": 0,
+          "lost": 0,
+          "no_route": 0,
+          "delivered": 0,
+          "forwarded": 22,
+          "dropped": 1,
+          "failovers": 0,
+          "send_failures": 0
+        },
+        "received_ms": 9160
+      },
+      "event_id": 27
+    },
+    {
+      "v": 1,
+      "seq": 33,
+      "ts": "2026-01-01T00:00:09.722Z",
+      "type": "telemetry",
+      "data": {
+        "sim_ms": 9722,
+        "node": "B",
+        "session": 3170526542,
+        "counters": {
+          "created": 0,
+          "acknowledged": 0,
+          "lost": 0,
+          "no_route": 0,
+          "delivered": 0,
+          "forwarded": 25,
+          "dropped": 1,
+          "failovers": 0,
+          "send_failures": 0
+        },
+        "received_ms": 9722
+      },
+      "event_id": 28
+    },
+    {
+      "v": 1,
+      "seq": 34,
+      "ts": "2026-01-01T00:00:09.976Z",
+      "type": "telemetry",
+      "data": {
+        "sim_ms": 9976,
+        "node": "C",
+        "session": 4145609530,
+        "counters": {
+          "created": 0,
+          "acknowledged": 0,
+          "lost": 0,
+          "no_route": 0,
+          "delivered": 2,
+          "forwarded": 0,
+          "dropped": 28,
+          "failovers": 0,
+          "send_failures": 0
+        },
+        "received_ms": 9976
+      },
+      "event_id": 29
+    },
+    {
+      "v": 1,
+      "seq": 35,
+      "ts": "2026-01-01T00:00:10.000Z",
+      "type": "heartbeat",
+      "data": {
+        "interval_s": 2.0,
+        "sim_ms": 10000,
+        "speed": 1.0,
+        "paused": false
+      }
+    },
+    {
+      "v": 1,
+      "seq": 36,
+      "ts": "2026-01-01T00:00:10.030Z",
+      "type": "reading_received",
+      "data": {
+        "sim_ms": 10030,
+        "origin": "A",
+        "session": 1664252997,
+        "seq": 73,
+        "value": 20.42,
+        "value_hundredths": 2042,
+        "via": "B",
+        "hops": 2,
+        "ttl": 7,
+        "observed_path": [
+          "A",
+          "B",
+          "C"
+        ],
+        "received_ms": 10030,
+        "replayed": false,
+        "delay_ms": 0
+      },
+      "event_id": 30
+    },
+    {
+      "v": 1,
+      "seq": 37,
+      "ts": "2026-01-01T00:00:12.000Z",
+      "type": "heartbeat",
+      "data": {
+        "interval_s": 2.0,
+        "sim_ms": 12000,
+        "speed": 1.0,
+        "paused": false
+      }
+    },
+    {
+      "v": 1,
+      "seq": 38,
+      "ts": "2026-01-01T00:00:12.000Z",
+      "type": "environment",
+      "data": {
+        "sim_ms": 12000,
+        "channel": "environment",
+        "source": "presenter",
+        "action": "gateway",
+        "target": "C",
+        "detail": {
+          "attached": false
+        },
+        "label": "Detach the gateway (injected by presenter, simulation)"
+      },
+      "event_id": 31
+    },
+    {
+      "v": 1,
+      "seq": 39,
+      "ts": "2026-01-01T00:00:14.000Z",
+      "type": "heartbeat",
+      "data": {
+        "interval_s": 2.0,
+        "sim_ms": 14000,
+        "speed": 1.0,
+        "paused": false
+      }
+    },
+    {
+      "v": 1,
+      "seq": 40,
+      "ts": "2026-01-01T00:00:15.500Z",
+      "type": "gateway_link_lost",
+      "data": {
+        "sim_ms": 15500,
+        "since_ms": 12000,
+        "silent_for_ms": 3500
+      },
+      "event_id": 32
+    },
+    {
+      "v": 1,
+      "seq": 41,
+      "ts": "2026-01-01T00:00:16.000Z",
+      "type": "heartbeat",
+      "data": {
+        "interval_s": 2.0,
+        "sim_ms": 16000,
+        "speed": 1.0,
+        "paused": false
+      }
+    },
+    {
+      "v": 1,
+      "seq": 42,
+      "ts": "2026-01-01T00:00:18.000Z",
+      "type": "heartbeat",
+      "data": {
+        "interval_s": 2.0,
+        "sim_ms": 18000,
+        "speed": 1.0,
+        "paused": false
+      }
+    },
+    {
+      "v": 1,
+      "seq": 43,
+      "ts": "2026-01-01T00:00:20.000Z",
+      "type": "heartbeat",
+      "data": {
+        "interval_s": 2.0,
+        "sim_ms": 20000,
+        "speed": 1.0,
+        "paused": false
+      }
+    },
+    {
+      "v": 1,
+      "seq": 44,
+      "ts": "2026-01-01T00:00:20.000Z",
+      "type": "environment",
+      "data": {
+        "sim_ms": 20000,
+        "channel": "environment",
+        "source": "presenter",
+        "action": "stop_node",
+        "target": "B",
+        "detail": {},
+        "label": "Stop B (injected by presenter, simulation)"
+      },
+      "event_id": 33
+    },
+    {
+      "v": 1,
+      "seq": 45,
+      "ts": "2026-01-01T00:00:22.000Z",
+      "type": "heartbeat",
+      "data": {
+        "interval_s": 2.0,
+        "sim_ms": 22000,
+        "speed": 1.0,
+        "paused": false
+      }
+    },
+    {
+      "v": 1,
+      "seq": 46,
+      "ts": "2026-01-01T00:00:24.000Z",
+      "type": "heartbeat",
+      "data": {
+        "interval_s": 2.0,
+        "sim_ms": 24000,
+        "speed": 1.0,
+        "paused": false
+      }
+    },
+    {
+      "v": 1,
+      "seq": 47,
+      "ts": "2026-01-01T00:00:26.000Z",
+      "type": "heartbeat",
+      "data": {
+        "interval_s": 2.0,
+        "sim_ms": 26000,
+        "speed": 1.0,
+        "paused": false
+      }
+    },
+    {
+      "v": 1,
+      "seq": 48,
+      "ts": "2026-01-01T00:00:26.016Z",
+      "type": "node_stale",
+      "data": {
+        "sim_ms": 26016,
+        "node": "C",
+        "reason": "reports expired"
+      },
+      "event_id": 34
+    },
+    {
+      "v": 1,
+      "seq": 49,
+      "ts": "2026-01-01T00:00:26.016Z",
+      "type": "link_state_changed",
+      "data": {
+        "sim_ms": 26016,
+        "link": "B-C",
+        "old": "up",
+        "new": "stale",
+        "usable": false,
+        "directions": {
+          "C->B": true,
+          "B->C": false
+        }
+      },
+      "event_id": 35
+    },
+    {
+      "v": 1,
+      "seq": 50,
+      "ts": "2026-01-01T00:00:26.016Z",
+      "type": "link_state_changed",
+      "data": {
+        "sim_ms": 26016,
+        "link": "C-D",
+        "old": "up",
+        "new": "stale",
+        "usable": false,
+        "directions": {
+          "D->C": false,
+          "C->D": true
+        }
+      },
+      "event_id": 36
+    },
+    {
+      "v": 1,
+      "seq": 51,
+      "ts": "2026-01-01T00:00:26.021Z",
+      "type": "node_stale",
+      "data": {
+        "sim_ms": 26021,
+        "node": "B",
+        "reason": "reports expired"
+      },
+      "event_id": 37
+    },
+    {
+      "v": 1,
+      "seq": 52,
+      "ts": "2026-01-01T00:00:26.021Z",
+      "type": "link_state_changed",
+      "data": {
+        "sim_ms": 26021,
+        "link": "A-B",
+        "old": "up",
+        "new": "stale",
+        "usable": false,
+        "directions": {
+          "B->A": true,
+          "A->B": false
+        }
+      },
+      "event_id": 38
+    },
+    {
+      "v": 1,
+      "seq": 53,
+      "ts": "2026-01-01T00:00:26.069Z",
+      "type": "node_stale",
+      "data": {
+        "sim_ms": 26069,
+        "node": "A",
+        "reason": "reports expired"
+      },
+      "event_id": 39
+    },
+    {
+      "v": 1,
+      "seq": 54,
+      "ts": "2026-01-01T00:00:26.069Z",
+      "type": "link_state_changed",
+      "data": {
+        "sim_ms": 26069,
+        "link": "A-D",
+        "old": "up",
+        "new": "stale",
+        "usable": false,
+        "directions": {
+          "D->A": false,
+          "A->D": true
+        }
+      },
+      "event_id": 40
+    },
+    {
+      "v": 1,
+      "seq": 55,
+      "ts": "2026-01-01T00:00:26.114Z",
+      "type": "node_stale",
+      "data": {
+        "sim_ms": 26114,
+        "node": "D",
+        "reason": "reports expired"
+      },
+      "event_id": 41
+    },
+    {
+      "v": 1,
+      "seq": 56,
+      "ts": "2026-01-01T00:00:28.000Z",
+      "type": "heartbeat",
+      "data": {
+        "interval_s": 2.0,
+        "sim_ms": 28000,
+        "speed": 1.0,
+        "paused": false
+      }
+    },
+    {
+      "v": 1,
+      "seq": 57,
+      "ts": "2026-01-01T00:00:30.000Z",
+      "type": "heartbeat",
+      "data": {
+        "interval_s": 2.0,
+        "sim_ms": 30000,
+        "speed": 1.0,
+        "paused": false
+      }
+    },
+    {
+      "v": 1,
+      "seq": 58,
+      "ts": "2026-01-01T00:00:32.000Z",
+      "type": "heartbeat",
+      "data": {
+        "interval_s": 2.0,
+        "sim_ms": 32000,
+        "speed": 1.0,
+        "paused": false
+      }
+    },
+    {
+      "v": 1,
+      "seq": 59,
+      "ts": "2026-01-01T00:00:34.000Z",
+      "type": "heartbeat",
+      "data": {
+        "interval_s": 2.0,
+        "sim_ms": 34000,
+        "speed": 1.0,
+        "paused": false
+      }
+    },
+    {
+      "v": 1,
+      "seq": 60,
+      "ts": "2026-01-01T00:00:36.000Z",
+      "type": "heartbeat",
+      "data": {
+        "interval_s": 2.0,
+        "sim_ms": 36000,
+        "speed": 1.0,
+        "paused": false
+      }
+    },
+    {
+      "v": 1,
+      "seq": 61,
+      "ts": "2026-01-01T00:00:38.000Z",
+      "type": "heartbeat",
+      "data": {
+        "interval_s": 2.0,
+        "sim_ms": 38000,
+        "speed": 1.0,
+        "paused": false
+      }
+    },
+    {
+      "v": 1,
+      "seq": 62,
+      "ts": "2026-01-01T00:00:40.000Z",
+      "type": "heartbeat",
+      "data": {
+        "interval_s": 2.0,
+        "sim_ms": 40000,
+        "speed": 1.0,
+        "paused": false
+      }
+    },
+    {
+      "v": 1,
+      "seq": 63,
+      "ts": "2026-01-01T00:00:40.000Z",
+      "type": "environment",
+      "data": {
+        "sim_ms": 40000,
+        "channel": "environment",
+        "source": "presenter",
+        "action": "gateway",
+        "target": "C",
+        "detail": {
+          "attached": true
+        },
+        "label": "Attach the gateway (injected by presenter, simulation)"
+      },
+      "event_id": 42
+    },
+    {
+      "v": 1,
+      "seq": 64,
+      "ts": "2026-01-01T00:00:41.000Z",
+      "type": "gateway_link_restored",
+      "data": {
+        "sim_ms": 41000,
+        "lost_since_ms": 12000,
+        "lost_for_ms": 29000
+      },
+      "event_id": 43
+    },
+    {
+      "v": 1,
+      "seq": 65,
+      "ts": "2026-01-01T00:00:41.000Z",
+      "type": "replay_started",
+      "data": {
+        "sim_ms": 41000,
+        "started_ms": 41000,
+        "entries": 24,
+        "held": 22,
+        "dropped_overflow": 0,
+        "coalesced": 33,
+        "outage_ms": 29000
+      },
+      "event_id": 44
+    },
+    {
+      "v": 1,
+      "seq": 66,
+      "ts": "2026-01-01T00:00:41.020Z",
+      "type": "reading_received",
+      "data": {
+        "sim_ms": 41020,
+        "origin": "A",
+        "session": 1664252997,
+        "seq": 87,
+        "value": 19.57,
+        "value_hundredths": 1957,
+        "via": "B",
+        "hops": 2,
+        "ttl": 7,
+        "observed_path": [
+          "A",
+          "B",
+          "C"
+        ],
+        "received_ms": 12034,
+        "replayed": true,
+        "delay_ms": 28986
+      },
+      "event_id": 45
+    },
+    {
+      "v": 1,
+      "seq": 67,
+      "ts": "2026-01-01T00:00:41.040Z",
+      "type": "reading_received",
+      "data": {
+        "sim_ms": 41040,
+        "origin": "A",
+        "session": 1664252997,
+        "seq": 102,
+        "value": 20.21,
+        "value_hundredths": 2021,
+        "via": "B",
+        "hops": 2,
+        "ttl": 7,
+        "observed_path": [
+          "A",
+          "B",
+          "C"
+        ],
+        "received_ms": 14034,
+        "replayed": true,
+        "delay_ms": 27006
+      },
+      "event_id": 46
+    },
+    {
+      "v": 1,
+      "seq": 68,
+      "ts": "2026-01-01T00:00:41.080Z",
+      "type": "reading_received",
+      "data": {
+        "sim_ms": 41080,
+        "origin": "A",
+        "session": 1664252997,
+        "seq": 114,
+        "value": 20.09,
+        "value_hundredths": 2009,
+        "via": "B",
+        "hops": 2,
+        "ttl": 7,
+        "observed_path": [
+          "A",
+          "B",
+          "C"
+        ],
+        "received_ms": 16030,
+        "replayed": true,
+        "delay_ms": 25050
+      },
+      "event_id": 47
+    },
+    {
+      "v": 1,
+      "seq": 69,
+      "ts": "2026-01-01T00:00:41.100Z",
+      "type": "reading_received",
+      "data": {
+        "sim_ms": 41100,
+        "origin": "A",
+        "session": 1664252997,
+        "seq": 129,
+        "value": 20.19,
+        "value_hundredths": 2019,
+        "via": "B",
+        "hops": 2,
+        "ttl": 7,
+        "observed_path": [
+          "A",
+          "B",
+          "C"
+        ],
+        "received_ms": 18033,
+        "replayed": true,
+        "delay_ms": 23067
+      },
+      "event_id": 48
+    },
+    {
+      "v": 1,
+      "seq": 70,
+      "ts": "2026-01-01T00:00:41.120Z",
+      "type": "telemetry",
+      "data": {
+        "sim_ms": 41120,
+        "node": "B",
+        "session": 3170526542,
+        "counters": {
+          "created": 0,
+          "acknowledged": 0,
+          "lost": 0,
+          "no_route": 0,
+          "delivered": 0,
+          "forwarded": 42,
+          "dropped": 1,
+          "failovers": 0,
+          "send_failures": 0
+        },
+        "received_ms": 19134
+      },
+      "event_id": 49
+    },
+    {
+      "v": 1,
+      "seq": 71,
+      "ts": "2026-01-01T00:00:41.140Z",
+      "type": "local_failover",
+      "data": {
+        "sim_ms": 41140,
+        "node": "A",
+        "from": "B",
+        "to": "D",
+        "reason": "send_failures",
+        "epoch": 1000,
+        "version": 1,
+        "link": "A-B",
+        "matches_current_route": true,
+        "outcome": "backup_in_use"
+      },
+      "event_id": 50
+    },
+    {
+      "v": 1,
+      "seq": 72,
+      "ts": "2026-01-01T00:00:41.140Z",
+      "type": "route_computed",
+      "data": {
+        "sim_ms": 41140,
+        "flow": "A->C",
+        "epoch": 1000,
+        "version": 2,
+        "path": [
+          "A",
+          "D",
+          "C"
+        ],
+        "cost_ms": 130,
+        "graph": [
+          {
+            "link": "A-D",
+            "cost_ms": 65
+          },
+          {
+            "link": "B-C",
+            "cost_ms": 35
+          },
+          {
+            "link": "C-D",
+            "cost_ms": 65
+          }
+        ],
+        "held_down": [],
+        "trigger": "local_failover_report",
+        "backups": {},
+        "backup_entries": {}
+      },
+      "event_id": 51
+    },
+    {
+      "v": 1,
+      "seq": 73,
+      "ts": "2026-01-01T00:00:41.140Z",
+      "type": "route_installing",
+      "data": {
+        "sim_ms": 41140,
+        "version": 2,
+        "epoch": 1000,
+        "kind": "route",
+        "phase": "relays",
+        "nodes": [
+          "D"
+        ]
+      },
+      "event_id": 52
+    },
+    {
+      "v": 1,
+      "seq": 74,
+      "ts": "2026-01-01T00:00:41.160Z",
+      "type": "reading_received",
+      "data": {
+        "sim_ms": 41160,
+        "origin": "A",
+        "session": 1664252997,
+        "seq": 143,
+        "value": 19.78,
+        "value_hundredths": 1978,
+        "via": "D",
+        "hops": 2,
+        "ttl": 7,
+        "observed_path": [
+          "A",
+          "D",
+          "C"
+        ],
+        "received_ms": 21060,
+        "replayed": true,
+        "delay_ms": 20100
+      },
+      "event_id": 53
+    },
+    {
+      "v": 1,
+      "seq": 75,
+      "ts": "2026-01-01T00:00:41.180Z",
+      "type": "reading_received",
+      "data": {
+        "sim_ms": 41180,
+        "origin": "A",
+        "session": 1664252997,
+        "seq": 156,
+        "value": 19.7,
+        "value_hundredths": 1970,
+        "via": "D",
+        "hops": 2,
+        "ttl": 7,
+        "observed_path": [
+          "A",
+          "D",
+          "C"
+        ],
+        "received_ms": 22060,
+        "replayed": true,
+        "delay_ms": 19120
+      },
+      "event_id": 54
+    },
+    {
+      "v": 1,
+      "seq": 76,
+      "ts": "2026-01-01T00:00:41.200Z",
+      "type": "reading_received",
+      "data": {
+        "sim_ms": 41200,
+        "origin": "A",
+        "session": 1664252997,
+        "seq": 169,
+        "value": 20.43,
+        "value_hundredths": 2043,
+        "via": "D",
+        "hops": 2,
+        "ttl": 7,
+        "observed_path": [
+          "A",
+          "D",
+          "C"
+        ],
+        "received_ms": 24060,
+        "replayed": true,
+        "delay_ms": 17140
+      },
+      "event_id": 55
+    },
+    {
+      "v": 1,
+      "seq": 77,
+      "ts": "2026-01-01T00:00:41.220Z",
+      "type": "reading_received",
+      "data": {
+        "sim_ms": 41220,
+        "origin": "A",
+        "session": 1664252997,
+        "seq": 181,
+        "value": 19.65,
+        "value_hundredths": 1965,
+        "via": "D",
+        "hops": 2,
+        "ttl": 7,
+        "observed_path": [
+          "A",
+          "D",
+          "C"
+        ],
+        "received_ms": 26060,
+        "replayed": true,
+        "delay_ms": 15160
+      },
+      "event_id": 56
+    },
+    {
+      "v": 1,
+      "seq": 78,
+      "ts": "2026-01-01T00:00:41.240Z",
+      "type": "reading_received",
+      "data": {
+        "sim_ms": 41240,
+        "origin": "A",
+        "session": 1664252997,
+        "seq": 193,
+        "value": 20.37,
+        "value_hundredths": 2037,
+        "via": "D",
+        "hops": 2,
+        "ttl": 7,
+        "observed_path": [
+          "A",
+          "D",
+          "C"
+        ],
+        "received_ms": 28060,
+        "replayed": true,
+        "delay_ms": 13180
+      },
+      "event_id": 57
+    },
+    {
+      "v": 1,
+      "seq": 79,
+      "ts": "2026-01-01T00:00:41.260Z",
+      "type": "reading_received",
+      "data": {
+        "sim_ms": 41260,
+        "origin": "A",
+        "session": 1664252997,
+        "seq": 205,
+        "value": 19.55,
+        "value_hundredths": 1955,
+        "via": "D",
+        "hops": 2,
+        "ttl": 7,
+        "observed_path": [
+          "A",
+          "D",
+          "C"
+        ],
+        "received_ms": 30060,
+        "replayed": true,
+        "delay_ms": 11200
+      },
+      "event_id": 58
+    },
+    {
+      "v": 1,
+      "seq": 80,
+      "ts": "2026-01-01T00:00:41.280Z",
+      "type": "reading_received",
+      "data": {
+        "sim_ms": 41280,
+        "origin": "A",
+        "session": 1664252997,
+        "seq": 218,
+        "value": 20.13,
+        "value_hundredths": 2013,
+        "via": "D",
+        "hops": 2,
+        "ttl": 7,
+        "observed_path": [
+          "A",
+          "D",
+          "C"
+        ],
+        "received_ms": 32060,
+        "replayed": true,
+        "delay_ms": 9220
+      },
+      "event_id": 59
+    },
+    {
+      "v": 1,
+      "seq": 81,
+      "ts": "2026-01-01T00:00:41.300Z",
+      "type": "reading_received",
+      "data": {
+        "sim_ms": 41300,
+        "origin": "A",
+        "session": 1664252997,
+        "seq": 230,
+        "value": 20.12,
+        "value_hundredths": 2012,
+        "via": "D",
+        "hops": 2,
+        "ttl": 7,
+        "observed_path": [
+          "A",
+          "D",
+          "C"
+        ],
+        "received_ms": 34060,
+        "replayed": true,
+        "delay_ms": 7240
+      },
+      "event_id": 60
+    },
+    {
+      "v": 1,
+      "seq": 82,
+      "ts": "2026-01-01T00:00:41.320Z",
+      "type": "reading_received",
+      "data": {
+        "sim_ms": 41320,
+        "origin": "A",
+        "session": 1664252997,
+        "seq": 242,
+        "value": 19.75,
+        "value_hundredths": 1975,
+        "via": "D",
+        "hops": 2,
+        "ttl": 7,
+        "observed_path": [
+          "A",
+          "D",
+          "C"
+        ],
+        "received_ms": 36060,
+        "replayed": true,
+        "delay_ms": 5260
+      },
+      "event_id": 61
+    },
+    {
+      "v": 1,
+      "seq": 83,
+      "ts": "2026-01-01T00:00:41.340Z",
+      "type": "telemetry",
+      "data": {
+        "sim_ms": 41340,
+        "node": "D",
+        "session": 3729682789,
+        "counters": {
+          "created": 0,
+          "acknowledged": 0,
+          "lost": 0,
+          "no_route": 0,
+          "delivered": 0,
+          "forwarded": 67,
+          "dropped": 1,
+          "failovers": 0,
+          "send_failures": 0
+        },
+        "received_ms": 37429
+      },
+      "event_id": 62
+    },
+    {
+      "v": 1,
+      "seq": 84,
+      "ts": "2026-01-01T00:00:41.360Z",
+      "type": "reading_received",
+      "data": {
+        "sim_ms": 41360,
+        "origin": "A",
+        "session": 1664252997,
+        "seq": 254,
+        "value": 19.9,
+        "value_hundredths": 1990,
+        "via": "D",
+        "hops": 2,
+        "ttl": 7,
+        "observed_path": [
+          "A",
+          "D",
+          "C"
+        ],
+        "received_ms": 38060,
+        "replayed": true,
+        "delay_ms": 3300
+      },
+      "event_id": 63
+    },
+    {
+      "v": 1,
+      "seq": 85,
+      "ts": "2026-01-01T00:00:41.380Z",
+      "type": "telemetry",
+      "data": {
+        "sim_ms": 41380,
+        "node": "A",
+        "session": 1664252997,
+        "counters": {
+          "created": 19,
+          "acknowledged": 17,
+          "lost": 0,
+          "no_route": 2,
+          "delivered": 0,
+          "forwarded": 36,
+          "dropped": 10,
+          "failovers": 1,
+          "send_failures": 58
+        },
+        "received_ms": 38346
+      },
+      "event_id": 64
+    },
+    {
+      "v": 1,
+      "seq": 86,
+      "ts": "2026-01-01T00:00:41.400Z",
+      "type": "telemetry",
+      "data": {
+        "sim_ms": 41400,
+        "node": "C",
+        "session": 4145609530,
+        "counters": {
+          "created": 0,
+          "acknowledged": 0,
+          "lost": 0,
+          "no_route": 0,
+          "delivered": 17,
+          "forwarded": 0,
+          "dropped": 40,
+          "failovers": 0,
+          "send_failures": 48
+        },
+        "received_ms": 39336
+      },
+      "event_id": 65
+    },
+    {
+      "v": 1,
+      "seq": 87,
+      "ts": "2026-01-01T00:00:41.420Z",
+      "type": "reading_received",
+      "data": {
+        "sim_ms": 41420,
+        "origin": "A",
+        "session": 1664252997,
+        "seq": 266,
+        "value": 20.38,
+        "value_hundredths": 2038,
+        "via": "D",
+        "hops": 2,
+        "ttl": 7,
+        "observed_path": [
+          "A",
+          "D",
+          "C"
+        ],
+        "received_ms": 40060,
+        "replayed": true,
+        "delay_ms": 1360
+      },
+      "event_id": 66
+    },
+    {
+      "v": 1,
+      "seq": 88,
+      "ts": "2026-01-01T00:00:41.440Z",
+      "type": "node_lost_contact",
+      "data": {
+        "sim_ms": 41440,
+        "node": "B",
+        "observed_by": [
+          "C"
+        ],
+        "silent_for_ms": 21350,
+        "basis": "fresh neighbor reports list it as lost (no HELLO heard)"
+      },
+      "event_id": 67
+    },
+    {
+      "v": 1,
+      "seq": 89,
+      "ts": "2026-01-01T00:00:41.440Z",
+      "type": "node_seen",
+      "data": {
+        "sim_ms": 41440,
+        "node": "C",
+        "session": 4145609530
+      },
+      "event_id": 68
+    },
+    {
+      "v": 1,
+      "seq": 90,
+      "ts": "2026-01-01T00:00:41.440Z",
+      "type": "link_state_changed",
+      "data": {
+        "sim_ms": 41440,
+        "link": "A-B",
+        "old": "stale",
+        "new": "down",
+        "usable": false,
+        "directions": {
+          "B->A": false,
+          "A->B": false
+        }
+      },
+      "event_id": 69
+    },
+    {
+      "v": 1,
+      "seq": 91,
+      "ts": "2026-01-01T00:00:41.440Z",
+      "type": "link_state_changed",
+      "data": {
+        "sim_ms": 41440,
+        "link": "B-C",
+        "old": "stale",
+        "new": "down",
+        "usable": false,
+        "directions": {
+          "C->B": false,
+          "B->C": false
+        }
+      },
+      "event_id": 70
+    },
+    {
+      "v": 1,
+      "seq": 92,
+      "ts": "2026-01-01T00:00:41.460Z",
+      "type": "node_seen",
+      "data": {
+        "sim_ms": 41460,
+        "node": "A",
+        "session": 1664252997
+      },
+      "event_id": 71
+    },
+    {
+      "v": 1,
+      "seq": 93,
+      "ts": "2026-01-01T00:00:41.480Z",
+      "type": "node_seen",
+      "data": {
+        "sim_ms": 41480,
+        "node": "D",
+        "session": 3729682789
+      },
+      "event_id": 72
+    },
+    {
+      "v": 1,
+      "seq": 94,
+      "ts": "2026-01-01T00:00:41.480Z",
+      "type": "link_state_changed",
+      "data": {
+        "sim_ms": 41480,
+        "link": "A-D",
+        "old": "stale",
+        "new": "up",
+        "usable": true,
+        "directions": {
+          "D->A": true,
+          "A->D": true
+        }
+      },
+      "event_id": 73
+    },
+    {
+      "v": 1,
+      "seq": 95,
+      "ts": "2026-01-01T00:00:41.480Z",
+      "type": "link_state_changed",
+      "data": {
+        "sim_ms": 41480,
+        "link": "C-D",
+        "old": "stale",
+        "new": "up",
+        "usable": true,
+        "directions": {
+          "D->C": true,
+          "C->D": true
+        }
+      },
+      "event_id": 74
+    },
+    {
+      "v": 1,
+      "seq": 96,
+      "ts": "2026-01-01T00:00:41.500Z",
+      "type": "route_installing",
+      "data": {
+        "sim_ms": 41500,
+        "version": 2,
+        "epoch": 1000,
+        "kind": "route",
+        "phase": "source",
+        "nodes": [
+          "A"
+        ]
+      },
+      "event_id": 75
+    },
+    {
+      "v": 1,
+      "seq": 97,
+      "ts": "2026-01-01T00:00:41.520Z",
+      "type": "replay_finished",
+      "data": {
+        "sim_ms": 41520,
+        "replayed": 25,
+        "dropped_overflow": 0,
+        "coalesced": 36
+      },
+      "event_id": 76
+    },
+    {
+      "v": 1,
+      "seq": 98,
+      "ts": "2026-01-01T00:00:41.630Z",
+      "type": "route_active",
+      "data": {
+        "sim_ms": 41630,
+        "version": 2,
+        "epoch": 1000,
+        "path": [
+          "A",
+          "D",
+          "C"
+        ],
+        "cost_ms": 130,
+        "confirmed_by": [
+          "D",
+          "A"
+        ],
+        "distribution_ms": 490,
+        "trigger": "local_failover_report",
+        "backups": {}
+      },
+      "event_id": 77
+    },
+    {
+      "v": 1,
+      "seq": 99,
+      "ts": "2026-01-01T00:00:42.000Z",
+      "type": "heartbeat",
+      "data": {
+        "interval_s": 2.0,
+        "sim_ms": 42000,
+        "speed": 1.0,
+        "paused": false
+      }
+    },
+    {
+      "v": 1,
+      "seq": 100,
+      "ts": "2026-01-01T00:00:42.060Z",
+      "type": "reading_received",
+      "data": {
+        "sim_ms": 42060,
+        "origin": "A",
+        "session": 1664252997,
+        "seq": 280,
+        "value": 19.5,
+        "value_hundredths": 1950,
+        "via": "D",
+        "hops": 2,
+        "ttl": 7,
+        "observed_path": [
+          "A",
+          "D",
+          "C"
+        ],
+        "received_ms": 42060,
+        "replayed": false,
+        "delay_ms": 0
+      },
+      "event_id": 78
+    },
+    {
+      "v": 1,
+      "seq": 101,
+      "ts": "2026-01-01T00:00:42.638Z",
+      "type": "telemetry",
+      "data": {
+        "sim_ms": 42638,
+        "node": "D",
+        "session": 3729682789,
+        "counters": {
+          "created": 0,
+          "acknowledged": 0,
+          "lost": 0,
+          "no_route": 0,
+          "delivered": 0,
+          "forwarded": 78,
+          "dropped": 1,
+          "failovers": 0,
+          "send_failures": 0
+        },
+        "received_ms": 42638
+      },
+      "event_id": 79
+    },
+    {
+      "v": 1,
+      "seq": 102,
+      "ts": "2026-01-01T00:00:43.264Z",
+      "type": "telemetry",
+      "data": {
+        "sim_ms": 43264,
+        "node": "A",
+        "session": 1664252997,
+        "counters": {
+          "created": 21,
+          "acknowledged": 19,
+          "lost": 0,
+          "no_route": 2,
+          "delivered": 0,
+          "forwarded": 39,
+          "dropped": 10,
+          "failovers": 1,
+          "send_failures": 75
+        },
+        "received_ms": 43264
+      },
+      "event_id": 80
+    },
+    {
+      "v": 1,
+      "seq": 103,
+      "ts": "2026-01-01T00:00:44.000Z",
+      "type": "heartbeat",
+      "data": {
+        "interval_s": 2.0,
+        "sim_ms": 44000,
+        "speed": 1.0,
+        "paused": false
+      }
+    },
+    {
+      "v": 1,
+      "seq": 104,
+      "ts": "2026-01-01T00:00:44.060Z",
+      "type": "reading_received",
+      "data": {
+        "sim_ms": 44060,
+        "origin": "A",
+        "session": 1664252997,
+        "seq": 292,
+        "value": 19.63,
+        "value_hundredths": 1963,
+        "via": "D",
+        "hops": 2,
+        "ttl": 7,
+        "observed_path": [
+          "A",
+          "D",
+          "C"
+        ],
+        "received_ms": 44060,
+        "replayed": false,
+        "delay_ms": 0
+      },
+      "event_id": 81
+    },
+    {
+      "v": 1,
+      "seq": 105,
+      "ts": "2026-01-01T00:00:44.416Z",
+      "type": "telemetry",
+      "data": {
+        "sim_ms": 44416,
+        "node": "C",
+        "session": 4145609530,
+        "counters": {
+          "created": 0,
+          "acknowledged": 0,
+          "lost": 0,
+          "no_route": 0,
+          "delivered": 20,
+          "forwarded": 0,
+          "dropped": 40,
+          "failovers": 0,
+          "send_failures": 64
+        },
+        "received_ms": 44416
+      },
+      "event_id": 82
+    },
+    {
+      "v": 1,
+      "seq": 106,
+      "ts": "2026-01-01T00:00:46.000Z",
+      "type": "heartbeat",
+      "data": {
+        "interval_s": 2.0,
+        "sim_ms": 46000,
+        "speed": 1.0,
+        "paused": false
+      }
+    },
+    {
+      "v": 1,
+      "seq": 107,
+      "ts": "2026-01-01T00:00:46.060Z",
+      "type": "reading_received",
+      "data": {
+        "sim_ms": 46060,
+        "origin": "A",
+        "session": 1664252997,
+        "seq": 303,
+        "value": 19.75,
+        "value_hundredths": 1975,
+        "via": "D",
+        "hops": 2,
+        "ttl": 7,
+        "observed_path": [
+          "A",
+          "D",
+          "C"
+        ],
+        "received_ms": 46060,
+        "replayed": false,
+        "delay_ms": 0
+      },
+      "event_id": 83
+    },
+    {
+      "v": 1,
+      "seq": 108,
+      "ts": "2026-01-01T00:00:47.864Z",
+      "type": "telemetry",
+      "data": {
+        "sim_ms": 47864,
+        "node": "D",
+        "session": 3729682789,
+        "counters": {
+          "created": 0,
+          "acknowledged": 0,
+          "lost": 0,
+          "no_route": 0,
+          "delivered": 0,
+          "forwarded": 84,
+          "dropped": 1,
+          "failovers": 0,
+          "send_failures": 0
+        },
+        "received_ms": 47864
+      },
+      "event_id": 84
+    },
+    {
+      "v": 1,
+      "seq": 109,
+      "ts": "2026-01-01T00:00:47.869Z",
+      "type": "telemetry",
+      "data": {
+        "sim_ms": 47869,
+        "node": "A",
+        "session": 1664252997,
+        "counters": {
+          "created": 23,
+          "acknowledged": 21,
+          "lost": 0,
+          "no_route": 2,
+          "delivered": 0,
+          "forwarded": 40,
+          "dropped": 10,
+          "failovers": 1,
+          "send_failures": 88
+        },
+        "received_ms": 47869
+      },
+      "event_id": 85
+    },
+    {
+      "v": 1,
+      "seq": 110,
+      "ts": "2026-01-01T00:00:48.000Z",
+      "type": "heartbeat",
+      "data": {
+        "interval_s": 2.0,
+        "sim_ms": 48000,
+        "speed": 1.0,
+        "paused": false
+      }
+    },
+    {
+      "v": 1,
+      "seq": 111,
+      "ts": "2026-01-01T00:00:48.060Z",
+      "type": "reading_received",
+      "data": {
+        "sim_ms": 48060,
+        "origin": "A",
+        "session": 1664252997,
+        "seq": 316,
+        "value": 19.83,
+        "value_hundredths": 1983,
+        "via": "D",
+        "hops": 2,
+        "ttl": 7,
+        "observed_path": [
+          "A",
+          "D",
+          "C"
+        ],
+        "received_ms": 48060,
+        "replayed": false,
+        "delay_ms": 0
+      },
+      "event_id": 86
+    },
+    {
+      "v": 1,
+      "seq": 112,
+      "ts": "2026-01-01T00:00:49.050Z",
+      "type": "telemetry",
+      "data": {
+        "sim_ms": 49050,
+        "node": "C",
+        "session": 4145609530,
+        "counters": {
+          "created": 0,
+          "acknowledged": 0,
+          "lost": 0,
+          "no_route": 0,
+          "delivered": 22,
+          "forwarded": 0,
+          "dropped": 40,
+          "failovers": 0,
+          "send_failures": 75
+        },
+        "received_ms": 49050
+      },
+      "event_id": 87
+    },
+    {
+      "v": 1,
+      "seq": 113,
+      "ts": "2026-01-01T00:00:50.000Z",
+      "type": "heartbeat",
+      "data": {
+        "interval_s": 2.0,
+        "sim_ms": 50000,
+        "speed": 1.0,
+        "paused": false
+      }
+    },
+    {
+      "v": 1,
+      "seq": 114,
+      "ts": "2026-01-01T00:00:50.060Z",
+      "type": "reading_received",
+      "data": {
+        "sim_ms": 50060,
+        "origin": "A",
+        "session": 1664252997,
+        "seq": 327,
+        "value": 20.39,
+        "value_hundredths": 2039,
+        "via": "D",
+        "hops": 2,
+        "ttl": 7,
+        "observed_path": [
+          "A",
+          "D",
+          "C"
+        ],
+        "received_ms": 50060,
+        "replayed": false,
+        "delay_ms": 0
+      },
+      "event_id": 88
+    },
+    {
+      "v": 1,
+      "seq": 115,
+      "ts": "2026-01-01T00:00:52.000Z",
+      "type": "heartbeat",
+      "data": {
+        "interval_s": 2.0,
+        "sim_ms": 52000,
+        "speed": 1.0,
+        "paused": false
+      }
+    },
+    {
+      "v": 1,
+      "seq": 116,
+      "ts": "2026-01-01T00:00:52.060Z",
+      "type": "reading_received",
+      "data": {
+        "sim_ms": 52060,
+        "origin": "A",
+        "session": 1664252997,
+        "seq": 339,
+        "value": 19.84,
+        "value_hundredths": 1984,
+        "via": "D",
+        "hops": 2,
+        "ttl": 7,
+        "observed_path": [
+          "A",
+          "D",
+          "C"
+        ],
+        "received_ms": 52060,
+        "replayed": false,
+        "delay_ms": 0
+      },
+      "event_id": 89
+    },
+    {
+      "v": 1,
+      "seq": 117,
+      "ts": "2026-01-01T00:00:52.638Z",
+      "type": "telemetry",
+      "data": {
+        "sim_ms": 52638,
+        "node": "D",
+        "session": 3729682789,
+        "counters": {
+          "created": 0,
+          "acknowledged": 0,
+          "lost": 0,
+          "no_route": 0,
+          "delivered": 0,
+          "forwarded": 92,
+          "dropped": 1,
+          "failovers": 0,
+          "send_failures": 0
+        },
+        "received_ms": 52638
+      },
+      "event_id": 90
+    },
+    {
+      "v": 1,
+      "seq": 118,
+      "ts": "2026-01-01T00:00:53.036Z",
+      "type": "telemetry",
+      "data": {
+        "sim_ms": 53036,
+        "node": "A",
+        "session": 1664252997,
+        "counters": {
+          "created": 26,
+          "acknowledged": 24,
+          "lost": 0,
+          "no_route": 2,
+          "delivered": 0,
+          "forwarded": 43,
+          "dropped": 10,
+          "failovers": 1,
+          "send_failures": 103
+        },
+        "received_ms": 53036
+      },
+      "event_id": 91
+    },
+    {
+      "v": 1,
+      "seq": 119,
+      "ts": "2026-01-01T00:00:53.667Z",
+      "type": "telemetry",
+      "data": {
+        "sim_ms": 53667,
+        "node": "C",
+        "session": 4145609530,
+        "counters": {
+          "created": 0,
+          "acknowledged": 0,
+          "lost": 0,
+          "no_route": 0,
+          "delivered": 24,
+          "forwarded": 0,
+          "dropped": 40,
+          "failovers": 0,
+          "send_failures": 86
+        },
+        "received_ms": 53667
+      },
+      "event_id": 92
+    },
+    {
+      "v": 1,
+      "seq": 120,
+      "ts": "2026-01-01T00:00:54.000Z",
+      "type": "heartbeat",
+      "data": {
+        "interval_s": 2.0,
+        "sim_ms": 54000,
+        "speed": 1.0,
+        "paused": false
+      }
+    },
+    {
+      "v": 1,
+      "seq": 121,
+      "ts": "2026-01-01T00:00:54.060Z",
+      "type": "reading_received",
+      "data": {
+        "sim_ms": 54060,
+        "origin": "A",
+        "session": 1664252997,
+        "seq": 351,
+        "value": 20.16,
+        "value_hundredths": 2016,
+        "via": "D",
+        "hops": 2,
+        "ttl": 7,
+        "observed_path": [
+          "A",
+          "D",
+          "C"
+        ],
+        "received_ms": 54060,
+        "replayed": false,
+        "delay_ms": 0
+      },
+      "event_id": 93
+    },
+    {
+      "v": 1,
+      "seq": 122,
+      "ts": "2026-01-01T00:00:56.000Z",
+      "type": "heartbeat",
+      "data": {
+        "interval_s": 2.0,
+        "sim_ms": 56000,
+        "speed": 1.0,
+        "paused": false
+      }
+    },
+    {
+      "v": 1,
+      "seq": 123,
+      "ts": "2026-01-01T00:00:56.060Z",
+      "type": "reading_received",
+      "data": {
+        "sim_ms": 56060,
+        "origin": "A",
+        "session": 1664252997,
+        "seq": 362,
+        "value": 20.37,
+        "value_hundredths": 2037,
+        "via": "D",
+        "hops": 2,
+        "ttl": 7,
+        "observed_path": [
+          "A",
+          "D",
+          "C"
+        ],
+        "received_ms": 56060,
+        "replayed": false,
+        "delay_ms": 0
+      },
+      "event_id": 94
+    },
+    {
+      "v": 1,
+      "seq": 124,
+      "ts": "2026-01-01T00:00:57.680Z",
+      "type": "telemetry",
+      "data": {
+        "sim_ms": 57680,
+        "node": "D",
+        "session": 3729682789,
+        "counters": {
+          "created": 0,
+          "acknowledged": 0,
+          "lost": 0,
+          "no_route": 0,
+          "delivered": 0,
+          "forwarded": 98,
+          "dropped": 1,
+          "failovers": 0,
+          "send_failures": 0
+        },
+        "received_ms": 57680
+      },
+      "event_id": 95
+    },
+    {
+      "v": 1,
+      "seq": 125,
+      "ts": "2026-01-01T00:00:58.000Z",
+      "type": "heartbeat",
+      "data": {
+        "interval_s": 2.0,
+        "sim_ms": 58000,
+        "speed": 1.0,
+        "paused": false
+      }
+    },
+    {
+      "v": 1,
+      "seq": 126,
+      "ts": "2026-01-01T00:00:58.060Z",
+      "type": "reading_received",
+      "data": {
+        "sim_ms": 58060,
+        "origin": "A",
+        "session": 1664252997,
+        "seq": 374,
+        "value": 19.57,
+        "value_hundredths": 1957,
+        "via": "D",
+        "hops": 2,
+        "ttl": 7,
+        "observed_path": [
+          "A",
+          "D",
+          "C"
+        ],
+        "received_ms": 58060,
+        "replayed": false,
+        "delay_ms": 0
+      },
+      "event_id": 96
+    },
+    {
+      "v": 1,
+      "seq": 127,
+      "ts": "2026-01-01T00:00:58.157Z",
+      "type": "telemetry",
+      "data": {
+        "sim_ms": 58157,
+        "node": "A",
+        "session": 1664252997,
+        "counters": {
+          "created": 29,
+          "acknowledged": 26,
+          "lost": 0,
+          "no_route": 2,
+          "delivered": 0,
+          "forwarded": 45,
+          "dropped": 10,
+          "failovers": 1,
+          "send_failures": 117
+        },
+        "received_ms": 58157
+      },
+      "event_id": 97
+    },
+    {
+      "v": 1,
+      "seq": 128,
+      "ts": "2026-01-01T00:00:58.554Z",
+      "type": "telemetry",
+      "data": {
+        "sim_ms": 58554,
+        "node": "C",
+        "session": 4145609530,
+        "counters": {
+          "created": 0,
+          "acknowledged": 0,
+          "lost": 0,
+          "no_route": 0,
+          "delivered": 27,
+          "forwarded": 0,
+          "dropped": 40,
+          "failovers": 0,
+          "send_failures": 99
+        },
+        "received_ms": 58554
+      },
+      "event_id": 98
+    },
+    {
+      "v": 1,
+      "seq": 129,
+      "ts": "2026-01-01T00:01:00.000Z",
+      "type": "heartbeat",
+      "data": {
+        "interval_s": 2.0,
+        "sim_ms": 60000,
+        "speed": 1.0,
+        "paused": false
+      }
+    }
+  ]
+}

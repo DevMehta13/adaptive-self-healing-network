@@ -96,3 +96,62 @@ def test_the_watcher_can_describe_every_recorded_event():
     assert "ROUTE ACTIVE" in joined
     summary = summarize_snapshot(load("demo-run.snapshot-mid.json"))
     assert "route:" in summary and "nodes:" in summary
+
+
+# ---- the outage run (Phase 5b) ----
+
+
+@pytest.mark.parametrize(
+    "name", ["outage-run.snapshot-initial.json", "outage-run.snapshot-mid.json"]
+)
+def test_outage_snapshots_match_the_documented_shape(name):
+    snapshot = load(name)
+    assert schema.validate_snapshot(snapshot) == []
+    assert snapshot["gateway"]["state"] in ("connecting", "connected", "lost", "replaying")
+
+
+def test_every_outage_message_matches_the_documented_shape_and_is_in_order():
+    events = load("outage-run.events.json")["events"]
+    assert [e["seq"] for e in events] == list(range(1, len(events) + 1))
+    for envelope in events:
+        assert schema.validate_envelope(envelope) == [], envelope
+    ids = [e["event_id"] for e in events if "event_id" in e]
+    assert ids == sorted(ids) and len(set(ids)) == len(ids)
+    mid = load("outage-run.snapshot-mid.json")
+    assert mid["gateway"]["state"] == "lost"  # the mid snapshot is taken during the outage
+    assert mid["readings"]["recent"][-1]["replayed"] is False
+
+
+def test_the_recorded_outage_story_is_the_one_we_promise():
+    events = load("outage-run.events.json")["events"]
+    story = [(e["type"], e["data"]) for e in events if "event_id" in e]
+
+    def first(predicate):
+        for index, (kind, data) in enumerate(story):
+            if predicate(kind, data):
+                return index
+        raise AssertionError("event missing from the recorded outage run")
+
+    detach = first(lambda k, d: k == "environment" and d["action"] == "gateway")
+    lost = first(lambda k, d: k == "gateway_link_lost")
+    stop = first(lambda k, d: k == "environment" and d["action"] == "stop_node")
+    attach = first(
+        lambda k, d: k == "environment" and d["action"] == "gateway" and d["detail"]["attached"]
+    )
+    restored = first(lambda k, d: k == "gateway_link_restored")
+    started = first(lambda k, d: k == "replay_started")
+    finished = first(lambda k, d: k == "replay_finished")
+    failover = first(lambda k, d: k == "local_failover")
+    confirmed = first(lambda k, d: k == "route_active" and d["trigger"] == "local_failover_report")
+    assert detach < lost < stop < attach < restored <= started < failover < finished
+    assert finished < confirmed
+    # nothing about B or the failover reached the controller while it was away
+    assert not [k for k, d in story[lost:attach] if k in ("local_failover", "node_lost_contact")]
+    # the replayed readings are marked and carry how late they are
+    replayed = [d for k, d in story[started:finished] if k == "reading_received"]
+    assert len(replayed) >= 10
+    assert all(d["replayed"] and d["delay_ms"] > 0 for d in replayed)
+    assert sorted(d["received_ms"] for d in replayed) == [d["received_ms"] for d in replayed]
+    # and live readings after the replay are not
+    live = [d for k, d in story[finished:] if k == "reading_received"]
+    assert live and not any(d["replayed"] for d in live)
