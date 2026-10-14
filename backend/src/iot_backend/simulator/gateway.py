@@ -4,9 +4,15 @@ It implements `iot_backend.transports.Gateway`. The controller receives plain ev
 clock; it never receives node objects, so it cannot read simulator internals. Commands go the
 other way as plain `RouteUpdateCommand` values: C turns each into a management frame that it
 originates on the controller's behalf (the frame's source is C).
+
+Between C and the laptop sits C's bridge (`bridge.py`): heartbeat watching, a bounded buffer and
+replay. `connected = False` models the laptop side being gone (the controller process stopped,
+or its serial reader): heartbeats and commands going down and every message going up are lost,
+exactly as they would be on hardware. C notices by the missing heartbeats, not by this flag.
 """
 
 from collections.abc import Callable
+from dataclasses import replace
 
 from iot_backend.protocol import (
     FailoverReason,
@@ -18,9 +24,12 @@ from iot_backend.protocol import (
     TelemetryPayload,
     TopologyReportPayload,
 )
+from iot_backend.simulator.bridge import BridgeConfig, CBridge
 from iot_backend.simulator.engine import Engine
 from iot_backend.transports import (
+    GatewayEvent,
     GatewayHandler,
+    Heartbeat,
     LocalFailoverEvent,
     NeighborObservation,
     ReadingEvent,
@@ -32,8 +41,9 @@ from iot_backend.transports import (
 
 
 class SimulatedGateway:
-    def __init__(self, engine: Engine) -> None:
+    def __init__(self, engine: Engine, bridge: BridgeConfig | None = None) -> None:
         self._engine = engine
+        self.bridge = CBridge(engine, bridge or BridgeConfig(), self._to_laptop)
         self._handlers: list[GatewayHandler] = []
         self._originate: Callable[[RouteUpdateCommand], None] | None = None
         # False models a controller that cannot see the network or command it (Phase 4b test
@@ -42,6 +52,9 @@ class SimulatedGateway:
         self.events_lost = 0
         self.commands_lost = 0
         self.commands_sent = 0  # route updates actually handed to node C
+        self.heartbeats_sent = 0
+        # Test aid: the heartbeat path alone is cut while the up path still works.
+        self.heartbeats_blocked = False
 
     # ---- Gateway interface ----
 
@@ -63,6 +76,25 @@ class SimulatedGateway:
         self.commands_sent += 1
         self._originate(command)
 
+    def send_heartbeat(self, heartbeat: Heartbeat) -> None:
+        if not self.connected or self.heartbeats_blocked:
+            self.commands_lost += 1
+            return
+        self.heartbeats_sent += 1
+        self._engine.schedule(0, self.bridge.heartbeat)
+
+    def _to_laptop(self, event: GatewayEvent) -> None:
+        """Hand one message to the serial line. The laptop's clock is `now`; C's age is the
+        only thing carried about when it happened."""
+        if not self.connected:
+            self.events_lost += 1
+            return
+        age = getattr(event, "age_ms", 0)
+        if age:
+            event = replace(event, received_ms=self._engine.now_ms - age)  # type: ignore[type-var]
+        for handler in list(self._handlers):
+            handler(event)
+
     # ---- node side ----
 
     def attach_originator(self, originate: Callable[[RouteUpdateCommand], None]) -> None:
@@ -71,18 +103,11 @@ class SimulatedGateway:
 
     def deliver_reading(self, event: ReadingEvent) -> None:
         """Node C reports a DATA frame it accepted, with its own link-layer evidence."""
-        if not self.connected:
-            self.events_lost += 1
-            return
-        for handler in list(self._handlers):
-            handler(event)
+        self.bridge.up(event)
 
     def deliver(self, frame: Frame) -> None:
         """Node C passes a received management frame up, as it would write a serial line."""
         payload = frame.payload
-        if not self.connected:
-            self.events_lost += 1
-            return
         event: TopologyReportEvent | RouteInstallAckEvent | LocalFailoverEvent | TelemetryEvent
         if isinstance(payload, TopologyReportPayload):
             event = TopologyReportEvent(
@@ -143,5 +168,4 @@ class SimulatedGateway:
             )
         else:
             return
-        for handler in list(self._handlers):
-            handler(event)
+        self.bridge.up(event)

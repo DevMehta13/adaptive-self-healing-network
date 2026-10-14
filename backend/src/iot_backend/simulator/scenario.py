@@ -12,6 +12,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 
 from iot_backend.protocol import DEFAULT_TTL, NODE_IDS, NODE_NAMES, PacketIdentity
+from iot_backend.simulator.bridge import BridgeConfig
 from iot_backend.simulator.engine import Engine
 from iot_backend.simulator.gateway import SimulatedGateway
 from iot_backend.simulator.link import Link, LinkConfig
@@ -71,6 +72,11 @@ class ScenarioConfig:
     send_fail_ms: int = 30
     failover_report_repeats: int = 5
     telemetry_interval_ms: int = 0  # Phase 5a: 0 = nodes send no telemetry
+    # Phase 5b: C's side of the laptop link. 0 = C does not watch for heartbeats and
+    # passes everything straight up (the Phase 5a behaviour).
+    controller_timeout_ms: int = 0
+    buffer_capacity: int = 50
+    replay_spacing_ms: int = 20
     gateway: str = "C"  # node whose USB link carries events to the controller
     reading_src: str = "A"
     reading_dst: str = "C"
@@ -148,7 +154,14 @@ class Simulation:
             failover_report_repeats=self.config.failover_report_repeats,
             telemetry_interval_ms=self.config.telemetry_interval_ms,
         )
-        self._gateway = SimulatedGateway(self._engine)
+        self._gateway = SimulatedGateway(
+            self._engine,
+            BridgeConfig(
+                controller_timeout_ms=self.config.controller_timeout_ms,
+                buffer_capacity=self.config.buffer_capacity,
+                replay_spacing_ms=self.config.replay_spacing_ms,
+            ),
+        )
         for letter in NODE_LETTERS:
             permitted = {NODE_IDS[n] for n in self.config.permitted.get(letter, set())}
             routes: dict[int, int] = {}
