@@ -7,7 +7,7 @@ Laptop-side backend. It contains:
 - a deterministic **simulator** with four virtual nodes (A, B, C, D): manual or controller-installed routing, forwarding, retries, duplicate detection, HELLO discovery, link probes, bounded flooding and failures;
 - a **gateway interface** (`transports/`) and a **controller** (`controller/`): a topology view and, since Phase 4a, Dijkstra route calculation with versioned route installation and automatic rerouting. The controller sees the network only through events that reached node C and acts on it only through commands that node C turns into frames.
 
-Primary routes are calculated and installed automatically (Phase 4a), together with backup next hops that nodes switch to on their own when the primary fails (Phase 4b, local failover). The controller heartbeat and C's buffering and replay (Phase 5b), adaptive policies, a serial gateway and a database do not exist yet.
+Primary routes are calculated and installed automatically (Phase 4a), together with backup next hops that nodes switch to on their own when the primary fails (Phase 4b, local failover). The controller sends node C a heartbeat; if it stops, C keeps the network running and holds what it would have sent up in a bounded buffer, replayed when the controller returns (Phase 5b). Adaptive policies, a serial gateway and a database do not exist yet.
 
 Contracts (both drafts, pending Dev's review): [docs/DASHBOARD_API.md](../docs/DASHBOARD_API.md) and [docs/PROTOCOL.md](../docs/PROTOCOL.md).
 
@@ -67,10 +67,34 @@ Other controls (full list in [docs/DASHBOARD_API.md](../docs/DASHBOARD_API.md)):
 | --- | --- |
 | `POST /api/control/link` | `{"link":"A->B","down":true}` (one direction) |
 | `POST /api/control/link-config` | `{"link":"B->C","loss":0.2,"delay_ms":80}` |
-| `POST /api/control/gateway` | `{"attached":false}` (controller sees and sends nothing) |
+| `POST /api/control/gateway` | `{"attached":false}` (the controller outage: C holds, then replays on `true`) |
 | `POST /api/control/pause`, `/resume` | `{}` |
 | `POST /api/control/speed` | `{"factor":5}` |
 | `POST /api/control/reset` | `{"scenario":"b-failure-auto-reroute"}` (any file in `scenarios/`) |
+
+### The controller outage demo (Phase 5b)
+
+With the server and the watcher running as above, take the controller away from node C, break something while it is away, and bring it back:
+
+```sh
+# macOS / Git Bash
+curl -X POST http://127.0.0.1:8000/api/control/gateway -H "Content-Type: application/json" -d '{"attached":false}'
+curl -X POST http://127.0.0.1:8000/api/control/node -H "Content-Type: application/json" -d '{"node":"B","action":"stop"}'
+# wait 20 seconds or so
+curl -X POST http://127.0.0.1:8000/api/control/gateway -H "Content-Type: application/json" -d '{"attached":true}'
+```
+
+```powershell
+# Windows PowerShell
+Invoke-RestMethod -Method Post http://127.0.0.1:8000/api/control/gateway -ContentType application/json -Body '{"attached":false}'
+Invoke-RestMethod -Method Post http://127.0.0.1:8000/api/control/node -ContentType application/json -Body '{"node":"B","action":"stop"}'
+# wait 20 seconds or so
+Invoke-RestMethod -Method Post http://127.0.0.1:8000/api/control/gateway -ContentType application/json -Body '{"attached":true}'
+```
+
+What the watcher prints, in order: `ENV Detach the gateway`; about 3 s later `GATEWAY LINK LOST: nothing from C since ...` (the controller's own timer; the network view is stale from here); `ENV Stop B` and then **nothing** from the network, because nothing reaches the laptop; after reattaching, `GATEWAY LINK RESTORED after ... s` and `REPLAY START: N entries ...`; a burst of `REPLAYED reading ... (reached C at ..., X s late)`, first via B and then via D; `LOCAL FAILOVER A: B -> D ... (REPLAYED: reached C at ...)`, which happened about half a second after the stop although the controller learns of it only now; `REPLAY END: N replayed, 0 dropped by overflow, ...`; and `ROUTE ACTIVE v2 A>D>C ... trigger=local_failover_report`, the controller confirming what A did alone. `GET /api/snapshot` shows the link state and C's buffer figures under `gateway`. Detach for more than about 100 s (2 s readings, 50-entry buffer) and the replay starts reporting readings dropped by overflow: those are lost, and counted.
+
+**On hardware, test controller loss by stopping the backend (Ctrl+C), never by unplugging C's USB cable.** The cable also powers C, and C's buffer is in RAM: unplugging it removes C and everything it held.
 
 `GET /api/snapshot` is the full current state; `GET /api/events?after_id=N` the recent history; `GET /health` a liveness check. Open <http://127.0.0.1:8000/docs> for the generated reference. Stop with Ctrl+C.
 
@@ -148,6 +172,26 @@ The six Phase 2 files set `discovery: false` and `ack_delivery: "routed"` so the
 | `no-false-failover.json` | Two consecutive link-layer failures happen three times with successes between them: K - 1 failures must not trigger. |
 | `b-returns-after-failover.json` | B returns. Nothing switches back by itself; the controller restores B only after the hold-down, by policy. |
 
+**Phase 5b scenarios** turn on the controller heartbeat (`controller.heartbeat_interval_ms` 1000, `link_timeout_ms` 3000) and C's watching of it (`settings.controller_timeout_ms` 3000, `buffer_capacity`, `replay_spacing_ms`). The routing output then also shows the gateway link and C's buffer counters:
+
+| Scenario file | What it shows |
+| --- | --- |
+| `controller-outage-replay.json` | The controller is away from 15 s to 35 s. C keeps accepting and acknowledging readings, holds them, and replays them in order on return; the controller counts each once and labels them delayed. |
+| `outage-with-failover.json` | Away from 15 s; B stops at 20 s and A fails over to D alone; back at 40 s. The replay carries the failover report and the controller confirms A > D > C. |
+| `buffer-overflow.json` | A 20-entry buffer, readings every 200 ms and a 60 s outage: the oldest readings are dropped and counted; the replay says how many. |
+| `coalescing.json` | Reports and telemetry every 500 ms during a 20 s outage: each node's reports occupy one slot, so readings keep the room. |
+| `stale-replay.json` | Reports only every 30 s and a 45 s outage: replayed reports are older than the 15 s expiry, so they arrive already stale and cannot make a link look fresh. |
+| `heartbeat-timeout.json` | Only the timing: C declares the controller unreachable 3 s after the last heartbeat, the laptop declares the link lost 3 s after hearing nothing, and both recover on return. |
+
+Measure readings delivered late versus lost for several outage lengths (simulation only):
+
+```sh
+uv run python -m iot_backend.simulator ../scenarios/controller-outage-replay.json --outage-study 10
+uv run python -m iot_backend.simulator ../scenarios/controller-outage-replay.json --outage-study 10 --interval-ms 500 --buffer 50
+```
+
+Columns: *made* (readings accepted at C during the outage), *late* (reached the controller by replay, once), *lost* (never reached it), *unexpl.* (lost readings C's overflow counter does not account for; should be 0, and is not for outages too short for C to notice), *dup* (counted twice; must be 0), and the median and maximum delay.
+
 Compare the three ways of handling a failure, and measure false triggers (simulation only):
 
 ```sh
@@ -180,8 +224,10 @@ Command-line options (also usable on top of a scenario file):
 | `--compare-modes N` | Replay a scenario's scripted failure with seeds 1..N under three modes (controller-only, local failover T1, T1 + T2) and print when A's table switched, when it first sent that way, the delivery gap, readings lost and when the controller's route was confirmed. |
 | `--false-triggers N` | No failure at all: count local failovers under random A-B loss (0-20 %) for K = 2, 3, 4 over seeds 1..N (use `--duration`). |
 | `--measure-seeds N` | Run a controller scenario with seeds 1..N and print min / median / max of failure detection, route active, distribution, service recovery, delivery gap and readings lost, plus route computation time (wall-clock CPU, reported separately). Prints no trace. |
+| `--outage-study N` | Detach the controller for outages of 5 to 160 s over seeds 1..N and print readings made, delivered late, lost, unexplained and doubled, with delays. Use with `--interval-ms` and `--buffer`. |
+| `--buffer N` | C's buffer capacity for `--outage-study`. |
 
-Scenario files are strict JSON (an unknown key is an error, so a typo cannot silently change an experiment). They can set `seed`, `duration_s`, `settings` (interval, timeout, `max_attempts`, `ttl`, `queue_capacity`, `service_ms`, `discovery`, `ack_delivery`, `hello_interval_ms`, `hello_jitter_ms`, `neighbor_timeout_ms`, `report_interval_ms`, `report_coalesce_ms`, `flood_cache_size`, `probe_interval_ms`, `probe_jitter_ms`, `rtt_window`, `rtt_min_samples`, `rtt_max_age_ms`, `max_routes`, `local_failover`, `failover_t1`, `failover_t2_k`, `send_fail_ms`, `failover_report_repeats`), `routing` (`"manual"` or `"controller"`), `controller` (`epoch`, `hold_down_ms`, `install_timeout_ms`, `install_max_attempts`, `replan_delay_ms`, `max_failed_plans`, `no_route_grace_ms`, `initial_settle_ms`, `backup_next_hops`), `permitted`, `routes` (manual routing only), `links` (`delay_ms`, `loss`, `drop_frames`, `drop_msg`, `down`), `initial_seq`, and timed `actions`: `stop_node`, `start_node`, `restart_node`, `set_route`, `set_permitted`, `link_down`, `set_link`, `inject_frame`, `restart_controller`, `detach_gateway`, `attach_gateway`.
+Scenario files are strict JSON (an unknown key is an error, so a typo cannot silently change an experiment). They can set `seed`, `duration_s`, `settings` (interval, timeout, `max_attempts`, `ttl`, `queue_capacity`, `service_ms`, `discovery`, `ack_delivery`, `hello_interval_ms`, `hello_jitter_ms`, `neighbor_timeout_ms`, `report_interval_ms`, `report_coalesce_ms`, `flood_cache_size`, `probe_interval_ms`, `probe_jitter_ms`, `rtt_window`, `rtt_min_samples`, `rtt_max_age_ms`, `max_routes`, `local_failover`, `failover_t1`, `failover_t2_k`, `send_fail_ms`, `failover_report_repeats`, `controller_timeout_ms`, `buffer_capacity`, `replay_spacing_ms`), `routing` (`"manual"` or `"controller"`), `controller` (`epoch`, `hold_down_ms`, `install_timeout_ms`, `install_max_attempts`, `replan_delay_ms`, `max_failed_plans`, `no_route_grace_ms`, `initial_settle_ms`, `backup_next_hops`, `heartbeat_interval_ms`, `link_timeout_ms`), `permitted`, `routes` (manual routing only), `links` (`delay_ms`, `loss`, `drop_frames`, `drop_msg`, `down`), `initial_seq`, and timed `actions`: `stop_node`, `start_node`, `restart_node`, `set_route`, `set_permitted`, `link_down`, `set_link`, `inject_frame`, `restart_controller`, `detach_gateway`, `attach_gateway`.
 
 Event names in the trace: `frame_sent` (a node created and transmitted a frame), `frame_forwarded` (a relay passed one on), `frame_received`, `frame_rejected`, `frame_dropped`, `frame_dropped_by_link`, `reading_delivered`, `duplicate_received`, `ack_received`, `ack_ignored`, `ack_timeout` (one attempt), `reading_lost`, `neighbor_changed`, `neighbor_restarted`, `node_booted`, `node_stopped`, `route_update_sent` (C originated an instruction), `route_installed` (a node applied it), `route_update_ignored` (duplicate, stale or refused), `send_failed` (the link layer said the next hop's radio did not acknowledge; shown with `--verbose`), `local_failover`, `local_no_route`, `frame_rerouted`, `gateway_detached`, `gateway_attached`. The `delivery_time_ms` on `ack_received` is the time from the *first attempt* to the ACK (time to confirmed delivery), together with `attempts`; it is not an RTT. A frame appears as `A:3905a56d#1`: creator, session id in hex, sequence number.
 
@@ -205,10 +251,14 @@ backend/
     simulator/         engine.py (virtual clock), link.py, nodes.py (forwarding, retries),
                        dedup.py (duplicate filter), trace.py, scenario.py (Simulation),
                        scenario_file.py (JSON loader), gateway.py (SimulatedGateway),
-                       measurements.py (detection and recovery times), __main__.py (CLI)
-    transports/        the Gateway interface the controller is written against
+                       bridge.py (node C's heartbeat watching, buffer and replay),
+                       measurements.py (detection and recovery times), studies.py
+                       (mode comparison, false triggers, outage study), __main__.py (CLI)
+    transports/        the Gateway interface and the typed laptop <-> C messages
     controller/        topology.py: nodes and links from reports, with freshness and RTT;
-                       routing.py: Dijkstra, versioned installation, hold-down, no-route
+                       routing.py: Dijkstra, versioned installation, hold-down, no-route;
+                       gateway_session.py: heartbeat and link monitor;
+                       readings.py: counts each reading once
   tests/               pytest checks (test_protocol.py loads ../tests/protocol-examples/,
                        test_scenarios.py loads ../scenarios/)
 ```
@@ -312,13 +362,35 @@ The two channels split the job: `GET /api/snapshot` gives the full current state
 
 **What the measurement comparison shows.** Switching the relay locally is only quicker if the node can notice sooner than the controller can. Detecting by HELLO timeout (T1) waits for the same 3 s as the controller, so it saves only the report and installation time (about 0.2 s here) and nothing in the one-way case. Detecting by failed sends (T2) does not wait for a timer, and moved the switch from about 2.6 s to about 0.1 to 1 s. The readings themselves are then limited by the reading interval and the ACK timeout (a reading created at the failure retries at +1 s), so the delivery gap improves by less than the switch does. T2 also fires falsely under loss (about 20 per simulated hour at 5 % loss with K = 3), which costs a hold-down of the good link each time.
 
+## Controller outage in plain language (Phase 5b)
+
+**Why a heartbeat.** Silence is ambiguous: if the laptop sends C nothing for a while, C cannot tell "the controller has nothing to say" from "the controller is gone". So the laptop says "I am alive" every second, over the USB link only (never on the radio, where it would cost every node airtime to tell C something only C needs). Three missed heartbeats (3 s) and C treats the controller as unreachable; one missed heartbeat is not enough, so a single delayed message is not an outage. C answers each heartbeat with a short status, so the laptop has the same test the other way round: 3 s without anything from C and it declares its link to C lost, and tells the dashboard its picture is stale.
+
+**Fail-static.** When the controller goes, nothing on the radio changes. Nodes keep their installed routes and backups, A still fails over to D if B dies, and C keeps accepting and acknowledging readings, because those acknowledgements come from C, not from the laptop. What stops is only new thinking: no new routes are calculated until the controller is back. Freezing in the last known good state is safer than guessing.
+
+**Why the buffer is bounded, and what is dropped first.** C is a small board with tens of kilobytes of free memory, and an outage can last any length of time. An unbounded buffer would eventually crash C, which would lose everything. So C keeps 50 entries and, when full, gives up the least valuable, oldest one and counts it, so the loss is reported instead of hidden. Readings are what the project exists to deliver, so they are kept in preference to topology reports, acknowledgements and telemetry. Those are also *coalesced*: a newer report from B says everything an older one did, so only the newest is kept, and a long outage costs one slot per node. Failover reports are always kept, because they record a recovery the controller must learn about. When even readings must go, the oldest go first: a recent reading is worth more than a stale one.
+
+**Ages instead of timestamps.** C has no calendar clock, and the laptop's clock means nothing to C. Comparing two clocks that were never synchronised gives nonsense. Instead C notes when each entry arrived *on its own clock*, and on replay says "this is 28.986 s old". The laptop subtracts that from its own clock. Both numbers are durations on one clock, so the result is right to within the time the message spent on the serial line.
+
+**Why replay does not count anything twice.** In the last few seconds before C notices the outage, it is still sending things up that nobody receives. So C keeps a copy of what it sent back to the second-to-last heartbeat and replays it too. Some of those the laptop did receive. That is safe because every reading has an identity, (origin, session, seq), and the controller counts a reading only the first time it sees that identity; a second copy is counted as a repeat. The replay is bracketed by start and end markers with counts, so the dashboard can say "replaying 26 entries" and "done: 0 dropped".
+
+**Why old information must not override new.** A replayed topology report can be 40 s old. If the controller treated it as news, a link that died 30 s ago would look alive again, and could even be routed over. So the controller compares the report's real age with what it already holds: an older report than the one held is ignored, and a report older than the 15 s expiry arrives already stale. Freshness comes from when something happened, not from when it was delivered.
+
 ## Limitations of the live demo (Phase 5a)
 
 - One live run is shared by everyone connected; presenter controls act on it for all viewers. There is no per-client session and no persistence: a backend restart starts a new run (`run_id` 1).
-- While the gateway is detached the controller *and* the dashboard see nothing, and node C does not buffer readings. Buffering and replay with a "delayed" label are Phase 5b.
+- While the gateway is detached the controller and the dashboard see nothing new from the network; since Phase 5b they are told the link is lost and receive what C held when it returns.
 - The pacing task runs in the server's event loop. At very high speed the simulation may fall behind (at most 5 s of simulated time per 50 ms wake-up) instead of keeping up.
 - The default `Origin` allow-list is `http://localhost:5173` (the Vite dev server). Requests with no `Origin` header are accepted, so keep the default localhost bind.
 - All numbers are simulated: delays, loss and timings are configured values, not measurements.
+
+## Limitations of the outage handling (Phase 5b)
+
+- Simulation only. The laptop ↔ C messages are typed messages inside the backend; their serial encoding and a real serial gateway are the next step.
+- C's buffer holds 50 entries: about 100 s of 2 s readings, or 25 s of 500 ms readings. Longer outages lose the oldest readings (counted). The RAM estimate (1.5 KB typical, 4 KB worst case) is not measured on an ESP8266.
+- **An outage shorter than C's 3 s timeout is not noticed, so nothing is replayed**: readings sent up during it that the laptop missed are absent and not counted as lost (a 1 s detach in the simulation loses every reading in it). A fix is proposed for the serial step: numbered up messages and a replay request.
+- Ages ignore the serial transfer time and C's clock drift; replay speed (20 ms per entry) is a simulated setting.
+- The buffer is RAM-only: if C loses power, what it held is gone.
 
 ## Limitations
 
