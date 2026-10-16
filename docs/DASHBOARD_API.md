@@ -1,6 +1,6 @@
 # Dashboard API contract
 
-**Draft — pending Dev's review.** Written by Harshal (backend owner) for Dev (dashboard owner). Nothing here is frozen until Dev approves it; change requests go in a pull request to this file. Everything below is **implemented and tested** as of Phase 5a, in simulation mode only. Anything not implemented is listed under *Not implemented yet*, not described as if it were.
+**Draft — pending Dev's review.** Written by Harshal (backend owner) for Dev (dashboard owner). Nothing here is frozen until Dev approves it; change requests go in a pull request to this file. Everything below is **implemented and tested** as of Phase 5b (the controller heartbeat, C's buffer and replay), in simulation mode only. Anything not implemented is listed under *Not implemented yet*, not described as if it were.
 
 Recorded examples of every message live in [tests/dashboard-fixtures/](../tests/dashboard-fixtures/); a test keeps them valid against the current shapes, so you can build and test the UI without running the backend.
 
@@ -17,6 +17,7 @@ The backend runs a simulated network in the background. The dashboard is shown *
 | Recovery events (local failover vs controller reroute) | the controller | failover reports from nodes, its own detection |
 | Each reading received, with `via` (last-hop relay) and `hops` | node C | link-layer sender and TTL of the frame, observed at C |
 | Created / acknowledged / lost / no-route counts | node A (and other nodes) | TELEMETRY messages flooded to C, labelled with their age |
+| Whether the link to C is up, and what C held and replayed (`gateway`) | the controller, from C's heartbeat answers | its own heartbeat timer, and C's status and replay markers |
 | What the presenter did to the environment | the presenter | the separate **`environment` channel**, below |
 
 The *observed packet path* is built **only** from C's own evidence. C knows which neighbor handed it a frame and how much TTL was left; it does not know the relays further back. Unknown relays are `null` in `observed_path`. It is never taken from the simulator's trace and never from the planned route.
@@ -29,6 +30,8 @@ Animations that draw the *planned* route (`route.path`) and the *observed* path 
 - Link delays and costs are **simulated settings**: B's links are configured cheaper than D's so that B is the normal relay.
 - Recovery times are simulated time, not hardware.
 - Counts that come from telemetry carry `known_by` and `age_ms`; show the age.
+- While `gateway.state` is `lost`, say plainly that the network view is **stale** (`gateway.network_view` has the text): nodes, links and the route are what the controller knew when C went quiet.
+- A reading with `replayed: true` arrived late: label it **delayed** and show `delay_ms`. Its `received_ms` is an estimate (see *Ages* below).
 
 ## Environment channel (separate on purpose)
 
@@ -60,8 +63,9 @@ The complete current state; the source of truth. WebSocket events only describe 
   "nodes": [ ... ],
   "links": [ ... ],
   "route": { ... },
-  "readings": { "delivered_unique": 49, "duplicates": 0, "recent": [ ... ] },
+  "readings": { "delivered_unique": 49, "duplicates": 0, "replayed": 0, "recent": [ ... ] },
   "counts": { ... },
+  "gateway": { ... },
   "presenter": { ... },
   "recent_events": [ { "event_id": 150, "type": "reading_received", "data": { ... } } ]
 }
@@ -160,13 +164,15 @@ A node that failed over locally is using its backup even though `route.path` sti
 {
   "delivered_unique": 49,
   "duplicates": 0,
-  "recent": [ { "origin": "A", "session": 1664252997, "seq": 45, "value": 20.13,
-                "value_hundredths": 2013, "via": "B", "hops": 2, "ttl": 7,
-                "observed_path": ["A", "B", "C"], "received_ms": 6030 } ]
+  "replayed": 22,
+  "recent": [ { "origin": "A", "session": 1664252997, "seq": 87, "value": 19.57,
+                "value_hundredths": 1957, "via": "B", "hops": 2, "ttl": 7,
+                "observed_path": ["A", "B", "C"], "received_ms": 12034,
+                "replayed": true, "delay_ms": 28986 } ]
 }
 ```
 
-`recent` holds the last 50 unique readings. `delivered_unique` counts each reading once (a repeat caused by a lost acknowledgement is counted under `duplicates`).
+`recent` holds the last 50 unique readings, in the order the controller learned of them (so a replayed reading can follow a newer live one). `delivered_unique` counts each reading once by its identity `(origin, session, seq)`: a repeat caused by a lost acknowledgement, or a reading C replays that had already reached the laptop, is counted under `duplicates`, never twice. `replayed` is how many of the unique readings first arrived in a replay (delivered late). In a reading, `replayed: true` means C held it while the controller was unreachable; `delay_ms` is how long C held it (0 for a live reading) and `received_ms` is when it reached C, estimated as the time it was replayed minus `delay_ms`.
 
 #### `counts`
 
@@ -175,14 +181,45 @@ Each entry is `{ "value", "known_by", "as_of_ms", "age_ms" }` or `null` before t
 ```json
 {
   "delivered": { "value": 7, "known_by": "C", "as_of_ms": 18063, "age_ms": 1937 },
-  "duplicates": { "value": 0, "known_by": "C" },
+  "duplicates": { "value": 0, "known_by": "C and the controller" },
+  "delivered_late": { "value": 0, "known_by": "C (held while the controller was unreachable)" },
   "created": { "value": 9, "known_by": "A (telemetry)", "as_of_ms": 19198, "age_ms": 802 },
   "acknowledged": { "...": "..." }, "lost": { "...": "..." }, "no_route": { "...": "..." },
   "pending": { "value": 0, "known_by": "A (telemetry, derived)", "as_of_ms": 19198, "age_ms": 802 }
 }
 ```
 
-*Delivered* is known by C and is as fresh as the last reading. *Created, acknowledged, lost, no_route* are known only by A and arrive by telemetry every ~5 s, so they lag; `pending` is derived from them (created − acknowledged − lost − no_route) and can differ from reality by up to a telemetry interval. `no_route` counts readings A dropped at creation for lack of a route.
+*Delivered* is known by C and is as fresh as the last reading. *Created, acknowledged, lost, no_route* are known only by A and arrive by telemetry every ~5 s, so they lag; `pending` is derived from them (created − acknowledged − lost − no_route) and can differ from reality by up to a telemetry interval. `no_route` counts readings A dropped at creation for lack of a route. *Delivered late* is the number of unique readings that first reached the controller in a replay. *Duplicates* adds C's repeats (a retry from A that reached C again) and the controller's (a replayed reading it already had).
+
+#### `gateway`
+
+The controller's knowledge of its own link to node C. It comes from the heartbeat the laptop sends C every second and from what C sends back; it is **not** the presenter's attach/detach switch (that is in `presenter.conditions.gateway_attached`).
+
+```json
+{
+  "state": "lost",
+  "since_ms": 12000,
+  "last_heard_ms": 12000,
+  "heartbeat_interval_ms": 1000,
+  "link_timeout_ms": 3000,
+  "c_status_as_of_ms": 12000,
+  "c_reports_controller_reachable": true,
+  "c_buffer": { "held": 0, "capacity": 50, "dropped_overflow": 0, "coalesced": 0,
+                "replayed": 0, "outages": 0 },
+  "last_replay": null,
+  "network_view": "stale: nothing has arrived from C since the link was lost"
+}
+```
+
+| Field | Meaning |
+| --- | --- |
+| `state` | `connecting` (nothing heard from C yet), `connected`, `lost` (nothing at all from C for longer than `link_timeout_ms`), `replaying` (C is handing up what it held). A scenario without a controller has `unmonitored`, with only `state`, `since_ms`, `last_heard_ms` and a `note`. |
+| `since_ms` | When the state began. For `lost` it is the last time anything was heard from C, not the moment the timeout fired. |
+| `last_heard_ms` | The last time anything arrived from C. |
+| `c_status_as_of_ms` | When C's last status message arrived. `c_reports_controller_reachable` and `c_buffer` are **C's own figures as of that time**: during an outage they are old news (C cannot tell the laptop anything until the link is back), so show this time next to them. `null` before the first status. |
+| `c_buffer` | `held`: entries C was holding; `capacity`; `dropped_overflow`: held entries C gave up because the buffer was full (cumulative); `coalesced`: held entries replaced by a newer one from the same node (cumulative); `replayed`: entries handed up in replays (cumulative); `outages`: how many times C decided the controller was unreachable. |
+| `last_replay` | The most recent replay: `state` (`replaying` or `finished`), `started_ms`, `finished_ms`, `entries` (announced at the start), `held` (of those, entries held during the outage), `replayed`, `dropped_overflow`, `coalesced` (for that outage), `outage_ms` (C's estimate of how long the controller was away). `null` before the first. |
+| `network_view` | Ready-made text: `live`, `waiting: ...` before C is heard, or `stale: ...` while the link is lost. |
 
 #### `presenter`
 
@@ -226,7 +263,7 @@ Every control changes **only the simulated environment**. None of them calls the
 | `POST /api/control/node` | `{"node": "B", "action": "stop"}` or `"start"` | Power a node off (RAM lost) or on (new session). |
 | `POST /api/control/link` | `{"link": "A->B", "down": true}` | Take **one direction** of a link down or up. |
 | `POST /api/control/link-config` | `{"link": "B->C", "loss": 0.2, "delay_ms": 80}` | Set loss (0–1) and/or one-way delay (0–5000 ms) of one direction. |
-| `POST /api/control/gateway` | `{"attached": false}` | Detach/attach the controller from node C: it then sees and sends nothing. C itself keeps receiving and acknowledging. (C does not buffer readings while detached; that is a later phase.) |
+| `POST /api/control/gateway` | `{"attached": false}` | Detach/attach the controller from node C (the simulated controller outage): nothing passes either way, heartbeats included. C keeps forwarding, receiving and acknowledging on the radio; after 3 s without a heartbeat it starts holding what it would have sent up, and on reattach it replays it. The controller notices only by its own timer (`gateway_link_lost`). |
 | `POST /api/control/pause` | `{}` | Stop simulated time. |
 | `POST /api/control/resume` | `{}` | Continue. |
 | `POST /api/control/speed` | `{"factor": 5}` | Simulated seconds per real second, 0.1–1000. |
@@ -322,7 +359,7 @@ All carry `event_id` and `data.sim_ms`. Examples are real output (fields abbrevi
 | `no_route_confirmed` | `version`, `epoch`, `confirmed_by`, `distribution_ms` — the source acknowledged being told there is no route. If it never arrives, the source was not told. |
 | `link_held_down` | `link`, `hold_down_ms`, `eligible_at_ms` — a link that came back (or that a node abandoned) is not used for routes until then. |
 | `epoch_advanced` | `old_epoch`, `held_epoch`, `epoch`. |
-| `local_failover` | `node`, `from` (abandoned next hop), `to` (backup now used, or `null`), `reason` (`neighbor_lost` = T1, `send_failures` = T2), `epoch`, `version`, `link`, `matches_current_route`, `outcome` (`backup_in_use` or `no_route`). e.g. `{"node":"A","from":"B","to":"D","reason":"send_failures","epoch":1000,"version":1,"link":"A-B","matches_current_route":true,"outcome":"backup_in_use"}`. **Label this recovery "local failover".** |
+| `local_failover` | `node`, `from` (abandoned next hop), `to` (backup now used, or `null`), `reason` (`neighbor_lost` = T1, `send_failures` = T2), `epoch`, `version`, `link`, `matches_current_route`, `outcome` (`backup_in_use` or `no_route`), `received_ms` (when the report reached C), `replayed` (C held the report during an outage). e.g. `{"node":"A","from":"B","to":"D","reason":"send_failures","epoch":1000,"version":1,"link":"A-B","matches_current_route":true,"outcome":"backup_in_use","received_ms":20966,"replayed":true}` (sent at `sim_ms` 41140: the controller learned of it 20 s late). **Label this recovery "local failover"**, and when `replayed` place it at `received_ms`, not at `sim_ms`. |
 
 How to label recoveries: a `local_failover` event is the node's own reaction. A `route_active` whose `trigger` is `local_failover_report` is the controller *confirming* that choice. A `route_active` with `topology_changed` after a `node_lost_contact` and no failover is a *controller reroute*. If the controller is unreachable only the first can happen.
 
@@ -330,10 +367,23 @@ How to label recoveries: a `local_failover` event is the node's own reaction. A 
 
 | `type` | `data` (besides `sim_ms`) |
 | --- | --- |
-| `reading_received` | `origin`, `session`, `seq` (identity), `value` (units), `value_hundredths`, `via` (the neighbor that handed C the frame), `hops` (transmissions, from the TTL left), `ttl`, `observed_path` (origin … `via`, `"C"`; `null` for relays C cannot name), `received_ms`. Only unique readings; repeats are counted in `readings.duplicates`. e.g. `{"origin":"A","session":1664252997,"seq":45,"value":20.13,"value_hundredths":2013,"via":"B","hops":2,"ttl":7,"observed_path":["A","B","C"],"received_ms":6030}` |
+| `reading_received` | `origin`, `session`, `seq` (identity), `value` (units), `value_hundredths`, `via` (the neighbor that handed C the frame), `hops` (transmissions, from the TTL left), `ttl`, `observed_path` (origin … `via`, `"C"`; `null` for relays C cannot name), `received_ms` (when it reached C), `replayed`, `delay_ms`. Only unique readings; repeats are counted in `readings.duplicates`. e.g. live: `{"origin":"A","session":1664252997,"seq":45,"value":20.13,"value_hundredths":2013,"via":"B","hops":2,"ttl":7,"observed_path":["A","B","C"],"received_ms":6030,"replayed":false,"delay_ms":0}`; replayed (sent at `sim_ms` 41020): `{..."seq":87,..."received_ms":12034,"replayed":true,"delay_ms":28986}` |
 | `telemetry` | `node`, `session`, `counters` (the nine counters, cumulative since that node's boot), `received_ms`. Only the node knows these. |
 
 `hops` assumes every node uses the configured data TTL (8). It is the number of radio transmissions, so A → B → C is 2.
+
+**The controller's link to C (controller outage and replay)**
+
+| `type` | `data` (besides `sim_ms`) |
+| --- | --- |
+| `gateway_link_lost` | `since_ms` (last time anything arrived from C), `silent_for_ms`. e.g. `{"since_ms":12000,"silent_for_ms":3500}` (sent at 15500). From here the network view is stale. |
+| `gateway_link_restored` | `lost_since_ms`, `lost_for_ms`. e.g. `{"lost_since_ms":12000,"lost_for_ms":29000}` |
+| `replay_started` | `started_ms`, `entries` (what C will hand up), `held` (of those, entries held during the outage; the rest are the last few C sent just before it noticed, which the laptop may have missed), `dropped_overflow` and `coalesced` (during this outage), `outage_ms` (C's estimate). e.g. `{"started_ms":41000,"entries":24,"held":22,"dropped_overflow":0,"coalesced":33,"outage_ms":29000}` |
+| `replay_finished` | `replayed` (entries actually handed up, including any that arrived at C during the replay), `dropped_overflow`, `coalesced` (final figures for the outage). e.g. `{"replayed":25,"dropped_overflow":0,"coalesced":36}` (520 ms after the start) |
+
+Between `replay_started` and `replay_finished` expect `reading_received` events with `replayed: true`, and topology, failover and telemetry events produced by replayed reports. Information that is older than what the controller already holds is ignored by it, so a replayed report never makes a link look fresher than it is or undoes a newer state. `dropped_overflow` readings are **lost**, not late: show the count, because those readings will never arrive.
+
+**Ages, not timestamps.** C has no wall clock. It remembers when each held entry arrived on its own clock and replays it with its age; the backend subtracts the age from its own clock to give `received_ms`. It is an estimate: it ignores the serial transfer time (milliseconds) and any drift of C's clock over the outage.
 
 **The environment channel and the runtime**
 
@@ -350,12 +400,13 @@ How to label recoveries: a `local_failover` event is the node's own reaction. A 
 - `demo-run.snapshot-initial.json` — the snapshot at connect time (`last_event_id` 0).
 - `demo-run.events.json` — every WebSocket message of a recorded demo, in order with `seq`, `event_id` and deterministic timestamps: normal operation, Stop B, local failover to D, the controller confirming, Start B, link hold-down, back to B.
 - `demo-run.snapshot-mid.json` — a snapshot taken at 20 s, to test the discard rule.
+- `outage-run.snapshot-initial.json`, `outage-run.events.json`, `outage-run.snapshot-mid.json` — a controller outage: the gateway detached at 12 s, B stopped at 20 s (A fails over to D on its own, unseen), reattached at 40 s; then `gateway_link_restored`, `replay_started`, replayed readings and the replayed failover report, `replay_finished`, and the controller confirming A > D > C. The mid snapshot (30 s) is taken during the outage: `gateway.state` `lost`, and C's buffer figures as of 12 s.
 
 Regenerate after a deliberate shape change with `uv run python -m iot_backend.live.record` (from `backend/`). Watch a live backend in a terminal with `uv run python -m iot_backend.watch`.
 
 ## Not implemented yet
 
-- Controller heartbeat, C's bounded buffer and replay of readings while the controller is unreachable, and the "delayed" label for replayed readings (Phase 5b). While the gateway is detached nothing is buffered: readings in that window are not delivered to the controller.
+- The serial gateway and its message format: the heartbeat, C's status and the replay markers exist as typed messages inside the backend (see [docs/PROTOCOL.md](PROTOCOL.md) *Laptop and C*); their encoding on the USB serial line is the next step. On hardware a controller outage is demonstrated by **stopping the backend**, not by unplugging C's USB cable: the cable also powers C, and C's buffer is in RAM, so unplugging it loses the buffer.
 - Experiment history, charts and CSV export (Phase 10).
 - Adaptive routing policies (Phase 9); the route cost is the measured RTT.
 - Hardware mode: `mode: "hardware"` exists only as a refusal.
@@ -366,3 +417,4 @@ Regenerate after a deliberate shape change with `uv run python -m iot_backend.li
 - No authentication; the backend binds to `127.0.0.1` by default and is intended for local use only.
 - The `Origin` check keeps other web pages out; it does not stop non-browser programs on the laptop, which is why the default bind is localhost.
 - Simulated timing: delays, loss and the 5 ms radio service time are configured values.
+- A gateway outage shorter than C's 3 s timeout (for example a 1 s detach) is not noticed by C: readings in it never arrive and are not counted as lost. `counts.acknowledged` (A's telemetry) can then exceed `counts.delivered`. A fix is proposed for the serial step.

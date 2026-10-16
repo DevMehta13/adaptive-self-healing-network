@@ -1,6 +1,6 @@
 # Node protocol
 
-**Draft — pending Dev's review.** Written by Harshal (backend owner) for Dev, who will implement the same format in C++ on the ESP8266. Scope so far: the frame header, DATA, DELIVERY_ACK (Phase 1), forwarding/delivery behaviour (Phase 2; no format change), HELLO / TOPOLOGY_REPORT payloads with management-traffic behaviour (Phase 3), probes, route updates, route acknowledgements and the local-failover report (Phase 4a), the behaviour of local failover (Phase 4b), and TELEMETRY plus the evidence node C reports about each reading (Phase 5a). The Python implementation is `backend/src/iot_backend/protocol/`; the shared reference examples are in [tests/protocol-examples/](../tests/protocol-examples/). If this document and the examples disagree, tell Harshal — they are meant to agree exactly.
+**Draft — pending Dev's review.** Written by Harshal (backend owner) for Dev, who will implement the same format in C++ on the ESP8266. Scope so far: the frame header, DATA, DELIVERY_ACK (Phase 1), forwarding/delivery behaviour (Phase 2; no format change), HELLO / TOPOLOGY_REPORT payloads with management-traffic behaviour (Phase 3), probes, route updates, route acknowledgements and the local-failover report (Phase 4a), the behaviour of local failover (Phase 4b), TELEMETRY plus the evidence node C reports about each reading (Phase 5a), and the laptop-to-C heartbeat, C's buffer and replay (Phase 5b; serial messages, not radio frames). The Python implementation is `backend/src/iot_backend/protocol/`; the shared reference examples are in [tests/protocol-examples/](../tests/protocol-examples/). If this document and the examples disagree, tell Harshal — they are meant to agree exactly.
 
 ## Why a compact binary format
 
@@ -534,6 +534,59 @@ LOCAL_FAILOVER_REPORT was defined in Phase 4a but never sent. Phase 4b needed to
 
 C does **not** know the relays before `via`. An observed path is therefore `origin, (unknown relays...), via, C`, and with the diamond's two-hop paths `via` is the whole story: `hops` 2 and `via` B means A → B → C. Nothing here comes from a routing table or from the simulator's trace; a path computed by the controller is a *plan*, a different thing.
 
+## Laptop and C: heartbeat, buffer and replay (Phase 5b)
+
+**Pending Dev's review.** This is the link between the laptop and node C over USB serial. It **never travels on the radio** and adds nothing to the frame format above. It is defined as a set of typed messages (`backend/src/iot_backend/transports/gateway.py`); the serial encoding, planned as newline-delimited JSON with one message per line, is the next step and must map to these messages one to one. Names in brackets are the intended wire names.
+
+| Direction | Message | Fields |
+| --- | --- | --- |
+| laptop → C | heartbeat (`heartbeat`) | `sent_ms` (laptop clock; C does not need to interpret it) |
+| laptop → C | route update (`route_update`) | as in Phase 4a: C turns it into a ROUTE_UPDATE frame |
+| C → laptop | topology report, route ack, local failover, reading, telemetry (`topology_report`, `route_ack`, `local_failover`, `reading`, `telemetry`) | the frame's fields as before, plus `age_ms` and `replayed` |
+| C → laptop | status (`status`), one per heartbeat | `controller_reachable`, `held`, `capacity`, `dropped_overflow`, `coalesced`, `replayed`, `outages` (counters cumulative since C booted) |
+| C → laptop | replay start (`replay_start`) | `entries`, `held`, `dropped_overflow`, `coalesced` (this outage), `outage_ms` |
+| C → laptop | replay end (`replay_end`) | `replayed`, `dropped_overflow`, `coalesced` (this outage) |
+
+### Heartbeat and the controller timeout
+
+- The laptop sends a heartbeat every **1 s** (configurable). C answers each one with a status message.
+- C treats the controller as **unreachable** when no heartbeat has arrived for **3 s** (configurable). The laptop declares its link to C **lost** when *nothing at all* has arrived from C for 3 s. Each side decides on its own clock; neither compares clocks.
+- While the controller is unreachable C is **fail-static** on the radio: it keeps forwarding, accepting and acknowledging readings, answering HELLOs and probes, and nodes keep their installed routes and backups. Only what goes *up* the serial line changes: C holds it in the buffer.
+- The first heartbeat after an outage makes C answer with a status and then replay.
+
+### C's buffer (bounded, RAM only)
+
+- Capacity **50 entries** by default. When the buffer is full the least valuable, oldest entry is evicted and counted in `dropped_overflow`. Order of eviction: (1) entries C had already sent up just before it noticed the outage (see below), (2) topology reports, route acknowledgements and telemetry, (3) readings, (4) local-failover reports, which are never evicted by anything else. Within a class the oldest goes first. A newcomer worth less than everything held (a report arriving at a buffer full of readings) is itself the one dropped and counted.
+- **Coalescing:** a newer topology report, route acknowledgement or telemetry from the same node replaces the held one (counted in `coalesced`), so each node uses one slot of each kind however long the outage. A repeated failover report (same node, epoch, version, from and to) keeps the **first** copy, because its age tells when the failover really happened.
+- **Readings are never coalesced:** each `(origin, session, seq)` is a separate entry.
+- **The last moments before the outage are kept too.** C cannot know the laptop stopped listening until 3 s have passed, so entries it sent up during that time may have been lost on the way. C keeps what it sent back to the second-to-last heartbeat it received, and replays those entries too. The laptop counts every reading once by `(origin, session, seq)`, so a reading it already had is counted as a repeat, not twice.
+- The buffer is in **RAM only**. It is lost if C loses power, and C is powered by the same USB cable that connects it to the laptop: unplugging the cable is not a controller-loss test. On hardware, controller loss is tested by **stopping the backend** with the cable left in.
+
+### Ages, not timestamps
+
+C has no wall clock and the laptop's clock means nothing to C. C remembers when each held entry arrived **on its own clock**, and replays it with `age_ms = now − arrived` (a live entry has `age_ms` 0). The laptop computes `received_ms = its own now − age_ms`. Only durations measured on one clock are ever used. The estimate ignores the serial transfer time and C's clock drift over the outage.
+
+### Replay
+
+1. C sends `replay_start` with what it is about to hand up.
+2. C sends the held entries **oldest first**, each with `replayed` true and its age, at one entry per 20 ms in simulation (the serial line's assumed throughput; to be measured on hardware).
+3. Anything that reaches C during the replay is appended after the held entries, so the stream stays in order of arrival at C.
+4. C sends `replay_end` with the final counts and goes back to passing things straight up.
+
+If the controller disappears again during a replay, the replay stops and what was not yet sent stays held.
+
+**Known gap:** an outage shorter than C's timeout is never noticed by C, so nothing is replayed, and anything C sent up during it that the laptop did not receive is missing without being counted (measured in simulation: a 1 s outage lost every reading made in it). Proposed for the serial step: a sequence number on every up message, so the laptop sees the gap and requests a replay of the entries C keeps.
+
+### What the laptop does with replayed information
+
+- A reading is counted once by its identity; a repeat is counted as a repeat. Readings delivered late are labelled as such with their delay. A reading C dropped for overflow is **lost**, and the count says how many.
+- A replayed topology report older than the one the controller already holds from that node is ignored, so old information can never refresh a link, or undo newer state, just because it arrived late. Expiry is judged by the report's estimated original time, so a report that has been held for longer than the 15 s report expiry is already stale when it arrives.
+- A replayed failover report is handled by the Phase 4b rules (a report about an older route version, or a repeat, does not change the current route).
+
+### RAM on the ESP8266 (estimate, not measured)
+
+A held reading is about 20 bytes (origin 1, session 4, seq 4, value 4, via 1, ttl 1, flags 1, arrival time 4); a topology report up to about 80 bytes (8 neighbor observations of 8 bytes plus a header). 50 entries at the 80-byte worst case is about **4 KB**; a typical outage (about 40 readings and 10 coalesced slots) about **1.5 KB**. Check against measured free heap in Phase 6; a fixed-size slot array is the simplest firmware layout.
+
 ## Reference examples
 
 Each file in `tests/protocol-examples/` holds one case:
@@ -570,4 +623,5 @@ Defining ROUTE_UPDATE made the last "still reserved" example wrong by constructi
 - **Phase 4a:** the optional RTT trailer on TOPOLOGY_REPORT (is a trailer easier or harder than a wider entry for the firmware packer?), `0` as "none" in the next-hop fields, the 11- and 10-byte route payloads, the epoch rule (start time in seconds), and whether `max_routes` 8 and the 5-sample RTT window fit the ESP8266's heap.
 - **Phase 5a:** TELEMETRY (counters, 32 bytes, flooded every 5 s) and whether the nine counters are the right set; the reading evidence C reports (`via` from the link-layer sender, `hops` from TTL) and that the ESP8266 can report the ESP-NOW sender MAC and the frame TTL to the serial line per reading; what the serial JSON line looks like (not specified yet).
 - **Phase 4b:** the node-protecting backup rule and three-round installation order; T1 (two-way lost or one-way) and T2 (K consecutive failures, default 3); `to_next_hop` 0 and reason 2 in LOCAL_FAILOVER_REPORT; whether report repeats (5, one per report interval) are acceptable; and that the ESP8266 ESP-NOW send callback behaves as modelled (to be verified in Phase 6).
+- **Phase 5b:** the laptop-to-C message set (heartbeat down; status, replay start and end up; `age_ms` and `replayed` on every up message); the 1 s heartbeat and 3 s timeout; the buffer (50 entries, the eviction order, coalescing, keeping what was sent back to the second-to-last heartbeat) and its estimated 1.5 to 4 KB of RAM; whether C's firmware can keep a monotonic millisecond clock for ages (`millis()` wraps after about 49 days, which is fine for ages if subtracted unsigned); and the 20 ms per replayed entry, which depends on the serial baud rate.
 - **Phase 4a:** a probe consumes a sequence number, like every created frame. If that is too many numbers per second for your counter or the duplicate window, say so and probes can use a separate counter.
