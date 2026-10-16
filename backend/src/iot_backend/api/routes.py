@@ -8,12 +8,12 @@ from fastapi.responses import JSONResponse
 from iot_backend import __version__
 from iot_backend.api.control import error_response
 from iot_backend.envelope import PROTOCOL_VERSION, utc_now
-from iot_backend.live import LiveSimulation
+from iot_backend.live import DashboardModel, LiveSimulation
 
 router = APIRouter()
 
 
-def _live(request: Request) -> LiveSimulation | None:
+def _live(request: Request) -> DashboardModel | None:
     return getattr(request.app.state, "live", None)
 
 
@@ -31,15 +31,8 @@ def snapshot(request: Request) -> dict[str, Any]:
         "backend": {"status": "ok", "version": __version__},
         "server_time": utc_now(),
     }
-    if live is None:  # hardware mode: nothing is simulated, nothing is known
-        return {
-            **base,
-            "run_id": 0,
-            "scenario": None,
-            "last_event_id": 0,
-            "nodes": [],
-            "links": [],
-        }
+    if live is None:
+        return {**base, "run_id": 0, "scenario": None, "last_event_id": 0, "nodes": [], "links": []}
     return {**base, **live.snapshot()}
 
 
@@ -55,7 +48,7 @@ def events(
     """
     live = _live(request)
     if live is None:
-        return error_response("not_available_in_hardware_mode", "no simulation is running", 409)
+        return error_response("not_available", "no live runtime", 409)
     selected, complete = live.events_after(after_id, limit)
     return JSONResponse(
         {
@@ -71,6 +64,6 @@ def events(
 @router.get("/api/scenarios", response_model=None)
 def scenarios(request: Request) -> Any:
     live = _live(request)
-    if live is None:
+    if not isinstance(live, LiveSimulation):
         return error_response("not_available_in_hardware_mode", "no simulation is running", 409)
     return {"scenarios": live.scenario_names(), "current": live.scenario}

@@ -121,6 +121,18 @@ EVENT_SCHEMAS: dict[str, dict[str, Any]] = {
         "outage_ms": Int,
     },
     "replay_finished": {"replayed": Int, "dropped_overflow": Int, "coalesced": Int},
+    # --- the reliable uplink and the serial port (Phase 6-prep) ---
+    "uplink_loss": {
+        "reason": Str,
+        "c_boot": Int,
+        "first": Int,
+        "last": Int,
+        "count": Int,
+        "readings": Int,
+        "unknown": Int,
+        "lower_bound": Bool,
+    },
+    "serial_port": {"port": (Str, NoneType), "state": Str, "detail": Str},
     # --- the environment channel and the runtime ---
     "environment": {
         "channel": Str,

@@ -16,9 +16,15 @@ class Settings(BaseSettings):
     host: str = "127.0.0.1"
     port: int = Field(default=8000, ge=1, le=65535)
     cors_origins: str = "http://localhost:5173"
-    # "simulation" runs the live simulator. "hardware" does not exist yet: the backend then
-    # serves status only and rejects every presenter control with a clear error.
+    # "simulation" runs the live simulator. "hardware" reads node C's USB serial port
+    # (serial_port) and refuses every presenter control with a clear error.
     mode: Literal["simulation", "hardware"] = "simulation"
+    # Hardware mode (Phase 6-prep): the port C is on (COM3 on Windows, /dev/cu.usbserial-...
+    # on macOS, or a pyserial URL such as socket://127.0.0.1:7777 for the fake C device).
+    serial_port: str = ""
+    serial_baud: int = Field(default=115_200, ge=1_200, le=2_000_000)
+    # The simulated C can also speak the serial line format in simulation mode ("serial").
+    live_transport: Literal["direct", "serial"] = "direct"
     heartbeat_interval_seconds: float = Field(default=2.0, gt=0)
 
     # Live simulation (Phase 5a)

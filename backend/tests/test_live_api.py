@@ -564,7 +564,8 @@ def test_observed_path_is_c_evidence_even_when_the_controllers_plan_disagrees():
 
 def test_the_runtime_module_never_reads_simulator_internals():
     source = Path(inspect.getsourcefile(__import__("iot_backend.live.runtime", fromlist=["x"])))
-    text = source.read_text(encoding="utf-8")
+    # every module of the live package: the runtimes and the dashboard model they share
+    text = "".join(p.read_text(encoding="utf-8") for p in sorted(source.parent.glob("*.py")))
     for word in (
         "sim.trace",
         ".trace.events",

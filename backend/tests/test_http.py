@@ -28,12 +28,17 @@ def test_snapshot_has_the_common_fields_and_nothing_is_known_at_time_zero():
 
 
 def test_hardware_mode_has_no_simulation_and_says_so():
-    client = make_client(mode="hardware")
-    body = client.get("/api/snapshot").json()
-    assert body["mode"] == "hardware" and body["nodes"] == [] and body["last_event_id"] == 0
-    refused = client.post("/api/control/pause", json={})
-    assert refused.status_code == 409
-    assert refused.json()["error"]["code"] == "not_available_in_hardware_mode"
+    with make_client(mode="hardware") as client:  # no port configured
+        body = client.get("/api/snapshot").json()
+        assert body["mode"] == "hardware" and body["label"].startswith("HARDWARE")
+        assert {n["status"] for n in body["nodes"]} == {"unknown"}  # nothing heard from C
+        assert body["gateway"]["serial"]["state"] == "no_port"
+        assert body["presenter"]["conditions"] is None
+        refused = client.post("/api/control/pause", json={})
+        assert refused.status_code == 409
+        assert refused.json()["error"]["code"] == "not_available_in_hardware_mode"
+        assert client.get("/api/scenarios").status_code == 409
+        assert client.get("/api/events").status_code == 200  # the event history works
 
 
 def test_cors_allows_configured_origin_only():
