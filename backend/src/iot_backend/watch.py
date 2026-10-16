@@ -99,6 +99,20 @@ def describe(envelope: dict[str, Any]) -> str:
             f"REPLAY END: {data['replayed']} replayed, {data['dropped_overflow']} dropped by "
             f"overflow, {data['coalesced']} coalesced"
         )
+    elif kind == "uplink_loss":
+        if data["reason"] == "c_restarted":
+            body = (
+                f"C RESTARTED: its buffer is lost; at least {data['count']} message(s) "
+                f"never arrived (numbers {data['first']}..{data['last']})"
+            )
+        else:
+            body = (
+                f"UPLINK LOSS: {data['count']} message(s) gone at C "
+                f"({data['readings']} reading(s), {data['unknown']} of unknown kind), "
+                f"numbers {data['first']}..{data['last']}"
+            )
+    elif kind == "serial_port":
+        body = f"SERIAL PORT {data['port']}: {data['state']} {data['detail']}".rstrip()
     elif kind == "runtime":
         body = f"runtime {data['change']} paused={data['paused']} speed={data['speed']}"
     elif kind == "reset":

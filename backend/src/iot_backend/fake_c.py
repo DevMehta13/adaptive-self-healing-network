@@ -48,7 +48,7 @@ class FakeCServer:
         port: int = 7777,
         seed: int | None = None,
         tick_s: float = 0.02,
-        echo: Callable[[str], None] = print,
+        echo: Callable[[str], None] = lambda text: print(text, flush=True),
     ) -> None:
         spec = load_scenario(scenario)
         spec.config.transport = "external"

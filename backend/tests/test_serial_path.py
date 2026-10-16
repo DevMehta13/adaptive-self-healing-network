@@ -251,6 +251,31 @@ def test_corrupted_lines_to_c_are_refused_by_c():
     assert run.made_at_c(0, 38_000) <= set(run.readings())
 
 
+def test_losses_and_port_changes_reach_the_dashboard_and_the_watcher():
+    from iot_backend.live import schema
+    from iot_backend.watch import describe
+
+    loss = {
+        "sim_ms": 1,
+        "reason": "gone_at_c",
+        "c_boot": 7,
+        "first": 5,
+        "last": 7,
+        "count": 2,
+        "readings": 1,
+        "unknown": 0,
+        "lower_bound": False,
+    }
+    port = {"sim_ms": 2, "port": "COM3", "state": "closed", "detail": "device removed"}
+    assert schema.validate_event("uplink_loss", loss) == []
+    assert schema.validate_event("serial_port", port) == []
+    text = describe({"type": "uplink_loss", "data": loss, "event_id": 1})
+    assert "UPLINK LOSS" in text and "1 reading" in text
+    restart = describe({"type": "uplink_loss", "data": {**loss, "reason": "c_restarted"}})
+    assert "C RESTARTED" in restart and "at least 2" in restart
+    assert "SERIAL PORT COM3: closed" in describe({"type": "serial_port", "data": port})
+
+
 # ---- the controller is the same code whatever the gateway ----
 
 
