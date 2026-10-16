@@ -55,7 +55,7 @@ Route-update ordering, acknowledgement retries, old/new version handling, and be
 
 ## Local failover and controller loss
 
-Approved by both owners on 2026-10-11. Backup next hops and local failover are implemented in simulation (Phase 4b); controller-loss buffering and replay (C's ring buffer, the controller heartbeat) are not (Phase 5). Phases and defaults are in [plan.md](../plan.md).
+Approved by both owners on 2026-10-11. Both are implemented in simulation: backup next hops and local failover in Phase 4b, the controller heartbeat and C's buffer and replay in Phase 5b. Phases and defaults are in [plan.md](../plan.md); the message set and buffer rules are in [PROTOCOL.md](PROTOCOL.md) *Laptop and C*.
 
 The controller calculates routes, but surviving a single relay failure should not depend on reaching it. Two mechanisms reduce that dependence.
 
@@ -72,6 +72,17 @@ The controller calculates routes, but surviving a single relay failure should no
 - C is powered by the same USB cable that connects it to the laptop, so unplugging it removes C entirely. Controller loss is tested by stopping the controller software. The buffer is RAM-only and is lost if C loses power.
 - Buffer size depends on ESP8266 free heap, measured in Phase 6.
 - Pre-installed backups cover only the failures the last route version anticipated. A second failure while the controller is unreachable may leave no route.
+
+Decisions recorded in Phase 5b (simulation; the message set and values are pending Dev's review):
+
+- **The heartbeat is laptop ↔ C only, never radio.** Every 1 s; C declares the controller unreachable after 3 s without one, and the laptop declares the link to C lost after 3 s of hearing nothing from C. C answers each heartbeat with a status, so silence in either direction is noticed by the side that is still alive. Both values are configurable. A radio heartbeat would cost airtime at every node to learn something only C needs to know.
+- **Typed messages first, encoding later.** The laptop ↔ C traffic is a fixed set of typed messages (heartbeat and route update down; reports, acks, failover reports, readings, telemetry, status, replay start and end up) that the serial NDJSON format must map to one to one. The controller is written against them, so the serial gateway can replace the simulated one without changing the controller.
+- **Ages instead of timestamps.** C has no wall clock. Every up message carries `age_ms`, measured on C's own clock, and the laptop subtracts it from its own. No two clocks are ever compared.
+- **C's buffer is bounded at 50 entries and ordered by value.** Readings are what the project exists to deliver, so reports, acknowledgements and telemetry are coalesced to the latest per node and evicted before readings; failover reports are always kept; entries C had already sent up just before noticing the outage (kept back to the second-to-last heartbeat, because the laptop may not have received them) go first. Within a class the oldest is dropped. Every drop is counted, so loss is reported, not hidden.
+- **Replay is explicit and idempotent.** C brackets it with start and end markers carrying counts. The controller counts each reading once by `(origin, session, seq)`; a repeat is counted as a repeat. Replayed readings are labelled delayed with their delay.
+- **Old information never overrides new.** A replayed topology report older than the one held is ignored, and freshness is judged from the estimated original time, so a report held longer than the expiry is stale on arrival and cannot revive a link. Failover reports are reconciled by the existing Phase 4b rules.
+- **The controller never reads C's buffer.** It learns about C's buffer only from C's status and replay messages; the dashboard shows those figures with the time they were reported, because during an outage they are old.
+- **Controller loss on hardware is tested by stopping the backend.** The USB cable also powers C, and the buffer is RAM-only, so unplugging it would remove C and its buffer.
 
 ## Topology and routing
 
@@ -162,7 +173,7 @@ Decisions recorded in Phase 5a (simulation; pending Dev's review where they touc
 - **Controls change only the environment.** No control calls the controller or the topology view; a test compares the controller's state and the commands it has sent before and after each one. State-changing endpoints require a JSON body (a cross-site form cannot send one), reject a foreign `Origin`, and the server binds to localhost.
 - **Everything the live process holds is bounded:** the state-changing event history (2000), recent readings (50), the simulator trace (5000), the controller and view event logs (1000 each), and the pending-work queue. A long accelerated run test checks each of them. The check found a real unbounded structure, a duplicate expiry timer re-armed by every timer in the topology view (about 44 pending entries per simulated minute); it is fixed.
 
-Limitations of Phase 5a: while the gateway is detached the dashboard also sees nothing and C buffers nothing (Phase 5b); presenter controls act on the single live run (no per-client sessions); and there is no persistence, so a backend restart starts a new run.
+Since Phase 5b the dashboard is also told, by the controller, when its link to C is lost (the network view is then stale) and when C replays, and replayed readings are labelled delayed. Limitations: presenter controls act on the single live run (no per-client sessions); and there is no persistence, so a backend restart starts a new run.
 
 ## Selected stack, not installed dependencies
 
