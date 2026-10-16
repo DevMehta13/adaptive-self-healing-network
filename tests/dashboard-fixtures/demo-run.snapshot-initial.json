@@ -67,7 +67,25 @@
     "c_reports_controller_reachable": null,
     "c_buffer": null,
     "last_replay": null,
-    "network_view": "waiting: nothing has arrived from C yet"
+    "network_view": "waiting: nothing has arrived from C yet",
+    "uplink": {
+      "c_boot": 4145609530,
+      "acknowledged_up_to": 0,
+      "highest_known": 0,
+      "missing_now": 0,
+      "frames": 0,
+      "duplicates_dropped": 0,
+      "resend_requests": 0,
+      "resend_repeats": 0,
+      "lost": {
+        "gone_at_c": 0,
+        "of_which_readings": 0,
+        "of_unknown_kind": 0,
+        "c_restarted_at_least": 0
+      },
+      "c_restarts": 0,
+      "out_of_window": 0
+    }
   },
   "readings": {
     "delivered_unique": 0,
