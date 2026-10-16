@@ -12,9 +12,12 @@ def test_outage_demo_through_the_api_shows_the_link_loss_the_replay_and_the_catc
         api = Api(client)
         with client.websocket_connect("/ws") as ws:
             ws.receive_json()
+            first = api.snapshot()["gateway"]
+            assert first["state"] == "connecting" and first["network_view"].startswith("waiting")
             api.step(12_000)
             settle(ws)  # normal operation
             assert api.snapshot()["gateway"]["state"] == "connected"
+            assert api.snapshot()["gateway"]["network_view"] == "live"
 
             assert api.post("gateway", {"attached": False}).status_code == 200
             api.step(10_000)

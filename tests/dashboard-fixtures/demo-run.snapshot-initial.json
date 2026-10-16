@@ -67,7 +67,7 @@
     "c_reports_controller_reachable": null,
     "c_buffer": null,
     "last_replay": null,
-    "network_view": "live"
+    "network_view": "waiting: nothing has arrived from C yet"
   },
   "readings": {
     "delivered_unique": 0,

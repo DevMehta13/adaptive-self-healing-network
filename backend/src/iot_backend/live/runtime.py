@@ -559,11 +559,10 @@ class LiveSimulation:
                 "note": "no heartbeat is configured, so the controller cannot tell",
             }
         described = self._session.describe()
-        described["network_view"] = (
-            "stale: nothing has arrived from C since the link was lost"
-            if described["state"] == "lost"
-            else "live"
-        )
+        described["network_view"] = {
+            "lost": "stale: nothing has arrived from C since the link was lost",
+            "connecting": "waiting: nothing has arrived from C yet",
+        }.get(described["state"], "live")
         return described
 
     def snapshot(self) -> dict[str, Any]:
