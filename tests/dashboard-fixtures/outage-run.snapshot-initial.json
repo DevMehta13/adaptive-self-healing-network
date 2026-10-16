@@ -63,6 +63,7 @@
     "last_heard_ms": null,
     "heartbeat_interval_ms": 1000,
     "link_timeout_ms": 3000,
+    "c_status_as_of_ms": null,
     "c_reports_controller_reachable": null,
     "c_buffer": null,
     "last_replay": null,

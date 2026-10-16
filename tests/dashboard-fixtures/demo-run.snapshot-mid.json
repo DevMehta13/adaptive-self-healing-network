@@ -213,6 +213,7 @@
     "last_heard_ms": 20000,
     "heartbeat_interval_ms": 1000,
     "link_timeout_ms": 3000,
+    "c_status_as_of_ms": 20000,
     "c_reports_controller_reachable": true,
     "c_buffer": {
       "held": 0,

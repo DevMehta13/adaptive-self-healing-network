@@ -81,6 +81,8 @@ class GatewaySession:
             "last_heard_ms": self.last_heard_ms,
             "heartbeat_interval_ms": self.heartbeat_interval_ms,
             "link_timeout_ms": self.link_timeout_ms,
+            # C's own report as of its last status message: during an outage this is old news
+            "c_status_as_of_ms": None if status is None else status.received_ms,
             "c_reports_controller_reachable": None
             if status is None
             else status.controller_reachable,
