@@ -90,7 +90,7 @@ def describe(envelope: dict[str, Any]) -> str:
         body = f"GATEWAY LINK RESTORED after {data['lost_for_ms'] / 1000:.1f} s"
     elif kind == "replay_started":
         body = (
-            f"REPLAY START: {data['entries']} entries ({data['held']} made during the outage), "
+            f"REPLAY START: {data['entries']} entries ({data['held']} held during the outage), "
             f"{data['dropped_overflow']} dropped by overflow, {data['coalesced']} coalesced, "
             f"outage {data['outage_ms'] / 1000:.1f} s"
         )
