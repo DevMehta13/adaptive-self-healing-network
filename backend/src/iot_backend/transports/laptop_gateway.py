@@ -324,8 +324,9 @@ class LaptopGateway:
                     received_ms=now,
                     reason="c_restarted",
                     boot=self.boot,
-                    first=self.ack + 1,
-                    last=max(self.ack, self.last_known),
+                    # the numbers known to be missing; 0..0 when none were
+                    first=self.ack + 1 if missing else 0,
+                    last=self.last_known if missing else 0,
                     count=missing,
                 )
             )

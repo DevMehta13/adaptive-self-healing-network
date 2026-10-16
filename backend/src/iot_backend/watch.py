@@ -100,10 +100,12 @@ def describe(envelope: dict[str, Any]) -> str:
             f"overflow, {data['coalesced']} coalesced"
         )
     elif kind == "uplink_loss":
-        if data["reason"] == "c_restarted":
+        if data["reason"] == "c_restarted" and data["count"] == 0:
+            body = "C RESTARTED: whatever it held is lost (RAM only); no missing number was known"
+        elif data["reason"] == "c_restarted":
             body = (
-                f"C RESTARTED: its buffer is lost; at least {data['count']} message(s) "
-                f"never arrived (numbers {data['first']}..{data['last']})"
+                f"C RESTARTED: whatever it held is lost (RAM only); at least {data['count']} "
+                f"message(s) never arrived (numbers {data['first']}..{data['last']})"
             )
         else:
             body = (
