@@ -80,7 +80,8 @@ class GoneUp:
     first: int  # numbers first..last were asked for and are no longer held
     last: int
     # One letter per number from first to last: "R" a reading (DATA), "M" another management
-    # frame, "?" C no longer knows (it was freed by an acknowledgement). At most 64 letters.
+    # frame, "S" a report, acknowledgement or telemetry superseded by a newer one from the same
+    # node (nothing is lost), "?" C no longer knows (freed by an acknowledgement). At most 64.
     kinds: str = ""
 
 

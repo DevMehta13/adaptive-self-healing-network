@@ -289,18 +289,22 @@ class CBridge:
             self._schedule_pump()
 
     def _store(self, entry: _Entry) -> None:
-        for existing in self._buffer:
-            if existing.key != entry.key:
-                continue
-            if entry.kind == FAILOVER:
-                # A node repeats a failover report; keep the first copy, which carries the
-                # time the failover really happened (its age), and drop the repeat.
-                self._count_coalesced()
-                return
-            if existing.n is None:
-                self._buffer.remove(existing)
-                self._count_coalesced()
-                break
+        older = [e for e in self._buffer if e.key == entry.key]
+        if older and entry.kind in (FAILOVER, READING):
+            # A repeat: a node repeats its failover report, and A retries a reading whose
+            # acknowledgement was lost. Keep the first copy (for a failover its age tells when
+            # it happened; for a reading it is the one not marked as a repeat, so it is
+            # counted) and drop the repeat.
+            self._count_coalesced()
+            return
+        for existing in older:
+            # A newer report, acknowledgement or telemetry from the same node says everything
+            # the older ones did. One that was sent once and not acknowledged is named as
+            # superseded if the laptop asks for it, not as lost.
+            self._buffer.remove(existing)
+            self._count_coalesced()
+            if existing.n is not None:
+                self._evicted[existing.n] = "S"
         while len(self._buffer) >= max(1, self.config.buffer_capacity):
             _, victim = min(enumerate(self._buffer), key=lambda item: (_rank(item[1]), item[0]))
             if _rank(entry) < _rank(victim):

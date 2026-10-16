@@ -65,8 +65,7 @@ REJECT_REASONS = (
     "no_checksum",  # starts like data but has no *XXXX ending
     "bad_checksum",  # the CRC does not match: bytes were lost or changed
     "not_ascii",  # bytes outside printable ASCII in a data line
-    "bad_json",  # the text is not one valid JSON value
-    "not_object",
+    "bad_json",  # the text is not one valid JSON object
     "duplicate_key",
     "bad_version",
     "unknown_type",
@@ -152,8 +151,8 @@ MAX_GONE_RANGE = 64
 
 
 def _kinds(value: Any) -> str:
-    if not isinstance(value, str) or not re.fullmatch(rf"[RM?]{{1,{MAX_GONE_RANGE}}}", value):
-        raise LineError("bad_value", f"kinds must be 1..{MAX_GONE_RANGE} of R M ?")
+    if not isinstance(value, str) or not re.fullmatch(rf"[RMS?]{{1,{MAX_GONE_RANGE}}}", value):
+        raise LineError("bad_value", f"kinds must be 1..{MAX_GONE_RANGE} of R M S ?")
     return value
 
 
@@ -339,8 +338,8 @@ def _object(line: bytes) -> dict[str, Any]:
         raise
     except ValueError as error:
         raise LineError("bad_json", str(error)) from error
-    if not isinstance(value, dict):
-        raise LineError("not_object")
+    if not isinstance(value, dict):  # unreachable for text starting with "{", kept as a guard
+        raise LineError("bad_json", "not an object")
     return value
 
 

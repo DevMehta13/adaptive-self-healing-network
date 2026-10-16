@@ -332,7 +332,7 @@ def _outage(args: argparse.Namespace) -> int:
     rows = outage_study(
         args.scenario,
         range(1, args.outage_study + 1),
-        durations_s=(5, 10, 20, 40, 80, 160),
+        durations_s=(1, 2, 5, 10, 20, 40, 80, 160),
         capacity=args.buffer,
         reading_interval_ms=args.interval_ms,
     )

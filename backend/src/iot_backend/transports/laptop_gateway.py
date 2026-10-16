@@ -98,6 +98,7 @@ class UplinkStats:
     lost_readings: int = 0  # of those, readings
     lost_unknown: int = 0  # of those, of a kind C could not say
     lost_restart: int = 0  # numbers known to be missing when C rebooted (a lower bound)
+    superseded: int = 0  # numbers C replaced by a newer report from the same node (not lost)
     c_restarts: int = 0
     out_of_window: int = 0  # frames numbered impossibly far ahead (refused)
     statuses: int = 0
@@ -296,6 +297,7 @@ class LaptopGateway:
                 "of_unknown_kind": s.lost_unknown,
                 "c_restarted_at_least": s.lost_restart,
             },
+            "superseded": s.superseded,
             "c_restarts": s.c_restarts,
             "out_of_window": s.out_of_window,
         }
@@ -411,6 +413,10 @@ class LaptopGateway:
         ]
         self._above.update(missing)
         self._advance()
+        # "S": superseded by a newer report from the same node, which we have or will get.
+        superseded = [n for n in missing if gone.kinds[n - gone.first] == "S"]
+        self.stats.superseded += len(superseded)
+        missing = [n for n in missing if n not in superseded]
         if missing:
             kinds = [gone.kinds[n - gone.first] for n in missing]
             readings, unknown = kinds.count("R"), kinds.count("?")

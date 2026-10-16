@@ -341,6 +341,35 @@ def test_numbers_c_no_longer_holds_are_named_as_gone_with_their_kinds():
     assert bridge.counters.gone == 3
 
 
+def test_a_retried_reading_never_replaces_the_original_copy():
+    """A's retry (its acknowledgement was lost) reaches C while the original is still held:
+    the original, the one not marked as a repeat, is the one the laptop must get."""
+    engine, bridge, out = make()
+    up(bridge, reading(5))
+    up(bridge, reading(5), duplicate=True)
+    assert [k for k, _, _ in bridge.slots()] == ["reading"]
+    hb(bridge)
+    engine.run_until(1_000)
+    sent = [m for _, f, m in frames(out) if f.msg_type is MessageType.DATA]
+    assert len(sent) == 1 and sent[0].duplicate is False
+
+
+def test_a_sent_report_superseded_by_a_newer_one_is_named_superseded_not_lost():
+    engine, bridge, out = make()
+    hb(bridge)
+    up(bridge, report(A, seq=1))  # n=1, sent, never acknowledged
+    engine.run_until(4_000)  # C notices the outage
+    up(bridge, report(A, seq=2))  # newer: the sent copy is worthless now
+    assert [key for _, key, numbered in bridge.slots()] == [("report", A)]
+    out.clear()
+    hb(bridge, ack=0)
+    bridge.receive(ResendDown(BOOT, 1))
+    engine.run_until(5_000)
+    assert [(m.first, m.last, m.kinds) for m in out if isinstance(m, GoneUp)] == [(1, 1, "S")]
+    reports = [f for _, f, _ in frames(out) if f.msg_type is MessageType.TOPOLOGY_REPORT]
+    assert [f.seq for f in reports] == [2]
+
+
 def test_numbers_freed_by_an_acknowledgement_are_gone_of_unknown_kind():
     engine, bridge, out = make()
     hb(bridge)
