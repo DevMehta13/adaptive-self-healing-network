@@ -106,6 +106,19 @@ def test_a_message_that_arrives_twice_is_counted_once():
     assert gw.stats.frames == 3 and gw.stats.duplicates == 3
 
 
+def test_a_repeat_of_a_number_received_out_of_order_is_counted_once():
+    """3 arrives before 2 (2 was lost and is resent later): a second copy of 3, from a resend,
+    is above the acknowledgement point and must still be recognised."""
+    clock, gw, down, events = synced()
+    gw.receive(frame(1))
+    gw.receive(frame(3))
+    gw.receive(frame(3, age=500))  # the resend answer repeats 3 as well
+    assert readings(events) == [1, 3] and gw.stats.duplicates == 1 and gw.ack == 1
+    gw.receive(frame(2, age=500))
+    gw.receive(frame(3, age=500))
+    assert readings(events) == [1, 3, 2] and gw.ack == 3 and gw.stats.duplicates == 2
+
+
 def test_gone_numbers_are_counted_by_kind_and_never_block_the_acknowledgement():
     clock, gw, down, events = synced()
     gw.receive(frame(1))
