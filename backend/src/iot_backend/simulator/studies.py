@@ -183,7 +183,7 @@ def outage_study(
             made += len(truth)
             late += len(got)
             missing = len(truth) - len(got)
-            counted = sim.gateway.bridge.counters.dropped_overflow
+            counted = sim.c_bridge.counters.dropped_overflow
             lost += missing
             dropped += counted
             unexplained += max(0, missing - counted)

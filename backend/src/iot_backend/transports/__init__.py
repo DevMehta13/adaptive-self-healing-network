@@ -17,9 +17,11 @@ from iot_backend.transports.gateway import (
     RouteUpdateCommand,
     TelemetryEvent,
     TopologyReportEvent,
+    UplinkLossEvent,
 )
 
 __all__ = [
+    "UplinkLossEvent",
     "DOWN_MESSAGES",
     "UP_MESSAGES",
     "Gateway",

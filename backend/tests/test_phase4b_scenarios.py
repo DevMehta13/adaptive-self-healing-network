@@ -195,7 +195,7 @@ def test_one_way_failure_with_only_t1_still_fails_over_though_a_never_loses_b():
 
 def test_failover_works_with_the_controller_detached_and_it_catches_up_on_reattach():
     sim, host, _ = run("failover-without-controller")
-    assert sim.gateway.events_lost > 0  # the controller really saw nothing
+    assert sim.link.events_lost > 0  # the controller really saw nothing
     window = [e for e in host.route_events if 10_000 < e.time_ms < 32_000]
     assert window == []  # ... and did nothing: no command, no event
     (fail,) = failovers(sim)

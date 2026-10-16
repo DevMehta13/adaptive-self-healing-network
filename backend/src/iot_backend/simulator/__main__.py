@@ -477,7 +477,7 @@ def _print_routes(sim: Simulation, host: ControllerHost, actions: list) -> None:
             f"  #{event.event_id:<3} {event.time_ms / 1000:8.3f} s  {event.type:<20} {event.data}"
         )
     stats = host.controller.stats
-    bridge = sim.gateway.bridge
+    bridge = sim.c_bridge
     session = host.session.describe()
     if session["heartbeat_interval_ms"]:
         c = bridge.counters

@@ -12,17 +12,20 @@ from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 
 from iot_backend.protocol import DEFAULT_TTL, NODE_IDS, NODE_NAMES, PacketIdentity
-from iot_backend.simulator.bridge import BridgeConfig
+from iot_backend.simulator.bridge import BridgeConfig, CBridge
 from iot_backend.simulator.engine import Engine
 from iot_backend.simulator.gateway import SimulatedGateway
 from iot_backend.simulator.link import Link, LinkConfig
 from iot_backend.simulator.nodes import ACK_FLOODING, ACK_ROUTED, Node, NodeSettings
+from iot_backend.simulator.serial_device import SerialCDevice
 from iot_backend.simulator.trace import (
     FRAME_DROPPED,
     GATEWAY_ATTACHED,
     GATEWAY_DETACHED,
     Trace,
 )
+from iot_backend.transports.laptop_gateway import EngineClock, LaptopGateway, UplinkConfig
+from iot_backend.transports.serial_gateway import SerialGateway
 
 NODE_LETTERS = tuple(sorted(NODE_IDS))  # ("A", "B", "C", "D")
 LINK_KEYS = tuple((s, d) for s in NODE_LETTERS for d in NODE_LETTERS if s != d)
@@ -77,6 +80,12 @@ class ScenarioConfig:
     controller_timeout_ms: int = 0
     buffer_capacity: int = 50
     replay_spacing_ms: int = 20
+    # Phase 6-prep: the reliable uplink. C keeps at most this many numbered messages waiting
+    # for the laptop's acknowledgement.
+    uplink_window: int = 16
+    # How C's messages reach the laptop side: "direct" (message objects) or "serial" (the
+    # serial text format through memory, parsed by a SerialGateway as on hardware).
+    transport: str = "direct"
     gateway: str = "C"  # node whose USB link carries events to the controller
     reading_src: str = "A"
     reading_dst: str = "C"
@@ -154,14 +163,23 @@ class Simulation:
             failover_report_repeats=self.config.failover_report_repeats,
             telemetry_interval_ms=self.config.telemetry_interval_ms,
         )
-        self._gateway = SimulatedGateway(
-            self._engine,
-            BridgeConfig(
-                controller_timeout_ms=self.config.controller_timeout_ms,
-                buffer_capacity=self.config.buffer_capacity,
-                replay_spacing_ms=self.config.replay_spacing_ms,
-            ),
+        bridge_config = BridgeConfig(
+            controller_timeout_ms=self.config.controller_timeout_ms,
+            buffer_capacity=self.config.buffer_capacity,
+            replay_spacing_ms=self.config.replay_spacing_ms,
+            window=self.config.uplink_window,
+            node_id=NODE_IDS[self.config.gateway],
         )
+        uplink = UplinkConfig(data_ttl=self.config.ttl)
+        self._gateway: LaptopGateway
+        self._link: SimulatedGateway | SerialCDevice
+        if self.config.transport == "serial":
+            device = SerialCDevice(self._engine, bridge_config, lambda data: gateway.feed(data))
+            gateway = SerialGateway(EngineClock(self._engine), device.feed_down, uplink)
+            self._gateway, self._link = gateway, device
+        else:
+            direct = SimulatedGateway(self._engine, bridge_config, uplink)
+            self._gateway, self._link = direct, direct
         for letter in NODE_LETTERS:
             permitted = {NODE_IDS[n] for n in self.config.permitted.get(letter, set())}
             routes: dict[int, int] = {}
@@ -197,9 +215,11 @@ class Simulation:
                 deliver=self._make_delivery(self._nodes[dst], NODE_IDS[src]),
             )
 
-        self._nodes[self.config.gateway].gateway_sink = self._gateway.deliver
-        self._gateway.attach_originator(self._nodes[self.config.gateway].originate_route_update)
-        self._nodes[self.config.gateway].reading_sink = self._gateway.deliver_reading
+        bridge, c_node = self._link.bridge, self._nodes[self.config.gateway]
+        c_node.gateway_sink = bridge.from_radio
+        c_node.on_boot = bridge.boot_up
+        c_node.on_stop = bridge.power_off
+        bridge.attach_originator(c_node.originate)
 
         for letter in NODE_LETTERS:
             self._nodes[letter].boot()
@@ -220,6 +240,8 @@ class Simulation:
             raise ValueError("routing must be 'manual' or 'controller'")
         if self.config.probe_interval_ms < 0:
             raise ValueError("probe_interval_ms must be >= 0")
+        if self.config.transport not in ("direct", "serial"):
+            raise ValueError("transport must be 'direct' or 'serial'")
         if self.config.reading_src == self.config.reading_dst:
             raise ValueError("reading source and destination must differ")
         for table in (self.config.permitted, self.config.initial_seq):
@@ -239,9 +261,19 @@ class Simulation:
         return self._engine.now_ms
 
     @property
-    def gateway(self) -> SimulatedGateway:
+    def gateway(self) -> LaptopGateway:
         """The only door the controller may use to learn about the network."""
         return self._gateway
+
+    @property
+    def link(self) -> SimulatedGateway | SerialCDevice:
+        """The simulated USB link (connected / heartbeats_blocked switches, loss counters)."""
+        return self._link
+
+    @property
+    def c_bridge(self) -> CBridge:
+        """Node C's laptop-link firmware model. An observation aid; never for the controller."""
+        return self._link.bridge
 
     def run(self, duration_ms: int) -> None:
         """Advance the virtual clock by `duration_ms`, processing everything due."""
@@ -272,12 +304,12 @@ class Simulation:
         """Cut or restore the controller's view of, and commands to, the network.
 
         Models the controller process (or the USB link to C) being unreachable. Node C keeps
-        receiving, acknowledging and forwarding; only the controller is blind and mute. C does
-        not buffer anything while detached (that is Phase 5).
+        receiving, acknowledging and forwarding; only the controller is blind and mute. C
+        notices by the missing heartbeats and holds what goes up (Phase 5b).
         """
 
         def apply() -> None:
-            self._gateway.connected = connected
+            self._link.connected = connected
             self.trace.record(
                 self._engine.now_ms,
                 self.config.gateway,

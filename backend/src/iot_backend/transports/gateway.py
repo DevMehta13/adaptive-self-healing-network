@@ -205,6 +205,26 @@ class ReplayEndEvent:
     coalesced: int
 
 
+@dataclass(frozen=True)
+class UplinkLossEvent:
+    """The laptop's own finding: numbered messages from C that will never arrive (Phase 6-prep).
+
+    Produced by the laptop side of the gateway, never by C directly. `reason` is "gone_at_c"
+    (C said it no longer holds them, and what each was) or "c_restarted" (C rebooted: its buffer
+    is RAM-only, so whatever it held is gone; `count` is then a lower bound, the numbers the
+    laptop knew about, and their kinds are unknown).
+    """
+
+    received_ms: int
+    reason: str
+    boot: int  # the boot of C the numbers belonged to
+    first: int
+    last: int
+    count: int  # how many of first..last were never received
+    readings: int = 0  # of those, readings (DATA)
+    unknown: int = 0  # of those, of a kind C could not say
+
+
 GatewayEvent = (
     TopologyReportEvent
     | RouteInstallAckEvent
@@ -214,10 +234,15 @@ GatewayEvent = (
     | GatewayStatusEvent
     | ReplayStartEvent
     | ReplayEndEvent
+    | UplinkLossEvent
 )
 GatewayHandler = Callable[[GatewayEvent], None]
 
-# The complete message set, by wire name, for the serial encoding that comes next.
+# The complete message set, by name. Each maps to exactly one serial line type
+# (docs/SERIAL_PROTOCOL.md): heartbeat -> `hb`; route_update -> `tx`; the five network events
+# -> `fr` (the radio frame itself, decoded on the laptop); status -> `st`; replay_start ->
+# `rps`; replay_end -> `rpe`. uplink_loss is made by the laptop from `gone`, `st` or a change
+# of C's boot, and has no line of its own.
 DOWN_MESSAGES: dict[str, type] = {"heartbeat": Heartbeat, "route_update": RouteUpdateCommand}
 UP_MESSAGES: dict[str, type] = {
     "topology_report": TopologyReportEvent,
@@ -228,6 +253,7 @@ UP_MESSAGES: dict[str, type] = {
     "status": GatewayStatusEvent,
     "replay_start": ReplayStartEvent,
     "replay_end": ReplayEndEvent,
+    "uplink_loss": UplinkLossEvent,
 }
 
 

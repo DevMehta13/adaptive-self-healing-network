@@ -185,12 +185,14 @@ def test_a_long_outage_drops_the_oldest_and_counts_them_and_memory_stays_bounded
     peak = 0
     for second in range(1, 76):
         o.run(second * 1000)
-        peak = max(peak, o.sim.gateway.bridge.size)
+        peak = max(peak, o.sim.c_bridge.size)
     assert peak <= 20  # the configured capacity, always
-    bridge = o.sim.gateway.bridge
-    # at the end of the outage the buffer holds readings only: reports and telemetry gave way
-    kinds = {kind for kind, _, _ in bridge.slots()}
+    bridge = o.sim.c_bridge
+    # at the end of the outage the entries waiting to be sent are readings only: reports and
+    # telemetry gave way. (The few sent just before C noticed stay until acknowledged.)
+    kinds = {kind for kind, _, numbered in bridge.slots() if not numbered}
     assert kinds == {"reading"}
+    assert bridge.unacked <= 16
     assert bridge.counters.dropped_overflow > 200
     o.run(100_000)
     outage = o.delivered_at_c(15_000, 75_000)
@@ -214,10 +216,10 @@ def test_a_long_outage_drops_the_oldest_and_counts_them_and_memory_stays_bounded
 
 def test_many_reports_during_an_outage_occupy_one_slot_per_origin():
     o = build("coalescing").run(34_900)  # just before the reattachment
-    bridge = o.sim.gateway.bridge
-    slots = bridge.slots()
-    reports = [key for kind, key, _ in slots if kind == "report"]
-    telemetry = [key for kind, key, _ in slots if kind == "telemetry"]
+    bridge = o.sim.c_bridge
+    waiting = [(kind, key) for kind, key, numbered in bridge.slots() if not numbered]
+    reports = [key for kind, key in waiting if kind == "report"]
+    telemetry = [key for kind, key in waiting if kind == "telemetry"]
     assert len(reports) == len({k[1] for k in reports}) <= 4
     assert len(telemetry) == len({k[1] for k in telemetry}) <= 4
     assert bridge.counters.coalesced > 80  # dozens of reports and telemetry were superseded
@@ -254,7 +256,7 @@ def test_replayed_old_topology_does_not_make_links_look_fresh_or_undo_newer_stat
 
 def test_c_declares_the_controller_unreachable_within_the_timeout_and_recovers():
     o = build("heartbeat-timeout")
-    bridge = o.sim.gateway.bridge
+    bridge = o.sim.c_bridge
     went_unreachable = came_back = None
     previous = True
     for tenth in range(1, 601):
@@ -273,16 +275,18 @@ def test_c_declares_the_controller_unreachable_within_the_timeout_and_recovers()
 
 
 def test_a_cut_heartbeat_path_with_a_working_up_path_replays_without_double_counting():
-    """C thinks the controller is gone, the laptop is in fact still listening: entries C
-    already sent up are replayed, and the controller counts every reading once."""
+    """C thinks the controller is gone, the laptop is in fact still listening: C holds and
+    replays, and the controller counts every reading once."""
     o = build("controller-outage-replay", scripted=False)  # no detach: only the heartbeat path
-    o.sim.call_at(15_000, lambda: setattr(o.sim.gateway, "heartbeats_blocked", True))
-    o.sim.call_at(35_000, lambda: setattr(o.sim.gateway, "heartbeats_blocked", False))
+    o.sim.call_at(15_000, lambda: setattr(o.sim.link, "heartbeats_blocked", True))
+    o.sim.call_at(35_000, lambda: setattr(o.sim.link, "heartbeats_blocked", False))
     o.run(60_000)
     keys = [(r.origin, r.session, r.seq) for r in o.records]
     assert len(keys) == len(set(keys)) == len(o.delivered_at_c())
-    assert o.host.ledger.repeats_seen_again >= 1  # some arrived twice, and were counted once
-    assert o.sim.gateway.events_lost == 0  # the up path never failed
+    assert o.sim.c_bridge.counters.replays == 1  # C really did hold and replay
+    # repeats are removed by number before the controller sees them
+    assert o.host.ledger.repeats_seen_again == 0
+    assert o.sim.link.events_lost == 0  # the up path never failed
 
 
 # ---- structure ----

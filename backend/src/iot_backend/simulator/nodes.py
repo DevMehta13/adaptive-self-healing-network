@@ -57,8 +57,10 @@ from iot_backend.protocol import (
 )
 from iot_backend.protocol.constants import (
     AGE_MAX_MS,
+    HEADER_STRUCT,
     MAX_HELLO_NEIGHBORS,
     MAX_REPORT_ENTRIES,
+    PROTOCOL_VERSION,
     RTT_MAX_MS,
 )
 from iot_backend.simulator.dedup import DuplicateFilter, FloodCache, Verdict
@@ -88,12 +90,13 @@ from iot_backend.simulator.trace import (
     SEND_FAILED,
     Trace,
 )
-from iot_backend.transports import ReadingEvent, RouteUpdateCommand
 
 # transmit(from_id, to_id, data, identity, msg): put encoded bytes on the air towards `to_id`.
 # `msg` is the message-type name; only the simulated link uses it (to pick frames to drop).
 TransmitFunction = Callable[[int, int, bytes, PacketIdentity, str], None]
-GatewaySink = Callable[[Frame], None]
+# Node C only: a frame for the controller, the link-layer sender that handed it over, and (for
+# DATA) whether the duplicate filter had already seen it.
+GatewaySink = Callable[[Frame, int, bool], None]
 
 # Epochs, versions and sequence numbers are compared with serial-number arithmetic.
 _HALF = 2**31
@@ -253,10 +256,14 @@ class Node:
         self._settings = settings
         self._reading_dst = reading_dst
         self._initial_seq = initial_seq
+        # Node C only: told about every management frame for the controller and every DATA
+        # frame accepted or repeated, with C's own evidence (link-layer sender; the frame keeps
+        # its remaining TTL).
         self.gateway_sink: GatewaySink | None = None
-        # Node C only: told about every DATA frame accepted or repeated, with C's own
-        # evidence (link-layer sender, remaining TTL).
-        self.reading_sink: Callable[[ReadingEvent], None] | None = None
+        # Told when the node boots (with its new session) and when it stops: C's laptop-link
+        # buffer lives in the same RAM and is lost with it.
+        self.on_boot: Callable[[int], None] | None = None
+        self.on_stop: Callable[[], None] | None = None
         self._telemetry_rng = random.Random(f"{seed}:telemetry:{self.name}")
 
         self.running = False
@@ -346,6 +353,8 @@ class Node:
             session=f"{session:08x}",
             boot=self.counters.boots,
         )
+        if self.on_boot is not None:
+            self.on_boot(session)
         epoch = self._epoch
         if self._reading_dst is not None:
             self._engine.schedule(
@@ -386,6 +395,8 @@ class Node:
         self._tickets_issued = self._next_ticket = 0
         self._verdicts.clear()
         self._trace.record(self._engine.now_ms, self.name, NODE_STOPPED)
+        if self.on_stop is not None:
+            self.on_stop()
 
     # ---- sending ----
 
@@ -636,7 +647,7 @@ class Node:
             self._drop("flood_duplicate", frame.identity, sender=self._name(from_node))
             return
         if frame.dst == self.id:
-            self._consume_management(frame)
+            self._consume_management(frame, from_node)
             return
         if frame.ttl <= 1:
             self._drop("ttl_expired", frame.identity, ttl=frame.ttl)
@@ -646,7 +657,7 @@ class Node:
             if neighbor != from_node:  # not back to where it came from
                 self._enqueue(forwarded, neighbor, from_node, None)
 
-    def _consume_management(self, frame: Frame) -> None:
+    def _consume_management(self, frame: Frame, from_node: int | None = None) -> None:
         kind = frame.msg_type
         if kind in (
             MessageType.TOPOLOGY_REPORT,
@@ -655,7 +666,7 @@ class Node:
             MessageType.TELEMETRY,
         ):
             if self.gateway_sink is not None:
-                self.gateway_sink(frame)
+                self.gateway_sink(frame, self.id if from_node is None else from_node, False)
             else:
                 self._reject("unexpected_type", frame.identity, msg=kind.name)
         elif kind is MessageType.ROUTE_UPDATE:
@@ -837,37 +848,48 @@ class Node:
 
     # ---- route installation (ROUTE_UPDATE / ROUTE_INSTALL_ACK) ----
 
-    def originate_route_update(self, command: RouteUpdateCommand) -> None:
+    def originate(self, dst: int, msg_type: int, payload: bytes) -> str | None:
         """Gateway node only: send the controller's instruction into the network.
 
-        C creates the frame (its own `src`, session and sequence), so nodes can check that a
+        The laptop supplies the type, destination and payload; C writes the header with its own
+        `src`, session and sequence (exactly what the firmware does), so nodes can check that a
         ROUTE_UPDATE really came from the gateway. It travels by management flooding, not along
-        the data route it is replacing.
+        the data route it is replacing. Returns why it was refused, or None.
         """
         if not self.running:
-            return
-        frame = self._new_frame(
-            command.node,
-            RouteUpdatePayload(
-                command.epoch,
-                command.version,
-                command.destination,
-                command.next_hop,
-                command.backup_next_hop,
-            ),
+            return "not_running"
+        if msg_type != MessageType.ROUTE_UPDATE:
+            return "type_not_allowed"  # C originates only what the controller may send
+        header = HEADER_STRUCT.pack(
+            PROTOCOL_VERSION,
+            msg_type,
+            self.id,
+            dst,
+            self._session,
+            self._next_seq,
+            self._settings.ttl,
+            len(payload),
         )
+        try:
+            frame = decode(header + payload)
+        except DecodeError as error:
+            return error.reason.value
+        self._next_seq = (self._next_seq + 1) % 2**32
+        update = frame.payload
+        assert isinstance(update, RouteUpdatePayload)
         self._trace.record(
             self._engine.now_ms,
             self.name,
             ROUTE_UPDATE_SENT,
             frame.identity,
-            target=self._name(command.node),
-            destination=self._name(command.destination),
-            next_hop=None if command.next_hop is None else self._name(command.next_hop),
-            epoch=command.epoch,
-            version=command.version,
+            target=self._name(dst),
+            destination=self._name(update.destination),
+            next_hop=None if update.next_hop is None else self._name(update.next_hop),
+            epoch=update.epoch,
+            version=update.version,
         )
         self._send_management(frame)
+        return None
 
     def _on_route_update(self, frame: Frame) -> None:
         """Install a controller instruction if it is newer than what this node holds.
@@ -1255,20 +1277,8 @@ class Node:
             self._trace.record(
                 self._engine.now_ms, self.name, DUPLICATE_RECEIVED, identity, ack="resent"
             )
-        if self.reading_sink is not None:
-            self.reading_sink(
-                ReadingEvent(
-                    received_ms=self._engine.now_ms,
-                    origin=frame.src,
-                    session=frame.session,
-                    seq=frame.seq,
-                    value=frame.payload.value,
-                    via=via,
-                    ttl=frame.ttl,
-                    hops=self._settings.ttl - frame.ttl + 1,
-                    duplicate=verdict is not Verdict.NEW,
-                )
-            )
+        if self.gateway_sink is not None:
+            self.gateway_sink(frame, via, verdict is not Verdict.NEW)
         ack = self._new_frame(
             frame.src, DeliveryAckPayload(identity.src, identity.session, identity.seq)
         )
