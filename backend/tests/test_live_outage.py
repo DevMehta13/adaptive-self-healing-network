@@ -25,6 +25,8 @@ def test_outage_demo_through_the_api_shows_the_link_loss_the_replay_and_the_catc
             snap = api.snapshot()
             assert snap["gateway"]["state"] == "lost"
             assert snap["gateway"]["network_view"].startswith("stale")
+            # C's buffer figures are from before the outage, and the snapshot says so
+            assert snap["gateway"]["c_status_as_of_ms"] <= snap["gateway"]["since_ms"]
             # nothing from the network reached the dashboard in the meantime
             assert events_of(during, "reading_received") == []
 
@@ -52,6 +54,11 @@ def test_outage_demo_through_the_api_shows_the_link_loss_the_replay_and_the_catc
             # the controller learned of the failover from the replay and confirmed the route
             failover = events_of(after, "local_failover")
             assert len(failover) == 1 and failover[0]["data"]["to"] == "D"
+            # ...and says it is old news: the report reached C soon after B stopped (22 s),
+            # long before the laptop heard of it
+            report = failover[0]["data"]
+            assert report["replayed"] is True
+            assert 22_000 <= report["received_ms"] < 27_000 < report["sim_ms"]
             confirmed = [
                 e
                 for e in events_of(after, "route_active")

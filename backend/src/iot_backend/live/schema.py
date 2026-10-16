@@ -90,6 +90,8 @@ EVENT_SCHEMAS: dict[str, dict[str, Any]] = {
         "link": Str,
         "matches_current_route": Bool,
         "outcome": Str,
+        "received_ms": Int,
+        "replayed": Bool,
     },
     # --- what reached C ---
     "reading_received": {

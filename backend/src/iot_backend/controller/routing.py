@@ -759,6 +759,9 @@ class RouteController:
                 "link": f"{_name(link[0])}-{_name(link[1])}",
                 "matches_current_route": current,
                 "outcome": "no_route" if report.to_next_hop is None else "backup_in_use",
+                # when the report reached C (estimated from its age if C held it)
+                "received_ms": report.received_ms,
+                "replayed": report.replayed,
             },
         )
         # treat the abandoned link as gone: if it returns (or is still reported up) it must be

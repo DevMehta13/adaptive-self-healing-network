@@ -1247,7 +1247,9 @@
         "version": 1,
         "link": "A-B",
         "matches_current_route": true,
-        "outcome": "backup_in_use"
+        "outcome": "backup_in_use",
+        "received_ms": 20966,
+        "replayed": true
       },
       "event_id": 50
     },

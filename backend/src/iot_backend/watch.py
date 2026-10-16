@@ -45,7 +45,7 @@ def describe(envelope: dict[str, Any]) -> str:
         if data.get("replayed"):
             body = (
                 f"REPLAYED reading A#{data['seq']} value={data['value']:.2f} via {data['via']} "
-                f"path {via}  (made at {_clock(data['received_ms'])}, "
+                f"path {via}  (reached C at {_clock(data['received_ms'])}, "
                 f"{data['delay_ms'] / 1000:.1f} s late)"
             )
     elif kind == "telemetry":
@@ -57,6 +57,8 @@ def describe(envelope: dict[str, Any]) -> str:
     elif kind == "local_failover":
         to = data["to"] or "NO ROUTE"
         body = f"LOCAL FAILOVER {data['node']}: {data['from']} -> {to} ({data['reason']})"
+        if data.get("replayed"):
+            body += f"  (REPLAYED: reached C at {_clock(data['received_ms'])})"
     elif kind == "route_computed":
         body = (
             f"route computed v{data['version']} {'>'.join(data['path'])} "
