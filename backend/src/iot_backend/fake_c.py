@@ -103,21 +103,31 @@ class FakeCServer:
 
     # ---- time ----
 
+    async def _listen(self) -> None:
+        self._server = await asyncio.start_server(self._client, self._host, self.port)
+        self.port = self._server.sockets[0].getsockname()[1]
+
+    def _stop_listening(self) -> None:
+        """Unplugged: the port disappears, so opening it fails (as a vanished COM port does)."""
+        if self._server is not None:
+            self._server.close()
+            self._server = None
+
     async def run(self) -> None:
         self._loop = asyncio.get_running_loop()
         self._stopping = asyncio.Event()
-        server = await asyncio.start_server(self._client, self._host, self.port)
-        self.port = server.sockets[0].getsockname()[1]
+        self._server: asyncio.Server | None = None
+        await self._listen()
         self._echo(f"[fake C] listening on socket://{self._host}:{self.port} (SIMULATION)")
         self._ready.set()
         last = self._loop.time()
-        async with server:
-            while not self._stopping.is_set():
-                await asyncio.sleep(self._tick_s)
-                now = self._loop.time()
-                self.sim.run(min(5_000, int((now - last) * 1000)))
-                last = now
+        while not self._stopping.is_set():
+            await asyncio.sleep(self._tick_s)
+            now = self._loop.time()
+            self.sim.run(min(5_000, int((now - last) * 1000)))
+            last = now
         self._drop_connection()
+        self._stop_listening()
 
     def start_in_thread(self) -> "FakeCServer":
         """For tests: run in a background thread until `stop()`."""
@@ -167,11 +177,15 @@ class FakeCServer:
         if verb == "unplug":
             self.plugged = False
             self._drop_connection()
+            self._stop_listening()
             self.sim.stop_node("C")  # the cable is C's power
-            return "C unplugged: powered off, buffer lost"
+            return "C unplugged: powered off, buffer lost, port gone"
         if verb == "replug":
-            self.plugged = True
-            self.sim.start_node("C")
+            if not self.plugged:
+                self.plugged = True
+                self.sim.start_node("C")
+                assert self._loop is not None
+                self._loop.create_task(self._listen())
             return "C plugged in: new boot"
         if verb == "noise":
             self._send(" ".join(rest).encode("ascii", "replace") + b"\n")

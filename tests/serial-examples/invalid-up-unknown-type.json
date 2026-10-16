@@ -1,0 +1,8 @@
+{
+  "name": "invalid-up-unknown-type",
+  "description": "A type that does not exist.",
+  "direction": "up",
+  "line": "{\"v\":1,\"t\":\"xx\",\"b\":1}*98CD",
+  "result": "rejected",
+  "reason": "unknown_type"
+}

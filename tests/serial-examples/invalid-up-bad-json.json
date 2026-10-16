@@ -1,0 +1,8 @@
+{
+  "name": "invalid-up-bad-json",
+  "description": "Correct checksum over text that is not JSON.",
+  "direction": "up",
+  "line": "{\"v\":1,\"t\":\"st\",*A6E5",
+  "result": "rejected",
+  "reason": "bad_json"
+}

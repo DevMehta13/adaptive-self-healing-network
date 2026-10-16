@@ -1,0 +1,8 @@
+{
+  "name": "invalid-down-heartbeat-missing-ack",
+  "description": "hb without ack.",
+  "direction": "down",
+  "line": "{\"v\":1,\"t\":\"hb\",\"b\":0}*830C",
+  "result": "rejected",
+  "reason": "missing_field"
+}

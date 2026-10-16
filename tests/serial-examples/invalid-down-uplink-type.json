@@ -1,0 +1,8 @@
+{
+  "name": "invalid-down-uplink-type",
+  "description": "The laptop must not send C's types.",
+  "direction": "down",
+  "line": "{\"v\":1,\"t\":\"st\",\"b\":1}*D659",
+  "result": "rejected",
+  "reason": "unknown_type"
+}

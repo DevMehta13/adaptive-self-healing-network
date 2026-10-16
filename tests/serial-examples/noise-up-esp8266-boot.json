@@ -1,0 +1,7 @@
+{
+  "name": "noise-up-esp8266-boot",
+  "description": "Text that is neither data nor a log line, like the ESP8266 boot ROM's message: counted as noise, never parsed.",
+  "direction": "up",
+  "line": " ets Jan  8 2013,rst cause:2, boot mode:(3,6)",
+  "result": "noise"
+}
