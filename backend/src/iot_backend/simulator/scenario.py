@@ -171,12 +171,17 @@ class Simulation:
             node_id=NODE_IDS[self.config.gateway],
         )
         uplink = UplinkConfig(data_ttl=self.config.ttl)
-        self._gateway: LaptopGateway
+        self._gateway: LaptopGateway | None
         self._link: SimulatedGateway | SerialCDevice
         if self.config.transport == "serial":
             device = SerialCDevice(self._engine, bridge_config, lambda data: gateway.feed(data))
             gateway = SerialGateway(EngineClock(self._engine), device.feed_down, uplink)
             self._gateway, self._link = gateway, device
+        elif self.config.transport == "external":
+            # The fake C device: C's serial bytes leave this process (`link.write_up`), and the
+            # laptop side is a real backend somewhere else. There is no controller in here.
+            self._link = SerialCDevice(self._engine, bridge_config, lambda data: None)
+            self._gateway = None
         else:
             direct = SimulatedGateway(self._engine, bridge_config, uplink)
             self._gateway, self._link = direct, direct
@@ -240,8 +245,8 @@ class Simulation:
             raise ValueError("routing must be 'manual' or 'controller'")
         if self.config.probe_interval_ms < 0:
             raise ValueError("probe_interval_ms must be >= 0")
-        if self.config.transport not in ("direct", "serial"):
-            raise ValueError("transport must be 'direct' or 'serial'")
+        if self.config.transport not in ("direct", "serial", "external"):
+            raise ValueError("transport must be 'direct', 'serial' or 'external'")
         if self.config.reading_src == self.config.reading_dst:
             raise ValueError("reading source and destination must differ")
         for table in (self.config.permitted, self.config.initial_seq):
@@ -263,6 +268,8 @@ class Simulation:
     @property
     def gateway(self) -> LaptopGateway:
         """The only door the controller may use to learn about the network."""
+        if self._gateway is None:
+            raise RuntimeError("external transport: the laptop side is another process")
         return self._gateway
 
     @property

@@ -34,7 +34,7 @@ class SerialCDevice:
         logs: bool = True,
     ) -> None:
         self._engine = engine
-        self._write_up = write_up
+        self.write_up = write_up  # where C's bytes go (replaceable: the fake device's socket)
         self._logs = logs
         self.bridge = CBridge(engine, config, self._up, log=self._log)
         self._splitter = LineSplitter(MAX_DOWN_LINE)
@@ -52,7 +52,7 @@ class SerialCDevice:
         if self.fault is not None:
             data = self.fault(data)
         if data:
-            self._write_up(data)
+            self.write_up(data)
 
     def _up(self, message: UpMessage) -> None:
         self._write(encode(message))
