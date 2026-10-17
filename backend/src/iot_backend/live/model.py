@@ -54,6 +54,8 @@ class DashboardModel:
         self.speed = 1.0
         self.paused = False
         self.scenario: str | None = None
+        # What this run was started with, for the stored history (the runtime fills it in).
+        self.run_config: dict[str, Any] = {}
         self._reset_model()
 
     def _reset_model(self) -> None:

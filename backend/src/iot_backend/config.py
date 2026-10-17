@@ -31,6 +31,13 @@ class Settings(BaseSettings):
     # It can also be changed while running with POST /api/policy.
     routing_policy: Literal["", "immediate_rtt", "lowest_delay", "highest_reliability"] = ""
 
+    # Run history (Phase 10): a SQLite file with each run's configuration, events and
+    # readings, exportable as CSV. Empty = no history is kept. The limits bound the file.
+    history_db: str = ""
+    history_max_runs: int = Field(default=10, ge=1)
+    history_max_events: int = Field(default=20_000, ge=1)
+    history_max_readings: int = Field(default=10_000, ge=1)
+
     # Live simulation (Phase 5a)
     live_autostart: bool = True  # pace the simulation against the wall clock at startup
     live_scenario: str = "live-demo"

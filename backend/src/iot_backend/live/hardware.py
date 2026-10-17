@@ -17,7 +17,7 @@ comes back, C's reliable uplink fills the gap (or names what is gone).
 import asyncio
 import time
 from collections.abc import Callable
-from dataclasses import dataclass, replace
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -86,6 +86,12 @@ class LiveHardware(DashboardModel):
             self._routing = replace(self._routing, policy=config.policy)
         self.run_id = 1
         self.scenario = None
+        self.run_config = {
+            "port": config.port,
+            "baud": config.baud,
+            "controller_settings_from": config.controller_scenario.name,
+            "controller": asdict(self._routing),
+        }
         self._clock = AsyncioClock()
         self.gateway = SerialGateway(
             self._clock, self._write, UplinkConfig(data_ttl=spec.config.ttl)

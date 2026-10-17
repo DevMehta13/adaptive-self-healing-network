@@ -22,3 +22,8 @@ dist/
 # Local editor/session state
 .idea/
 .claude/settings.local.json
+
+# Run history databases (Phase 10)
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm

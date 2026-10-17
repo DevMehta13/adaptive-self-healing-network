@@ -22,7 +22,8 @@ the environment is published on a separate, labelled `environment` channel.
 """
 
 import asyncio
-from dataclasses import dataclass, replace
+import json
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -106,6 +107,12 @@ class LiveSimulation(DashboardModel):
         spec.config.transport = self._config.transport
         self.scenario = name
         self.description = spec.description
+        self.run_config = {
+            "scenario": name,
+            "scenario_file": json.loads(path.read_text(encoding="utf-8")),
+            "transport": self._config.transport,
+            "speed": self.speed,
+        }
         self.run_id += 1
         self._sim = Simulation(spec.config)
         self._reset_model()  # per-run dashboard model (what the controller and C have learned)
@@ -119,6 +126,7 @@ class LiveSimulation(DashboardModel):
         self._host: ControllerHost | None = None
         if spec.config.routing == "controller":
             routing = replace(spec.controller, policy=self._config.policy or spec.controller.policy)
+            self.run_config["controller"] = asdict(routing)
             self._host = ControllerHost(self._sim, routing, on_start=self._on_controller)
         elif spec.config.discovery:
             self._on_controller(
