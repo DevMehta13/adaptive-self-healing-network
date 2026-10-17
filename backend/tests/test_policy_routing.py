@@ -276,6 +276,22 @@ def test_a_restart_of_a_node_on_the_route_is_treated_as_broken_and_reinstalled_a
     assert net.events("route_computed")[-1].data["trigger"] == "node_restarted"
 
 
+def test_a_restart_on_the_route_is_replaced_at_once_even_by_a_route_that_is_only_better():
+    net = Net("lowest_delay")
+    net.settle()
+    net.set(A, B, 120, (20, 20))  # B's links dip: D (60) is now narrowly better than B (64)
+    net.set(B, C, 120, (20, 20))
+    net.tick()
+    assert net.controller.route_state()["pending_switch"]["evaluations"] == 1
+    sessions = dict(SESSIONS)
+    sessions[B] = 2222  # and B reboots: its table is gone, the route through it is broken
+    net.report_all(sessions=sessions)
+    net.gw.advance(1)
+    activate(net.gw)
+    assert net.path == ["A", "D", "C"]  # at once, not after three evaluations
+    assert net.events("route_computed")[-1].data["trigger"] == "topology_changed"
+
+
 def test_a_returning_better_link_waits_for_the_evaluations_too():
     net = Net("lowest_delay")
     net.settle()
@@ -338,6 +354,19 @@ def test_with_equal_probabilities_nothing_is_better_so_the_route_never_moves():
         net.tick()
     assert len(net.events("route_computed")) == 1
     assert not net.events("route_candidate")
+
+
+def test_a_tie_is_not_better_so_a_route_in_use_is_not_swapped_for_an_equal_one():
+    net = Net("highest_reliability", ab=(10, (12, 20)), bc=(10, (13, 20)))
+    net.settle()
+    assert net.path == ["A", "D", "C"]
+    net.set(A, B, 10, (20, 20))  # B recovers: every link is now 20/20, so both paths cost 0
+    net.set(B, C, 10, (20, 20))
+    for _ in range(14):  # past the hold-down and many evaluations
+        net.tick()
+    assert net.path == ["A", "D", "C"]  # the tie-break prefers B, but equal is not better
+    assert not net.events("route_candidate")
+    assert len(net.events("route_computed")) == 1
 
 
 def test_a_single_lost_probe_has_to_persist_to_move_the_route():
