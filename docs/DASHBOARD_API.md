@@ -1,6 +1,21 @@
 # Dashboard API contract
 
-**Draft — pending Dev's review.** Written by Harshal (backend owner) for Dev (dashboard owner). Nothing here is frozen until Dev approves it; change requests go in a pull request to this file. Everything below is **implemented and tested** as of Phase 5b (the controller heartbeat, C's buffer and replay), in simulation mode only. Anything not implemented is listed under *Not implemented yet*, not described as if it were.
+**Draft — pending Dev's review.** Written by Harshal (backend owner) for Dev (dashboard owner). Nothing here is frozen until Dev approves it; change requests go in a pull request to this file. Everything below is **implemented and tested** as of Phase 6-prep: in simulation mode, and in hardware mode against a fake node C over a socket (no real board has been connected yet). Anything not implemented is listed under *Not implemented yet*, not described as if it were.
+
+## Two modes, one shape
+
+| | `mode: "simulation"` | `mode: "hardware"` |
+| --- | --- | --- |
+| Where the network is | the simulator inside the backend | real boards; node C on a USB serial port (`IOT_SERIAL_PORT`) |
+| `label` | starts with `SIMULATION:` | starts with `HARDWARE:` |
+| `sim_ms` everywhere | simulated milliseconds since the run started | milliseconds on the **laptop's** clock since the backend started (the name is kept so there is one shape; see the review list) |
+| `clock.speed` / `paused` | as set by the presenter | always 1.0 / false |
+| `scenario` | the scenario file name | `null` |
+| `presenter` | the injected conditions | `conditions: null` with a note: nothing is injected |
+| Presenter controls, `GET /api/scenarios` | work | refused with 409 `not_available_in_hardware_mode` |
+| `gateway.serial` | only if the simulated C speaks the serial format (`IOT_LIVE_TRANSPORT=serial`) | always: the port and its state |
+
+Everything else (nodes, links, route, readings, counts, events, the WebSocket) is the same code and the same shape in both modes: it is built only from what reaches the controller through the gateway.
 
 Recorded examples of every message live in [tests/dashboard-fixtures/](../tests/dashboard-fixtures/); a test keeps them valid against the current shapes, so you can build and test the UI without running the backend.
 
@@ -220,6 +235,10 @@ The controller's knowledge of its own link to node C. It comes from the heartbea
 | `c_buffer` | `held`: entries C was holding; `capacity`; `dropped_overflow`: held entries C gave up because the buffer was full (cumulative); `coalesced`: held entries replaced by a newer one from the same node (cumulative); `replayed`: entries handed up in replays (cumulative); `outages`: how many times C decided the controller was unreachable. |
 | `last_replay` | The most recent replay: `state` (`replaying` or `finished`), `started_ms`, `finished_ms`, `entries` (announced at the start), `held` (of those, entries held during the outage), `replayed`, `dropped_overflow`, `coalesced` (for that outage), `outage_ms` (C's estimate of how long the controller was away). `null` before the first. |
 | `network_view` | Ready-made text: `live`, `waiting: ...` before C is heard, or `stale: ...` while the link is lost. |
+| `uplink` | The laptop's own view of the numbered stream from C (Phase 6-prep; see [SERIAL_PROTOCOL.md](SERIAL_PROTOCOL.md) *Reliable uplink*): `c_boot` (C's current boot, or `null`), `acknowledged_up_to`, `highest_known`, `missing_now` (numbers known to exist and not yet received), `frames` (received, each once), `duplicates_dropped`, `resend_requests`, `resend_repeats`, `lost` (`gone_at_c`, `of_which_readings`, `of_unknown_kind`, `c_restarted_at_least`), `superseded` (not a loss), `c_restarts`, `out_of_window`. Cumulative since the backend started. |
+| `serial` | Hardware mode (and the serial simulation): `port`, `state` (`open`, `closed`, `waiting` while it cannot be opened, `no_port` if none is configured), `lines` (`messages`, `logs`, `noise`, and `rejected` by reason), `c_log` (C's last 50 log and noise lines, each `{at_ms, text}`, for people to read), and in hardware mode `opens`, `closes`, `writes_dropped`, and `available_ports` (`device`, `description`, `chip`) whenever the port is not open, so the UI can say which ports exist. |
+
+In hardware mode, show `serial.state` next to the link state: a closed or missing port explains a lost link. Show `uplink.lost` whenever it is not zero: those messages will never arrive.
 
 #### `presenter`
 
@@ -293,7 +312,7 @@ Every error has the same shape and a stable `code`:
 | 400 | `bad_scenario` | The scenario file could not be loaded. |
 | 403 | `origin_not_allowed` | `Origin` is present and not an allowed origin, or `Sec-Fetch-Site` is `cross-site`. |
 | 404 | `unknown_scenario` | No such scenario (names are file stems; no paths). |
-| 409 | `not_available_in_hardware_mode` | The backend is in hardware mode, which has no simulator. |
+| 409 | `not_available_in_hardware_mode` | The backend is in hardware mode: there is no simulator to control, and no scenarios to list. (`GET /api/events` and `GET /api/snapshot` work in both modes.) |
 | 415 | `json_required` | The body is not `application/json` (a plain HTML form cannot send it). |
 
 State-changing requests are protected three ways: the server binds to `127.0.0.1` by default; a present `Origin` header must be an allowed origin; and the body must be JSON. A browser always sends `Origin` on a cross-site POST and cannot send a JSON body cross-site without a CORS preflight, which only allowed origins pass. Requests with no `Origin` (curl, scripts, the watcher) are accepted; that is why the default bind is localhost.
@@ -378,12 +397,21 @@ How to label recoveries: a `local_failover` event is the node's own reaction. A 
 | --- | --- |
 | `gateway_link_lost` | `since_ms` (last time anything arrived from C), `silent_for_ms`. e.g. `{"since_ms":12000,"silent_for_ms":3500}` (sent at 15500). From here the network view is stale. |
 | `gateway_link_restored` | `lost_since_ms`, `lost_for_ms`. e.g. `{"lost_since_ms":12000,"lost_for_ms":29000}` |
-| `replay_started` | `started_ms`, `entries` (what C will hand up), `held` (of those, entries held during the outage; the rest are the last few C sent just before it noticed, which the laptop may have missed), `dropped_overflow` and `coalesced` (during this outage), `outage_ms` (C's estimate). e.g. `{"started_ms":41000,"entries":24,"held":22,"dropped_overflow":0,"coalesced":33,"outage_ms":29000}` |
+| `replay_started` | `started_ms`, `entries` (what C will hand up), `held` (of those, entries stored while the controller was unreachable; any others were waiting because C's send window was full), `dropped_overflow` and `coalesced` (during this outage), `outage_ms` (C's estimate). e.g. `{"started_ms":41000,"entries":24,"held":22,"dropped_overflow":0,"coalesced":33,"outage_ms":29000}` |
 | `replay_finished` | `replayed` (entries actually handed up, including any that arrived at C during the replay), `dropped_overflow`, `coalesced` (final figures for the outage). e.g. `{"replayed":25,"dropped_overflow":0,"coalesced":36}` (520 ms after the start) |
 
 Between `replay_started` and `replay_finished` expect `reading_received` events with `replayed: true`, and topology, failover and telemetry events produced by replayed reports. Information that is older than what the controller already holds is ignored by it, so a replayed report never makes a link look fresher than it is or undoes a newer state. `dropped_overflow` readings are **lost**, not late: show the count, because those readings will never arrive.
 
 **Ages, not timestamps.** C has no wall clock. It remembers when each held entry arrived on its own clock and replays it with its age; the backend subtracts the age from its own clock to give `received_ms`. It is an estimate: it ignores the serial transfer time (milliseconds) and any drift of C's clock over the outage.
+
+Messages C sent while the laptop was not listening, in an outage too short for C to notice, also arrive late: the laptop asks for them again, and they come as `reading_received` (and other) events with `replayed: true` and their delay, without replay markers.
+
+**The uplink and the serial port (Phase 6-prep)**
+
+| `type` | `data` (besides `sim_ms`) |
+| --- | --- |
+| `uplink_loss` | `reason` (`gone_at_c`: C said it no longer holds them; `c_restarted`: C rebooted and its RAM buffer is gone), `c_boot` (the boot they belonged to), `first`, `last`, `count` (how many were never received), `readings` (of those, readings), `unknown` (of a kind C could not say), `lower_bound` (true for `c_restarted`: there may have been more that the laptop never heard of). e.g. `{"reason":"gone_at_c","c_boot":2766734100,"first":5,"last":7,"count":2,"readings":1,"unknown":0,"lower_bound":false}`. For `c_restarted` with nothing known missing, `count` is 0 and `first`/`last` are 0. **Show it**: these messages will never arrive. |
+| `serial_port` | `port`, `state` (`open`, `closed`, `waiting`), `detail` (the operating system's reason). Hardware mode only. e.g. `{"port":"COM3","state":"closed","detail":"read failed: device reports readiness to read but returned no data"}` |
 
 **The environment channel and the runtime**
 
@@ -406,10 +434,9 @@ Regenerate after a deliberate shape change with `uv run python -m iot_backend.li
 
 ## Not implemented yet
 
-- The serial gateway and its message format: the heartbeat, C's status and the replay markers exist as typed messages inside the backend (see [docs/PROTOCOL.md](PROTOCOL.md) *Laptop and C*); their encoding on the USB serial line is the next step. On hardware a controller outage is demonstrated by **stopping the backend**, not by unplugging C's USB cable: the cable also powers C, and C's buffer is in RAM, so unplugging it loses the buffer.
+- Hardware mode has been run only against the fake node C (`python -m iot_backend.fake_c`), never against a board. On hardware a controller outage is demonstrated by **stopping the backend**, not by unplugging C's USB cable: the cable also powers C, and C's buffer is in RAM, so unplugging it loses the buffer (the dashboard then sees `serial_port` closed, `gateway_link_lost`, and later `uplink_loss` with `c_restarted`).
 - Experiment history, charts and CSV export (Phase 10).
 - Adaptive routing policies (Phase 9); the route cost is the measured RTT.
-- Hardware mode: `mode: "hardware"` exists only as a refusal.
 - `event_id` is not persisted across backend restarts: after a restart `last_event_id` restarts and `run_id` is 1. A client that sees either go backwards must replace all state from the snapshot.
 
 ## Known limits of this draft
@@ -417,4 +444,4 @@ Regenerate after a deliberate shape change with `uv run python -m iot_backend.li
 - No authentication; the backend binds to `127.0.0.1` by default and is intended for local use only.
 - The `Origin` check keeps other web pages out; it does not stop non-browser programs on the laptop, which is why the default bind is localhost.
 - Simulated timing: delays, loss and the 5 ms radio service time are configured values.
-- A gateway outage shorter than C's 3 s timeout (for example a 1 s detach) is not noticed by C: readings in it never arrive and are not counted as lost. `counts.acknowledged` (A's telemetry) can then exceed `counts.delivered`. A fix is proposed for the serial step.
+- In hardware mode `sim_ms` is the laptop's clock, not simulated time; the field keeps its name for now (see the review list).
