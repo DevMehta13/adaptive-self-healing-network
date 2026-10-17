@@ -67,6 +67,7 @@ class HardwareConfig:
     history: int = 2_000
     recent_readings: int = 50
     recent_events_in_snapshot: int = 100
+    policy: str = ""  # routing policy override ("" = the scenario's controller section)
 
 
 class LiveHardware(DashboardModel):
@@ -81,6 +82,8 @@ class LiveHardware(DashboardModel):
         self._routing: RoutingConfig = replace(
             spec.controller, epoch=max(1, int(time.time()) & 0xFFFF_FFFF)
         )
+        if config.policy:
+            self._routing = replace(self._routing, policy=config.policy)
         self.run_id = 1
         self.scenario = None
         self._clock = AsyncioClock()

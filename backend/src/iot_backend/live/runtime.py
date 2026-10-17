@@ -22,7 +22,7 @@ the environment is published on a separate, labelled `environment` channel.
 """
 
 import asyncio
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -68,6 +68,7 @@ class LiveConfig:
     recent_events_in_snapshot: int = 100
     trace_max_events: int = 5_000  # simulator trace bound (not shown to the dashboard)
     transport: str = "direct"  # "serial": the simulated C speaks the serial line format
+    policy: str = ""  # routing policy override ("" = the scenario's controller section)
 
 
 class LiveSimulation(DashboardModel):
@@ -117,7 +118,8 @@ class LiveSimulation(DashboardModel):
         self._sim.gateway.subscribe(self._on_gateway_event)
         self._host: ControllerHost | None = None
         if spec.config.routing == "controller":
-            self._host = ControllerHost(self._sim, spec.controller, on_start=self._on_controller)
+            routing = replace(spec.controller, policy=self._config.policy or spec.controller.policy)
+            self._host = ControllerHost(self._sim, routing, on_start=self._on_controller)
         elif spec.config.discovery:
             self._on_controller(
                 TopologyView(self._sim.gateway), None, None, ReadingLedger(self._sim.gateway)

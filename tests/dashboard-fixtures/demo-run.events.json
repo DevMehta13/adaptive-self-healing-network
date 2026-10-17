@@ -324,12 +324,14 @@
         "flow": "A->C",
         "epoch": 1000,
         "version": 1,
+        "policy": "immediate_rtt",
         "path": [
           "A",
           "B",
           "C"
         ],
         "cost_ms": 65,
+        "delivery_probability": null,
         "graph": [
           {
             "link": "A-B",
@@ -431,12 +433,14 @@
         "sim_ms": 4117,
         "version": 1,
         "epoch": 1000,
+        "policy": "immediate_rtt",
         "path": [
           "A",
           "B",
           "C"
         ],
         "cost_ms": 65,
+        "delivery_probability": null,
         "confirmed_by": [
           "D",
           "B",
@@ -780,12 +784,14 @@
         "flow": "A->C",
         "epoch": 1000,
         "version": 2,
+        "policy": "immediate_rtt",
         "path": [
           "A",
           "D",
           "C"
         ],
         "cost_ms": 130,
+        "delivery_probability": null,
         "graph": [
           {
             "link": "A-D",
@@ -881,12 +887,14 @@
         "sim_ms": 13192,
         "version": 2,
         "epoch": 1000,
+        "policy": "immediate_rtt",
         "path": [
           "A",
           "D",
           "C"
         ],
         "cost_ms": 130,
+        "delivery_probability": null,
         "confirmed_by": [
           "D",
           "A"
@@ -2102,12 +2110,14 @@
         "flow": "A->C",
         "epoch": 1000,
         "version": 3,
+        "policy": "immediate_rtt",
         "path": [
           "A",
           "B",
           "C"
         ],
         "cost_ms": 65,
+        "delivery_probability": null,
         "graph": [
           {
             "link": "A-B",
@@ -2197,12 +2207,14 @@
         "sim_ms": 39993,
         "version": 3,
         "epoch": 1000,
+        "policy": "immediate_rtt",
         "path": [
           "A",
           "B",
           "C"
         ],
         "cost_ms": 65,
+        "delivery_probability": null,
         "confirmed_by": [
           "D",
           "B",

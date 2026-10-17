@@ -34,8 +34,10 @@ EVENT_SCHEMAS: dict[str, dict[str, Any]] = {
         "flow": Str,
         "epoch": Int,
         "version": Int,
+        "policy": Str,
         "path": List,
         "cost_ms": (Int, NoneType),
+        "delivery_probability": (Num, NoneType),
         "graph": List,
         "held_down": List,
         "trigger": Str,
@@ -46,8 +48,10 @@ EVENT_SCHEMAS: dict[str, dict[str, Any]] = {
     "route_active": {
         "version": Int,
         "epoch": Int,
+        "policy": Str,
         "path": List,
-        "cost_ms": Int,
+        "cost_ms": (Int, NoneType),
+        "delivery_probability": (Num, NoneType),
         "confirmed_by": List,
         "distribution_ms": Int,
         "trigger": Str,
@@ -78,6 +82,18 @@ EVENT_SCHEMAS: dict[str, dict[str, Any]] = {
         "confirmed_by": List,
         "distribution_ms": Int,
     },
+    # --- the routing policy (Phase 9) ---
+    "policy_changed": {"old": Str, "new": Str},
+    "route_candidate": {
+        "policy": Str,
+        "path": List,
+        "current_path": List,
+        "evaluations": Int,
+        "needed": Int,
+        "candidate": Dict,
+        "current": Dict,
+    },
+    "route_candidate_dropped": {"policy": Str, "path": List, "evaluations": Int, "reason": Str},
     "link_held_down": {"link": Str, "hold_down_ms": Int, "eligible_at_ms": Int},
     "epoch_advanced": {"old_epoch": Int, "held_epoch": Int, "epoch": Int},
     "local_failover": {
@@ -171,6 +187,7 @@ SNAPSHOT_FIELDS: dict[str, Any] = {
     "nodes": List,
     "links": List,
     "route": Dict,
+    "policy": Dict,
     "gateway": Dict,
     "readings": Dict,
     "counts": Dict,
@@ -196,6 +213,8 @@ LINK_FIELDS: dict[str, Any] = {
     "since_ms": Int,
     "rtt_ms": Dict,
     "cost_ms": (Int, NoneType),
+    "smoothed_rtt_ms": (Int, NoneType),
+    "delivery_probability": (Num, NoneType),
 }
 
 

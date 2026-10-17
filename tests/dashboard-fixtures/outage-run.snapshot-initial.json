@@ -55,7 +55,19 @@
     "epoch": 1000,
     "state": "waiting",
     "kind": null,
-    "version": null
+    "version": null,
+    "policy": "immediate_rtt",
+    "pending_switch": null
+  },
+  "policy": {
+    "current": "immediate_rtt",
+    "available": [
+      "immediate_rtt",
+      "lowest_delay",
+      "highest_reliability"
+    ],
+    "evaluation_interval_ms": 5000,
+    "hysteresis_evaluations": 3
   },
   "gateway": {
     "state": "connecting",

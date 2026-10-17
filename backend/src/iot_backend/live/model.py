@@ -348,6 +348,11 @@ class DashboardModel:
             "nodes": self._nodes(),
             "links": view["links"],
             "route": route,
+            "policy": (
+                self._controller.policy_state()
+                if self._controller is not None
+                else {"current": None, "available": []}
+            ),
             "gateway": self._gateway_state(),
             "readings": {
                 "delivered_unique": self._delivered_unique,

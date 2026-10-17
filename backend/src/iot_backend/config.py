@@ -26,6 +26,10 @@ class Settings(BaseSettings):
     # The simulated C can also speak the serial line format in simulation mode ("serial").
     live_transport: Literal["direct", "serial"] = "direct"
     heartbeat_interval_seconds: float = Field(default=2.0, gt=0)
+    # Phase 9: the routing policy the controller starts with. Empty = whatever the scenario's
+    # controller section says (the live-demo scenario: immediate_rtt, the Phase 4 behaviour).
+    # It can also be changed while running with POST /api/policy.
+    routing_policy: Literal["", "immediate_rtt", "lowest_delay", "highest_reliability"] = ""
 
     # Live simulation (Phase 5a)
     live_autostart: bool = True  # pace the simulation against the wall clock at startup

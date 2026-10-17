@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from iot_backend import __version__
-from iot_backend.api import control, routes, ws
+from iot_backend.api import control, policy, routes, ws
 from iot_backend.config import Settings
 from iot_backend.live import LiveConfig, LiveSimulation
 from iot_backend.live.hardware import HardwareConfig, LiveHardware
@@ -23,6 +23,7 @@ def build_live(settings: Settings) -> LiveSimulation | LiveHardware:
                 port=settings.serial_port,
                 baud=settings.serial_baud,
                 history=settings.live_history,
+                policy=settings.routing_policy,
             )
         )
     return LiveSimulation(
@@ -33,6 +34,7 @@ def build_live(settings: Settings) -> LiveSimulation | LiveHardware:
             tick_s=settings.live_tick_seconds,
             history=settings.live_history,
             transport=settings.live_transport,
+            policy=settings.routing_policy,
         )
     )
 
@@ -62,6 +64,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     app.include_router(routes.router)
     app.include_router(control.router)
+    app.include_router(policy.router)
     app.include_router(ws.router)
     return app
 
