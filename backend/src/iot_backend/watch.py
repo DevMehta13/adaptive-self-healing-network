@@ -60,9 +60,26 @@ def describe(envelope: dict[str, Any]) -> str:
         if data.get("replayed"):
             body += f"  (REPLAYED: reached C at {_clock(data['received_ms'])})"
     elif kind == "route_computed":
+        cost = (
+            f"p={data['delivery_probability']}"
+            if data["cost_ms"] is None
+            else f"cost={data['cost_ms']}ms"
+        )
         body = (
             f"route computed v{data['version']} {'>'.join(data['path'])} "
-            f"cost={data['cost_ms']}ms backups={data['backups']} trigger={data['trigger']}"
+            f"{cost} backups={data['backups']} trigger={data['trigger']} policy={data['policy']}"
+        )
+    elif kind == "policy_changed":
+        body = f"POLICY {data['old']} -> {data['new']}"
+    elif kind == "route_candidate":
+        body = (
+            f"better route {'>'.join(data['path'])} seen {data['evaluations']} of "
+            f"{data['needed']} times ({data['policy']}; in use: {'>'.join(data['current_path'])})"
+        )
+    elif kind == "route_candidate_dropped":
+        body = (
+            f"better route {'>'.join(data['path'])} dropped after {data['evaluations']} "
+            f"evaluation(s): {data['reason']}"
         )
     elif kind == "route_active":
         body = (

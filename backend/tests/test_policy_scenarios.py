@@ -25,6 +25,7 @@ from iot_backend.simulator.scenario_file import ScenarioError, load_scenario, pa
 from iot_backend.simulator.studies import MODES, run_scenario
 from iot_backend.simulator.trace import LOCAL_FAILOVER, ROUTE_INSTALLED
 from iot_backend.transports import TopologyReportEvent
+from iot_backend.watch import describe
 
 SCENARIOS = Path(__file__).resolve().parents[2] / "scenarios"
 LOSSY = SCENARIOS / "fast-lossy-vs-slow-reliable.json"
@@ -364,3 +365,37 @@ def test_choosing_a_policy_does_not_touch_the_simulated_environment():
         assert client.get("/api/snapshot").json()["presenter"] == before
         events = client.get("/api/events?after_id=0&limit=1000").json()["events"]
         assert not [e for e in events if e["type"] == "environment" and "policy" in str(e)]
+
+
+def test_the_watcher_prints_the_policy_events_in_words():
+    run = run_scenario(LOSSY, 2, policy="highest_reliability", duration_ms=60_000)
+    lines = {
+        e.type: describe({"type": e.type, "event_id": 1, "data": {"sim_ms": e.time_ms, **e.data}})
+        for e in run.host.route_events
+    }
+    assert (
+        "p=" in lines["route_computed"] and "policy=highest_reliability" in lines["route_computed"]
+    )
+    assert "ms" not in lines["route_computed"].split("p=")[1].split(" ")[0]
+    run.host.controller.set_policy("lowest_delay")
+    event = run.host.route_events[-1]
+    assert event.type == "policy_changed"
+    text = describe({"type": event.type, "event_id": 2, "data": {"sim_ms": 0, **event.data}})
+    assert "POLICY highest_reliability -> lowest_delay" in text
+    candidate = describe(
+        {
+            "type": "route_candidate",
+            "event_id": 3,
+            "data": {
+                "sim_ms": 0,
+                "policy": "lowest_delay",
+                "path": ["A", "D", "C"],
+                "current_path": ["A", "B", "C"],
+                "evaluations": 2,
+                "needed": 3,
+                "candidate": {},
+                "current": {},
+            },
+        }
+    )
+    assert "better route A>D>C seen 2 of 3 times" in candidate
