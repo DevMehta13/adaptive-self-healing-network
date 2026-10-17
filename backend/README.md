@@ -7,9 +7,9 @@ Laptop-side backend. It contains:
 - a deterministic **simulator** with four virtual nodes (A, B, C, D): manual or controller-installed routing, forwarding, retries, duplicate detection, HELLO discovery, link probes, bounded flooding and failures;
 - a **gateway interface** (`transports/`) and a **controller** (`controller/`): a topology view and, since Phase 4a, Dijkstra route calculation with versioned route installation and automatic rerouting. The controller sees the network only through events that reached node C and acts on it only through commands that node C turns into frames.
 
-Primary routes are calculated and installed automatically (Phase 4a), together with backup next hops that nodes switch to on their own when the primary fails (Phase 4b, local failover). The controller sends node C a heartbeat; if it stops, C keeps the network running and holds what it would have sent up in a bounded buffer, replayed when the controller returns (Phase 5b). Adaptive policies, a serial gateway and a database do not exist yet.
+Primary routes are calculated and installed automatically (Phase 4a), together with backup next hops that nodes switch to on their own when the primary fails (Phase 4b, local failover). The controller sends node C a heartbeat; if it stops, C keeps the network running and holds what it would have sent up in a bounded buffer, replayed when the controller returns (Phase 5b). Since Phase 6-prep the laptop can also talk to node C over a **USB serial port** (`IOT_MODE=hardware`), using the line format in [docs/SERIAL_PROTOCOL.md](../docs/SERIAL_PROTOCOL.md), with a numbered, acknowledged uplink so that even a one-second interruption loses nothing silently. This has been run only against a **fake C** (the simulated network behind the real line format), never against a board. Adaptive policies and a database do not exist yet.
 
-Contracts (both drafts, pending Dev's review): [docs/DASHBOARD_API.md](../docs/DASHBOARD_API.md) and [docs/PROTOCOL.md](../docs/PROTOCOL.md).
+Contracts (all drafts, pending Dev's review): [docs/DASHBOARD_API.md](../docs/DASHBOARD_API.md), [docs/PROTOCOL.md](../docs/PROTOCOL.md) and [docs/SERIAL_PROTOCOL.md](../docs/SERIAL_PROTOCOL.md).
 
 ## Prerequisites
 
@@ -101,6 +101,78 @@ What the watcher prints, in order: `ENV Detach the gateway`; about 3 s later `GA
 A recorded run of this demo, as JSON, is in `tests/dashboard-fixtures/` so the dashboard can be built without the backend. Regenerate it after changing a shape with `uv run python -m iot_backend.live.record`.
 
 Optional configuration: copy `.env.example` to `.env` (`Copy-Item .env.example .env` on Windows, `cp .env.example .env` on macOS) and edit it, or set `IOT_*` environment variables. Defaults work without any file.
+
+## Hardware mode, ports, the fake C and the serial tools (Phase 6-prep)
+
+In hardware mode the backend runs the same controller and dashboard model, but the network is whatever node C reports on its USB serial port. No board has been connected yet: everything below was run against the **fake C**, which is the simulated network speaking the real serial line format over a TCP socket. It proves the laptop's side of the line, not the firmware, the USB chip or the radio.
+
+**1. Find the port.** The name is never hard-coded; list what the computer has:
+
+```sh
+uv run python -m iot_backend.serial_probe --list
+```
+
+| | Windows | macOS |
+| --- | --- | --- |
+| Looks like | `COM3` (Device Manager > Ports) | `/dev/cu.usbserial-0001`, `/dev/cu.SLAB_USBtoUART` or `/dev/cu.wchusbserial...` |
+| Driver | CH340 or CP210x driver from the chip maker if the port does not appear | same; recent macOS versions include CP210x and CH340 support, older ones need the vendor driver |
+| Use `cu.` not `tty.` | n/a | the `tty.` twin waits for a modem signal and can block |
+
+A port whose USB chip is one NodeMCU boards use (CH340, CP210x, FTDI) is flagged in the list. Bluetooth serial ports are listed too and are not boards.
+
+**2. Try it with no board: the fake C.** In one terminal:
+
+```sh
+uv run python -m iot_backend.fake_c                  # the live-demo network, on 127.0.0.1:7777
+```
+
+In a second terminal start the backend in hardware mode.
+
+```sh
+# macOS / Git Bash
+IOT_MODE=hardware IOT_SERIAL_PORT=socket://127.0.0.1:7777 uv run python -m iot_backend
+```
+
+```powershell
+# Windows PowerShell
+$env:IOT_MODE = "hardware"; $env:IOT_SERIAL_PORT = "socket://127.0.0.1:7777"; uv run python -m iot_backend
+```
+
+(or put the two settings in `.env`; with a real board the port is `COM3` or `/dev/cu.usbserial-0001`.) In a third terminal run `uv run python -m iot_backend.watch --no-heartbeats`. Within a few seconds the controller installs a route through the serial line and readings arrive. `GET /api/snapshot` says `"mode": "hardware"`, and presenter controls answer 409.
+
+Type commands into the fake C's terminal to break things, as you would with hands on the boards:
+
+| Command | Effect |
+| --- | --- |
+| `stop B` / `start B` | power a node off or on |
+| `link A->B down` / `up` | take one direction of a link down |
+| `unplug` | C loses power: its buffer is gone and the port disappears. The backend shows the port closed, the link lost, and keeps retrying every second |
+| `replug` | C powers up again with a new boot; the backend reopens the port by itself and reports `C RESTARTED` |
+| `noise <text>`, `garble` | send an unframed line, or corrupt the next line (see them counted under `gateway.serial.lines`) |
+| `status`, `quit` | what C holds; stop |
+
+To test **controller loss** the way it will be done on hardware, stop the backend (Ctrl+C) and start it again while the fake C keeps running: C notices the missing heartbeat, holds what it would have sent up, and replays it when the backend returns. (Unplugging C's USB cable is not that test: the cable powers C.)
+
+**3. The serial console, for bring-up with real boards.**
+
+```sh
+uv run python -m iot_backend.serial_probe --port COM3                    # Windows
+uv run python -m iot_backend.serial_probe --port /dev/cu.usbserial-0001   # macOS
+uv run python -m iot_backend.serial_probe --port socket://127.0.0.1:7777   # the fake C
+```
+
+It shows each line C sends once, sorted: `DATA` (a checked line, decoded), `LOG` (C's `#` lines), `NOISE` (unframed text, such as the ESP8266 boot ROM) and `BAD` (a line that failed a check, with the reason). It sends heartbeats and acknowledgements like the backend (`--no-heartbeat` lets you watch C decide the controller is gone). Commands: `route B C C` (have C send a ROUTE_UPDATE), `noroute`, `hb`, `raw {json}` (sent with a correct checksum, to test C's parser), `rawbad {json}` (wrong checksum: C must refuse it), `stats`, `quit`. `--seconds N` stops after N seconds; `--send "route B C C"` runs a command once at start.
+
+**4. Test vectors for Dev's firmware.** The shared examples (`tests/protocol-examples/` for radio frames, `tests/serial-examples/` for serial lines) become a C/C++ header:
+
+```sh
+uv run python -m iot_backend.vectors            # writes tests/generated/test_vectors.h
+uv run python -m iot_backend.vectors --check    # exit 1 if it is out of date (a test also checks)
+```
+
+The header is plain C99 (also valid C++11): arrays and structs of bytes and expected results, the line-length limits and the CRC check value. It compiles with `gcc -std=c99 -Wall -Wextra -Werror -pedantic`. Its comments say how the firmware's tests should use it.
+
+**5. Run the simulation itself through the serial format.** `IOT_LIVE_TRANSPORT=serial` (simulation mode) makes the simulated C speak the line format into memory and a `SerialGateway` parse it, which is what the end-to-end tests do. The results are identical to the direct path.
 
 ## Run the tests and linter
 
@@ -243,8 +315,9 @@ backend/
     envelope.py        the versioned WebSocket message envelope
     main.py            app factory and server entry point
     api/               dashboard-facing endpoints (routes.py, control.py, ws.py)
-    live/              runtime.py (the paced live simulation and what the dashboard is
-                       shown), schema.py (event and snapshot shapes),
+    live/              model.py (what the dashboard is shown, both modes), runtime.py (the
+                       paced live simulation), hardware.py (hardware mode on a serial port),
+                       schema.py (event and snapshot shapes),
                        record.py (writes tests/dashboard-fixtures/)
     watch.py           terminal watcher: python -m iot_backend.watch
     protocol/          frame constants, message classes, encode()/decode()
@@ -254,7 +327,14 @@ backend/
                        bridge.py (node C's heartbeat watching, buffer and replay),
                        measurements.py (detection and recovery times), studies.py
                        (mode comparison, false triggers, outage study), __main__.py (CLI)
-    transports/        the Gateway interface and the typed laptop <-> C messages
+    transports/        the Gateway interface and the typed laptop <-> C messages;
+                       wire.py (the serial-level messages), serial_format.py (lines, CRC),
+                       laptop_gateway.py (reliable uplink, shared by every carrier),
+                       serial_gateway.py (lines in and out), serial_port.py (pyserial,
+                       reconnect, port listing)
+    fake_c.py          a fake node C on a TCP port: python -m iot_backend.fake_c
+    serial_probe.py    a serial console for C's bring-up
+    vectors.py         writes tests/generated/test_vectors.h for the firmware
     controller/        topology.py: nodes and links from reports, with freshness and RTT;
                        routing.py: Dijkstra, versioned installation, hold-down, no-route;
                        gateway_session.py: heartbeat and link monitor;
@@ -376,6 +456,20 @@ The two channels split the job: `GET /api/snapshot` gives the full current state
 
 **Why old information must not override new.** A replayed topology report can be 40 s old. If the controller treated it as news, a link that died 30 s ago would look alive again, and could even be routed over. So the controller compares the report's real age with what it already holds: an older report than the one held is ignored, and a report older than the 15 s expiry arrives already stale. Freshness comes from when something happened, not from when it was delivered.
 
+## The serial link in plain language (Phase 6-prep)
+
+**Why JSON lines on serial but binary on the radio.** An ESP-NOW frame is at most 250 bytes and every byte costs airtime and memory on a small board, so the radio uses a packed 14-byte header. The USB cable has no such pressure (115200 baud is about 11 KB/s, far more than a few frames a second), and a person debugging a board will read its output in a terminal. A line like `{"v":1,"t":"hb","b":0,"ack":0}` can be read and typed by hand, and the laptop parses it with the standard library. The two are not mixed: when C hands a radio frame up, the line carries the frame itself as hex, so there is still one binary format and one decoder.
+
+**Why logs must be separated from data.** A microcontroller prints for two reasons: to send data and to tell its developer what it is doing. If both go down the same wire unmarked, the first debug `Serial.println("got here")` lands in the middle of a data line, or looks like data. So every data line is JSON followed by `*` and a checksum, every human message starts with `#`, and anything else is counted as noise (the ESP8266 prints garbage at boot at a different baud rate). Only a line that passes every check is ever used.
+
+**Why a checksum.** The last stretch of the link, between the ESP8266 and the USB chip, has no error protection, and its typical fault is a lost byte when a buffer overflows. JSON would not notice: `"n":12` with a digit lost is `"n":2`, still valid. A 16-bit CRC catches every single lost or changed byte (the tests drop and flip every byte of a real line in turn and check each is refused). A refused line is dropped whole and counted, and the reliable uplink below asks for it again.
+
+**Cumulative acknowledgement and gap-based resend, and how it relates to TCP.** C numbers every message it sends up (1, 2, 3, ...). The laptop periodically says "I have everything up to 17" (cumulative: one number covers all before it), and C may then forget those. If the laptop sees 18 and 20 but not 19, it asks "resend from 19". TCP does the same job with the same two ideas, a cumulative acknowledgement and retransmission. The differences: here the receiver asks (it notices a gap within a heartbeat, so C needs no timer), the window is a fixed 16 messages, and if C no longer holds a number it answers "those are gone, and they were readings" so the loss is counted, never silent. Before this, an interruption shorter than 3 s lost readings without a trace; now a 1 s interruption delivers everything late, once.
+
+**Why the laptop sends payloads and C builds the header.** The radio header carries C's own id, C's session (a random number chosen at each boot) and C's next sequence number. Nodes accept a route update only from C's id, and the sequence numbers must be unique per boot of C, so a counter held anywhere else could repeat or collide. The laptop knows what it wants said (a type, a destination, a payload); C knows who it is. So `tx` carries those three and C writes the header, exactly as it does for any frame it creates.
+
+**How one controller works with a simulator and with real hardware.** The controller is written against a small interface: "subscribe to events from the network", "send a route update", "send a heartbeat", "what time is it". It never learns what is behind it. The simulator behind it hands over message objects directly; the serial gateway behind it parses text lines; both feed one shared piece of code (`LaptopGateway`) that handles numbering, acknowledgements and decoding. Tests run four scenarios through both and require identical events, and another test fails if the controller ever imports a serial or simulator module. That is what lets the same controller, dashboard model and tests carry over to real boards.
+
 ## Limitations of the live demo (Phase 5a)
 
 - One live run is shared by everyone connected; presenter controls act on it for all viewers. There is no per-client session and no persistence: a backend restart starts a new run (`run_id` 1).
@@ -384,11 +478,20 @@ The two channels split the job: `GET /api/snapshot` gives the full current state
 - The default `Origin` allow-list is `http://localhost:5173` (the Vite dev server). Requests with no `Origin` header are accepted, so keep the default localhost bind.
 - All numbers are simulated: delays, loss and timings are configured values, not measurements.
 
+## Limitations of the serial link (Phase 6-prep)
+
+- **No board has been connected.** Everything was run against the fake C. The firmware does not exist; the line format is a draft pending Dev's review. Whether the ESP8266 can sustain the format (hex of a 250-byte frame, a CRC per line, 128-byte downlink lines, C's buffer in about 2 to 6 KB) is unverified.
+- Opening a port is meant not to reset C (DTR and RTS are cleared first). Whether that works with the real USB chip on Windows and macOS is untested.
+- The simulated serial line is lossless unless a test corrupts it; a real UART loses bytes under load. The 20 ms per message C spends sending from its buffer is a simulated setting.
+- The uplink window is 16 messages. The reliable uplink recovers what C still holds; a reboot of C loses its buffer, which the laptop reports as `c_restarted` with a lower bound on the count.
+- Hardware-mode times (`sim_ms`) are the laptop's clock since the backend started.
+- Only ROUTE_UPDATE can be sent down for C to originate.
+
 ## Limitations of the outage handling (Phase 5b)
 
-- Simulation only. The laptop ↔ C messages are typed messages inside the backend; their serial encoding and a real serial gateway are the next step.
-- C's buffer holds 50 entries: about 100 s of 2 s readings, or 25 s of 500 ms readings. Longer outages lose the oldest readings (counted). The RAM estimate (1.5 KB typical, 4 KB worst case) is not measured on an ESP8266.
-- **An outage shorter than C's 3 s timeout is not noticed, so nothing is replayed**: readings sent up during it that the laptop missed are absent and not counted as lost (a 1 s detach in the simulation loses every reading in it). A fix is proposed for the serial step: numbered up messages and a replay request.
+- Simulation only for the outage measurements below.
+- C's buffer holds 50 entries: about 100 s of 2 s readings, or 25 s of 500 ms readings. Longer outages lose the oldest readings (counted). The RAM estimate (2.3 KB typical, 5.7 KB worst case, since C keeps frames as received) is not measured on an ESP8266.
+- **An outage shorter than C's 3 s timeout** used to lose readings uncounted (a 1 s detach lost every reading in it). Fixed in Phase 6-prep by the reliable uplink (below): the laptop notices the missing numbers and asks again.
 - Ages ignore the serial transfer time and C's clock drift; replay speed (20 ms per entry) is a simulated setting.
 - The buffer is RAM-only: if C loses power, what it held is gone.
 
