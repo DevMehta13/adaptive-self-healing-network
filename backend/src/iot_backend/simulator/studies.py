@@ -62,12 +62,15 @@ def run_scenario(
     duration_ms: int | None = None,
     loss: dict[tuple[str, str], float] | None = None,
     clear_drops: bool = False,
+    policy: str | None = None,
 ) -> Run:
     """Run a controller-routing scenario with overrides. Used by the studies and the tests."""
     spec = load_scenario(path)
     config = spec.config
     config.seed = seed
     routing = spec.controller
+    if policy is not None:
+        routing = replace(routing, policy=policy)
     for key, value in (mode or {}).items():
         if key == "backup_next_hops":
             routing = replace(routing, backup_next_hops=bool(value))

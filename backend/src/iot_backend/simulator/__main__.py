@@ -9,6 +9,7 @@ from iot_backend.controller import RoutingConfig, TopologyView
 from iot_backend.protocol import NODE_IDS
 from iot_backend.simulator.link import LinkConfig
 from iot_backend.simulator.measurements import detection_measurements, recovery_measurement
+from iot_backend.simulator.policy_study import compare_policies, format_comparison
 from iot_backend.simulator.scenario import (
     LINK_KEYS,
     ROUTING_CONTROLLER,
@@ -139,6 +140,15 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "detach the controller for several outage lengths (seeds 1..N) and report how many "
             "readings were delivered late vs lost; use --interval-ms and --buffer to vary"
+        ),
+    )
+    parser.add_argument(
+        "--compare-policies",
+        type=int,
+        metavar="N",
+        help=(
+            "run the scenario with seeds 1..N under the lowest-delay and the highest-reliability "
+            "policy and compare delivery rate, delivery time, readings lost and route changes"
         ),
     )
     parser.add_argument("--buffer", type=int, help="C buffer capacity for --outage-study")
@@ -294,6 +304,17 @@ def _compare(args: argparse.Namespace) -> int:
     return 0
 
 
+def _policies(args: argparse.Namespace) -> int:
+    if not args.scenario:
+        print("error: --compare-policies needs a scenario file")
+        return 2
+    duration = None if args.duration is None else round(args.duration * 1000)
+    results = compare_policies(args.scenario, range(1, args.compare_policies + 1), duration)
+    length = (duration or load_scenario(args.scenario).duration_ms) / 1000
+    print(format_comparison(args.scenario, results, length))
+    return 0
+
+
 def _false_triggers(args: argparse.Namespace) -> int:
     if not args.scenario:
         print("error: --false-triggers needs a scenario file")
@@ -359,6 +380,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.outage_study:
         try:
             return _outage(args)
+        except (ScenarioError, ValueError) as error:
+            print(f"error: {error}")
+            return 2
+    if args.compare_policies:
+        try:
+            return _policies(args)
         except (ScenarioError, ValueError) as error:
             print(f"error: {error}")
             return 2
