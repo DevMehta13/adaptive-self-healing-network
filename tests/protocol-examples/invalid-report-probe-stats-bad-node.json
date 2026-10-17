@@ -1,0 +1,7 @@
+{
+  "name": "report-probe-stats-bad-node",
+  "description": "A probe-statistics entry for node id 0.",
+  "valid": false,
+  "hex": "011101030d0c0b0a1f000000081c0202022222222278000402444444445a000102160002001314041414",
+  "reject_reason": "bad_node_id"
+}

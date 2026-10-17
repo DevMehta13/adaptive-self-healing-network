@@ -59,6 +59,11 @@ AGE_MAX_MS = 0xFFFF  # "last heard" ages saturate here
 # measurements keep their Phase 3 bytes exactly.
 RTT_ENTRY_SIZE = 3
 RTT_MAX_MS = 0xFFFE  # 0xFFFF is never sent; it is the "unmeasured" value, not a cost
+# Optional second trailer (Phase 9), after the RTT trailer: count u8, then count x
+# (neighbor u8, probes_ok u8, probes_total u8): of the reporter's last `probes_total` completed
+# probes to that neighbor (at most 20), `probes_ok` were answered. When there is no RTT
+# measurement at all the RTT trailer is a single 0 byte, so the second trailer stays findable.
+PROBE_STATS_ENTRY_SIZE = 3
 NO_NODE = 0  # "none" in a next-hop field (0 is not a valid node id)
 
 # PROBE has no payload. PROBE_REPLY echoes the probe's own session and seq (u32, u32).

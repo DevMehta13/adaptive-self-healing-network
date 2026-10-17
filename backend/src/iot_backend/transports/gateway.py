@@ -44,6 +44,10 @@ class NeighborObservation:
     last_heard_ms_ago: int  # on the reporter's clock when it built the report (saturating)
     # Round trip to this neighbor, measured by the reporter on its own clock; None = unmeasured.
     rtt_ms: int | None = None
+    # Of the reporter's last `probes_total` completed probes to this neighbor, `probes_ok` were
+    # answered (Phase 9); None = too few completed probes to say.
+    probes_ok: int | None = None
+    probes_total: int | None = None
 
 
 @dataclass(frozen=True)

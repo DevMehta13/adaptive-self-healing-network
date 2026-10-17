@@ -150,6 +150,8 @@ def frame_event(
                     session=e.session,
                     last_heard_ms_ago=e.age_ms,
                     rtt_ms=e.rtt_ms,
+                    probes_ok=e.probes_ok,
+                    probes_total=e.probes_total,
                 )
                 for e in p.entries
             ),

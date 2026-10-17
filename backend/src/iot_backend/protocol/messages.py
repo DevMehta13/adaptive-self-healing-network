@@ -66,6 +66,10 @@ class ReportEntry:
     # Round-trip time to this neighbor measured by the reporter on its own clock (median of a
     # small window), or None if there is no fresh measurement. None is never a zero cost.
     rtt_ms: int | None = None
+    # Phase 9: of the reporter's last `probes_total` completed probes to this neighbor, how many
+    # were answered. Both are None when too few probes have completed to say anything.
+    probes_ok: int | None = None
+    probes_total: int | None = None
 
 
 @dataclass(frozen=True)

@@ -59,6 +59,8 @@ def frame_from_fields(fields: dict) -> Frame:
                     e["session"],
                     e["age_ms"],
                     e.get("rtt_ms"),
+                    e.get("probes_ok"),
+                    e.get("probes_total"),
                 )
                 for e in payload["entries"]
             )

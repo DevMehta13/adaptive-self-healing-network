@@ -20,6 +20,7 @@ from iot_backend.protocol.constants import (
     NO_NODE,
     PROBE_PAYLOAD_SIZE,
     PROBE_REPLY_PAYLOAD_SIZE,
+    PROBE_STATS_ENTRY_SIZE,
     PROTOCOL_VERSION,
     REPORT_ENTRY_SIZE,
     ROUTE_INSTALL_ACK_PAYLOAD_SIZE,
@@ -57,6 +58,7 @@ _ACK = struct.Struct("<BII")
 _HELLO_ENTRY = struct.Struct("<BI")
 _REPORT_ENTRY = struct.Struct("<BBIH")
 _RTT_ENTRY = struct.Struct("<BH")
+_STATS_ENTRY = struct.Struct("<BBB")
 _PROBE_REPLY = struct.Struct("<II")
 _ROUTE_UPDATE = struct.Struct("<IIBBB")
 _ROUTE_ACK = struct.Struct("<IIBB")
@@ -133,11 +135,20 @@ def encode(frame: Frame) -> bytes:
             _check_range("report age_ms", e.age_ms, 0, AGE_MAX_MS)
             parts.append(_REPORT_ENTRY.pack(e.neighbor, e.state, e.session, e.age_ms))
         measured = [e for e in payload.entries if e.rtt_ms is not None]
-        if measured:  # the optional RTT trailer; absent when nothing is measured
-            parts.append(bytes([len(measured)]))
+        with_stats = [e for e in payload.entries if e.probes_total is not None]
+        if measured or with_stats:  # the optional trailers; absent when nothing is measured
+            parts.append(bytes([len(measured)]))  # 0 only when the stats trailer follows
             for e in measured:
                 _check_range("report rtt_ms", e.rtt_ms, 0, RTT_MAX_MS)  # type: ignore[arg-type]
                 parts.append(_RTT_ENTRY.pack(e.neighbor, e.rtt_ms))
+        if with_stats:  # the optional probe-statistics trailer (Phase 9)
+            parts.append(bytes([len(with_stats)]))
+            for e in with_stats:
+                if e.probes_ok is None:
+                    raise EncodeError("report probes_ok is missing")
+                _check_range("report probes_total", e.probes_total, 1, U8_MAX)  # type: ignore[arg-type]
+                _check_range("report probes_ok", e.probes_ok, 0, e.probes_total)  # type: ignore[arg-type]
+                parts.append(_STATS_ENTRY.pack(e.neighbor, e.probes_ok, e.probes_total))
         body = b"".join(parts)
     elif isinstance(payload, ProbePayload):
         body = b""
@@ -245,6 +256,13 @@ def _decode_hello(body: bytes) -> HelloPayload:
     return HelloPayload(tuple(neighbors))
 
 
+def _bad_report_length(count: int, body: bytes) -> DecodeError:
+    return DecodeError(
+        RejectReason.BAD_PAYLOAD_LENGTH,
+        f"TOPOLOGY_REPORT count={count} with {len(body)} payload bytes",
+    )
+
+
 def _decode_report(body: bytes) -> TopologyReportPayload:
     if not body:
         raise DecodeError(RejectReason.BAD_PAYLOAD_LENGTH, "TOPOLOGY_REPORT payload is empty")
@@ -256,15 +274,23 @@ def _decode_report(body: bytes) -> TopologyReportPayload:
             f"TOPOLOGY_REPORT count={count} with {len(body)} payload bytes",
         )
     rtt_count = 0
+    stats_count = 0
+    stats_at = 0
     if len(body) > base:  # optional RTT trailer: count, then (neighbor, rtt_ms) pairs
         rtt_count = body[base]
-        if not 1 <= rtt_count <= MAX_REPORT_ENTRIES or len(body) != (
-            base + 1 + rtt_count * RTT_ENTRY_SIZE
-        ):
-            raise DecodeError(
-                RejectReason.BAD_PAYLOAD_LENGTH,
-                f"TOPOLOGY_REPORT count={count} with {len(body)} payload bytes",
-            )
+        rtt_end = base + 1 + rtt_count * RTT_ENTRY_SIZE
+        if rtt_count > MAX_REPORT_ENTRIES or len(body) < rtt_end:
+            raise _bad_report_length(count, body)
+        if len(body) == rtt_end:
+            if rtt_count == 0:  # a bare zero says nothing: the trailer is left out instead
+                raise _bad_report_length(count, body)
+        else:  # optional probe-statistics trailer after the RTT trailer
+            stats_count = body[rtt_end]
+            stats_at = rtt_end + 1
+            if not 1 <= stats_count <= MAX_REPORT_ENTRIES or len(body) != (
+                stats_at + stats_count * PROBE_STATS_ENTRY_SIZE
+            ):
+                raise _bad_report_length(count, body)
     rtts: dict[int, int] = {}
     for i in range(rtt_count):
         neighbor, rtt = _RTT_ENTRY.unpack_from(body, base + 1 + i * RTT_ENTRY_SIZE)
@@ -273,6 +299,14 @@ def _decode_report(body: bytes) -> TopologyReportPayload:
         if rtt > RTT_MAX_MS:
             raise DecodeError(RejectReason.BAD_VALUE, f"report rtt {rtt}")
         rtts[neighbor] = rtt
+    stats: dict[int, tuple[int, int]] = {}
+    for i in range(stats_count):
+        neighbor, ok, total = _STATS_ENTRY.unpack_from(body, stats_at + i * PROBE_STATS_ENTRY_SIZE)
+        if neighbor in INVALID_NODE_IDS:
+            raise DecodeError(RejectReason.BAD_NODE_ID, f"report probe stats neighbor {neighbor}")
+        if total == 0 or ok > total:
+            raise DecodeError(RejectReason.BAD_VALUE, f"report probe stats {ok}/{total}")
+        stats[neighbor] = (ok, total)
     entries = []
     for i in range(count):
         neighbor, state, session, age = _REPORT_ENTRY.unpack_from(body, 1 + i * REPORT_ENTRY_SIZE)
@@ -282,7 +316,8 @@ def _decode_report(body: bytes) -> TopologyReportPayload:
             raise DecodeError(RejectReason.BAD_SESSION, "report session 0")
         if state not in tuple(NeighborCode):
             raise DecodeError(RejectReason.BAD_VALUE, f"report state {state}")
-        entries.append(ReportEntry(neighbor, state, session, age, rtts.get(neighbor)))
+        ok, total = stats.get(neighbor, (None, None))
+        entries.append(ReportEntry(neighbor, state, session, age, rtts.get(neighbor), ok, total))
     return TopologyReportPayload(tuple(entries))
 
 
