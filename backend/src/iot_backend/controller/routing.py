@@ -30,6 +30,14 @@ Rules, all of them testable from outside:
   The controller records a *local failover* recovery event, stops using the abandoned link until
   it has been routable for the hold-down again, and installs the route that results: it never
   re-installs the primary the node just abandoned.
+* **Policies (Phase 9, `RoutingConfig.policy`).** `immediate_rtt` is the Phase 4 behaviour
+  (latest measured RTT, a different route as soon as the set of usable links changes).
+  `lowest_delay` minimises the sum of smoothed link RTTs; `highest_reliability` maximises the
+  product of link delivery probabilities by minimising the sum of `-log p` (never negative, so
+  Dijkstra still works). Both are evaluated every `policy_eval_interval_ms`, and a candidate
+  must be strictly better for `hysteresis_evaluations` evaluations in a row before the route
+  changes. A route that is *broken* (a link of it left the graph, or a node on it restarted)
+  is replaced at once, as in Phase 4; local failover is never delayed by any of this.
 * **Versions.** Every update carries (epoch, version). Nodes ignore anything older than what they
   hold. The epoch identifies this controller run; a restarted controller must use a larger one.
 
@@ -37,6 +45,7 @@ Nothing here imports the simulator: the controller sees the network only through
 """
 
 import heapq
+import math
 import time
 from collections import deque
 from collections.abc import Callable, Iterable
@@ -63,6 +72,17 @@ FAILED = "failed"  # a node refused the update
 UNCONFIRMED = "unconfirmed"  # acknowledgements did not arrive within the bounded retries
 SUPERSEDED = "superseded"
 
+# Routing policies (Phase 9)
+POLICY_IMMEDIATE = "immediate_rtt"
+POLICY_LOWEST_DELAY = "lowest_delay"
+POLICY_HIGHEST_RELIABILITY = "highest_reliability"
+POLICIES = (POLICY_IMMEDIATE, POLICY_LOWEST_DELAY, POLICY_HIGHEST_RELIABILITY)
+
+# A link that answered none of its probes would cost -log(0) = infinity. Delivery probability is
+# floored here before the logarithm, so every cost is finite; costs are -ln(p) in thousandths.
+RELIABILITY_FLOOR = 0.05
+_COST_SCALE = 1000
+
 _HALF = 2**31
 _U32 = 2**32
 
@@ -73,6 +93,20 @@ def _newer(a: int, b: int) -> bool:
 
 def _name(node: int) -> str:
     return NODE_NAMES.get(node, str(node))
+
+
+def reliability_cost(delivery: float) -> int:
+    """Cost of a link with this delivery probability: -ln(p) in thousandths, never negative.
+
+    Summing these along a path gives -ln(product of p), so the cheapest path is the one with
+    the highest chance of getting through, and Dijkstra's non-negative-cost rule is respected.
+    """
+    return round(-math.log(min(1.0, max(delivery, RELIABILITY_FLOOR))) * _COST_SCALE)
+
+
+def path_delivery(cost: int) -> float:
+    """The delivery probability a reliability-cost sum stands for."""
+    return round(math.exp(-cost / _COST_SCALE), 4)
 
 
 @dataclass(frozen=True)
@@ -203,6 +237,11 @@ class RoutingConfig:
     heartbeat_interval_ms: int = 0
     link_timeout_ms: int = 3_000
     max_events: int = 1_000
+    # Phase 9: how routes are chosen, how often the choice is re-examined and how many
+    # evaluations in a row a better candidate must win before the route changes.
+    policy: str = POLICY_IMMEDIATE
+    policy_eval_interval_ms: int = 5_000
+    hysteresis_evaluations: int = 3
 
     def __post_init__(self) -> None:
         if not 1 <= self.epoch < _U32:
@@ -211,6 +250,10 @@ class RoutingConfig:
             raise ValueError("attempt limits must be positive")
         if min(self.hold_down_ms, self.install_timeout_ms, self.replan_delay_ms) < 0:
             raise ValueError("times must be non-negative")
+        if self.policy not in POLICIES:
+            raise ValueError(f"policy must be one of {POLICIES}, got {self.policy!r}")
+        if self.policy_eval_interval_ms < 1 or self.hysteresis_evaluations < 1:
+            raise ValueError("evaluation interval and hysteresis count must be at least 1")
 
 
 @dataclass(frozen=True)
@@ -241,6 +284,18 @@ class _Plan:
     phase_index: int = 0
     outstanding: dict[int, int] = field(default_factory=dict)  # node -> transmissions so far
     confirmed: list[int] = field(default_factory=list)
+    policy: str = POLICY_IMMEDIATE
+    delivery: float | None = None  # estimated path delivery probability (reliability policy)
+
+
+@dataclass
+class _Candidate:
+    """A route that is better than the current one and is waiting to have stayed better."""
+
+    path: tuple[int, ...]
+    cost: int
+    current_cost: int
+    evaluations: int
 
 
 @dataclass
@@ -279,6 +334,7 @@ class RouteController:
         self._last_cost: dict[tuple[int, int], int] = {}  # last measured cost of a routable link
         self._since: dict[tuple[int, int], int] = {}
         self._eligible_at: dict[tuple[int, int], int] = {}
+        self._in_service: set[tuple[int, int]] = set()  # links not known to be down
         self._seen: set[tuple[int, int]] = set()
         self._failed_streak = 0
         self._forced_trigger: str | None = None
@@ -287,6 +343,9 @@ class RouteController:
         self._again = False
         self._scheduled = False
         self._stopped = False
+        self._policy = self._config.policy
+        self._candidate: _Candidate | None = None
+        self._tick_generation = 0
         self._events: deque[RouteEvent] = deque(maxlen=self._config.max_events)
         self._next_event_id = 1
         self._handlers: list[Callable[[RouteEvent], None]] = []
@@ -295,6 +354,7 @@ class RouteController:
         gateway.subscribe(self._on_gateway_event)
         view.subscribe(self._on_view_event)
         view.subscribe_updates(self._reconcile)
+        self._schedule_policy_tick()
         self._reconcile()
 
     # ---- public ----
@@ -315,6 +375,37 @@ class RouteController:
     def version(self) -> int:
         return self._version
 
+    @property
+    def policy(self) -> str:
+        return self._policy
+
+    def policy_state(self) -> dict[str, Any]:
+        """The policy and its settings, in the shape served in the snapshot."""
+        return {
+            "current": self._policy,
+            "available": list(POLICIES),
+            "evaluation_interval_ms": self._config.policy_eval_interval_ms,
+            "hysteresis_evaluations": self._config.hysteresis_evaluations,
+        }
+
+    def set_policy(self, policy: str) -> bool:
+        """Choose how routes are selected from now on; True if it changed.
+
+        A new policy does not move the route by itself: the best route under it must still win
+        `hysteresis_evaluations` evaluations in a row, unless the current route is broken.
+        """
+        if policy not in POLICIES:
+            raise ValueError(f"policy must be one of {POLICIES}, got {policy!r}")
+        if policy == self._policy:
+            return False
+        previous, self._policy = self._policy, policy
+        self._drop_candidate("policy_changed")
+        self._emit("policy_changed", {"old": previous, "new": policy})
+        self._basis = None  # eligibility differs between policies: look at the graph again
+        self._schedule_policy_tick()
+        self._reconcile()
+        return True
+
     def subscribe(self, handler: Callable[[RouteEvent], None]) -> None:
         self._handlers.append(handler)
 
@@ -333,6 +424,8 @@ class RouteController:
                 "state": "waiting",
                 "kind": None,
                 "version": None,
+                "policy": self._policy,
+                "pending_switch": None,
             }
         return {
             "flow": flow,
@@ -340,6 +433,10 @@ class RouteController:
             "version": plan.version,
             "kind": plan.kind,
             "state": plan.state,
+            "policy": self._policy,
+            "plan_policy": plan.policy,
+            "delivery_probability": plan.delivery,
+            "pending_switch": self._pending_switch(),
             "path": [_name(n) for n in plan.path],
             "cost_ms": plan.cost_ms,
             "confirmed_by": [_name(n) for n in plan.confirmed],
@@ -387,23 +484,46 @@ class RouteController:
         finally:
             self._busy = False
 
-    def _reconcile_once(self) -> None:
-        now = self._gateway.now_ms()
-        routable = {
-            (min(NODE_IDS[a], NODE_IDS[b]), max(NODE_IDS[a], NODE_IDS[b])): cost
-            for a, b, cost in self._view.routable_links()
-        }
+    def _link_costs(self) -> tuple[dict[tuple[int, int], int], set[tuple[int, int]]]:
+        """(cost of each routable link under the policy, every link the view says is up)."""
+
+        def key(a: str, b: str) -> tuple[int, int]:
+            return min(NODE_IDS[a], NODE_IDS[b]), max(NODE_IDS[a], NODE_IDS[b])
+
+        if self._policy == POLICY_IMMEDIATE:
+            costs = {key(a, b): cost for a, b, cost in self._view.routable_links()}
+            return costs, set(costs)
+        costs = {}
+        up = set()
+        for link in self._view.link_metrics():
+            up.add(key(link.a, link.b))
+            if self._policy == POLICY_LOWEST_DELAY and link.smoothed_rtt_ms is not None:
+                costs[key(link.a, link.b)] = link.smoothed_rtt_ms
+            elif self._policy == POLICY_HIGHEST_RELIABILITY and link.delivery is not None:
+                costs[key(link.a, link.b)] = reliability_cost(link.delivery)
+        return costs, up
+
+    def _current_graph(self, now: int) -> dict[tuple[int, int], int]:
+        """The links routes may use right now, with their costs under the active policy."""
+        routable, up = self._link_costs()
         # Fail-static on silence: a link whose information has merely *expired* (the controller
         # stopped hearing reports, for instance while detached) is not known to be down, so it
         # keeps its last known cost and is not treated as having left. Only a link the view
         # says is down or one-way leaves the graph.
+        in_service = set(up)
         for a, b in self._view.stale_links():
             key = (min(NODE_IDS[a], NODE_IDS[b]), max(NODE_IDS[a], NODE_IDS[b]))
+            in_service.add(key)
             if key in self._since and key in self._last_cost and key not in routable:
                 routable[key] = self._last_cost[key]
+        self._in_service = in_service
         self._last_cost.update(routable)
         self._update_hold_down(routable, now)
-        eligible = {key: cost for key, cost in routable.items() if now >= self._eligible_at[key]}
+        return {key: cost for key, cost in routable.items() if now >= self._eligible_at[key]}
+
+    def _reconcile_once(self) -> None:
+        now = self._gateway.now_ms()
+        eligible = self._current_graph(now)
         if frozenset(eligible) != self._last_eligible:
             self._last_eligible = frozenset(eligible)
             self._last_change_ms = now
@@ -459,10 +579,17 @@ class RouteController:
         trigger = self._forced_trigger
         self._forced_trigger = None
         plan = self._plan
+        # A local failover report, a retry after a failed install and an epoch change are
+        # never "a merely better route": the route in use is not to be kept for them.
+        holding = trigger is None and self._holds_route(sessions)
         if trigger is None:
             trigger = "initial" if plan is None else "topology_changed"
         if result is None:
-            self._no_path(links, now, trigger)
+            if not holding:
+                self._no_path(links, now, trigger)
+            return  # an intact route stays even if this policy has nothing to compare it with
+        if holding and plan is not None and result.path != plan.path:
+            # The route in use is intact: a different route has to win the evaluations first.
             return
         extra = (
             protecting_backups(links, result.path)
@@ -483,6 +610,138 @@ class RouteController:
                 return  # the same route, backups included, is already installing or in use
             trigger = "node_restarted"
         self._start_plan(KIND_ROUTE, result, node_sessions, links, now, trigger, extra)
+
+    # ---- policy evaluation and hysteresis (Phase 9) ----
+
+    def _holds_route(self, sessions: dict[str, int]) -> bool:
+        """True if the route in use is intact, so a merely better route must wait its turn.
+
+        Only for the two policies. Intact means: it is a real route, being installed or in use,
+        every link of it is still up (or only unheard of), and no node on it has restarted
+        (its table is gone with its RAM). Anything else is *broken* and is replaced at once.
+        """
+        plan = self._plan
+        if (
+            self._policy == POLICY_IMMEDIATE
+            or plan is None
+            or plan.kind != KIND_ROUTE
+            or plan.state not in (INSTALLING, ACTIVE)
+        ):
+            return False
+        for a, b in zip(plan.path, plan.path[1:], strict=False):
+            if (min(a, b), max(a, b)) not in self._in_service:
+                return False
+        return all(sessions.get(_name(n), 0) == s for n, s in plan.sessions.items())
+
+    def _schedule_policy_tick(self) -> None:
+        if self._policy == POLICY_IMMEDIATE or self._stopped:
+            return
+        self._tick_generation += 1
+        generation = self._tick_generation
+        self._gateway.call_later(
+            self._config.policy_eval_interval_ms, lambda: self._policy_tick(generation)
+        )
+
+    def _policy_tick(self, generation: int) -> None:
+        if self._stopped or generation != self._tick_generation or self._policy == POLICY_IMMEDIATE:
+            return
+        self._evaluate_policy()
+        self._gateway.call_later(
+            self._config.policy_eval_interval_ms, lambda: self._policy_tick(generation)
+        )
+
+    def _metric(self, cost: int) -> dict[str, Any]:
+        """A cost as the dashboard should read it: milliseconds, or a delivery probability."""
+        if self._policy == POLICY_HIGHEST_RELIABILITY:
+            return {"cost_ms": None, "delivery_probability": path_delivery(cost)}
+        return {"cost_ms": cost, "delivery_probability": None}
+
+    def _pending_switch(self) -> dict[str, Any] | None:
+        c = self._candidate
+        if c is None:
+            return None
+        return {
+            "path": [_name(n) for n in c.path],
+            "evaluations": c.evaluations,
+            "needed": self._config.hysteresis_evaluations,
+            "candidate": self._metric(c.cost),
+            "current": self._metric(c.current_cost),
+        }
+
+    def _drop_candidate(self, reason: str) -> None:
+        candidate, self._candidate = self._candidate, None
+        if candidate is not None:
+            self._emit(
+                "route_candidate_dropped",
+                {
+                    "policy": self._policy,
+                    "path": [_name(n) for n in candidate.path],
+                    "evaluations": candidate.evaluations,
+                    "reason": reason,
+                },
+            )
+
+    def _evaluate_policy(self) -> None:
+        """One evaluation: is some route strictly better than the one in use?
+
+        A candidate must be the same strictly better route for `hysteresis_evaluations`
+        evaluations in a row. One evaluation where it is not better (or another route is better)
+        starts the count again, so a brief dip in a link's quality cannot move the route.
+        """
+        now = self._gateway.now_ms()
+        eligible = self._current_graph(now)
+        plan = self._plan
+        if plan is None or plan.kind != KIND_ROUTE or plan.state != ACTIVE:
+            return  # nothing in use to compare with, or a change is already being installed
+        sessions = self._view.node_sessions()
+        if not self._holds_route(sessions):
+            self._drop_candidate("route_not_intact")  # a broken route is the other path's job
+            return
+        links = [(a, b, cost) for (a, b), cost in sorted(eligible.items())]
+        result = shortest_path(links, self._source, self._destination)
+        current = 0
+        for a, b in zip(plan.path, plan.path[1:], strict=False):
+            cost = eligible.get((min(a, b), max(a, b)))
+            if cost is None:
+                result = None  # the route in use cannot be priced: compare nothing
+                break
+            current += cost
+        if result is None or result.path == plan.path or result.cost_ms >= current:
+            self._drop_candidate("no_longer_better")
+            return
+        candidate = self._candidate
+        if candidate is not None and candidate.path == result.path:
+            candidate.evaluations += 1
+            candidate.cost, candidate.current_cost = result.cost_ms, current
+        else:
+            self._drop_candidate("another_route_is_better")
+            candidate = self._candidate = _Candidate(result.path, result.cost_ms, current, 1)
+        self._emit(
+            "route_candidate",
+            {
+                "policy": self._policy,
+                "path": [_name(n) for n in result.path],
+                "current_path": [_name(n) for n in plan.path],
+                "evaluations": candidate.evaluations,
+                "needed": self._config.hysteresis_evaluations,
+                "candidate": self._metric(candidate.cost),
+                "current": self._metric(candidate.current_cost),
+            },
+        )
+        if candidate.evaluations < self._config.hysteresis_evaluations:
+            return
+        self._candidate = None  # it earned the switch
+        extra = (
+            protecting_backups(links, result.path)
+            if self._config.backup_next_hops
+            else BackupPlan({}, {})
+        )
+        involved = set(result.path) | set(extra.entries)
+        node_sessions = {n: sessions.get(_name(n), 0) for n in involved}
+        self._basis = (frozenset(eligible), tuple(sorted(sessions.items())))
+        self._start_plan(
+            KIND_ROUTE, result, node_sessions, links, now, "policy_better_route", extra
+        )
 
     def _no_path(self, links: list[tuple[int, int, int]], now: int, trigger: str) -> None:
         plan = self._plan
@@ -513,6 +772,7 @@ class RouteController:
     ) -> None:
         if self._plan is not None and self._plan.state in (COMPUTED, INSTALLING):
             self._plan.state = SUPERSEDED
+        self._drop_candidate("route_replaced")
         self._version += 1
         self.stats.plans += 1
         path = result.path if result else ()
@@ -524,12 +784,26 @@ class RouteController:
             sessions=sessions,
             computed_ms=now,
             trigger=trigger,
+            policy=self._policy,
         )
+        if result is not None and self._policy == POLICY_HIGHEST_RELIABILITY:
+            plan.delivery = path_delivery(result.cost_ms)
+            plan.cost_ms = None  # the cost is -ln(p), not milliseconds
         if extra is not None:
             plan.backups, plan.entries = dict(extra.backups), dict(extra.entries)
         self._plan = plan
         flow = f"{self._config.source}->{self._config.destination}"
-        graph = [{"link": f"{_name(a)}-{_name(b)}", "cost_ms": c} for a, b, c in links]
+        if self._policy == POLICY_HIGHEST_RELIABILITY:
+            graph = [
+                {
+                    "link": f"{_name(a)}-{_name(b)}",
+                    "cost_ms": None,
+                    "delivery_probability": path_delivery(c),
+                }
+                for a, b, c in links
+            ]
+        else:
+            graph = [{"link": f"{_name(a)}-{_name(b)}", "cost_ms": c} for a, b, c in links]
         held = [
             {"link": f"{_name(a)}-{_name(b)}", "eligible_in_ms": at - now}
             for (a, b), at in sorted(self._eligible_at.items())
@@ -546,8 +820,10 @@ class RouteController:
                     "flow": flow,
                     "epoch": self._epoch,
                     "version": plan.version,
+                    "policy": self._policy,
                     "path": [_name(n) for n in path],
                     "cost_ms": plan.cost_ms,
+                    "delivery_probability": plan.delivery,
                     "graph": graph,
                     "held_down": held,
                     "trigger": trigger,
@@ -673,8 +949,10 @@ class RouteController:
                 {
                     "version": plan.version,
                     "epoch": self._epoch,
+                    "policy": plan.policy,
                     "path": [_name(n) for n in plan.path],
                     "cost_ms": plan.cost_ms,
+                    "delivery_probability": plan.delivery,
                     "confirmed_by": [_name(n) for n in plan.confirmed],
                     "distribution_ms": now - plan.computed_ms,
                     "trigger": plan.trigger,

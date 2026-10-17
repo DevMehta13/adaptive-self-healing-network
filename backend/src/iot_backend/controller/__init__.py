@@ -12,12 +12,18 @@ from iot_backend.controller.routing import (
     protecting_backups,
     shortest_path,
 )
-from iot_backend.controller.topology import TopologyConfig, TopologyEvent, TopologyView
+from iot_backend.controller.topology import (
+    LinkMetrics,
+    TopologyConfig,
+    TopologyEvent,
+    TopologyView,
+)
 
 __all__ = [
     "BackupPlan",
     "GatewayLinkEvent",
     "GatewaySession",
+    "LinkMetrics",
     "ReadingLedger",
     "ReadingRecord",
     "ControllerStats",

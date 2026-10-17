@@ -67,6 +67,8 @@ class ScenarioConfig:
     rtt_window: int = 5
     rtt_min_samples: int = 3
     rtt_max_age_ms: int = 10_000
+    probe_window: int = 0  # Phase 9: completed probes remembered per neighbor (0 = off)
+    probe_stats_min: int = 5
     max_routes: int = 8
     # Phase 4b: local failover (off by default; earlier scenarios are unchanged)
     local_failover: bool = False
@@ -155,6 +157,8 @@ class Simulation:
             rtt_window=self.config.rtt_window,
             rtt_min_samples=self.config.rtt_min_samples,
             rtt_max_age_ms=self.config.rtt_max_age_ms,
+            probe_window=self.config.probe_window,
+            probe_stats_min=self.config.probe_stats_min,
             max_routes=self.config.max_routes,
             local_failover=self.config.local_failover,
             failover_t1=self.config.failover_t1,

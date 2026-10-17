@@ -53,6 +53,9 @@ _CONTROLLER_KEYS = {
     "backup_next_hops",
     "heartbeat_interval_ms",
     "link_timeout_ms",
+    "policy",
+    "policy_eval_interval_ms",
+    "hysteresis_evaluations",
 }
 _SETTING_KEYS = {
     "reading_interval_ms",
@@ -74,6 +77,8 @@ _SETTING_KEYS = {
     "rtt_window",
     "rtt_min_samples",
     "rtt_max_age_ms",
+    "probe_window",
+    "probe_stats_min",
     "max_routes",
     "local_failover",
     "failover_t1",
@@ -176,7 +181,7 @@ def parse_scenario(raw: dict[str, Any]) -> ScenarioSpec:
     try:
         controller = RoutingConfig(
             **{
-                k: (bool(v) if k == "backup_next_hops" else int(v))
+                k: (bool(v) if k == "backup_next_hops" else str(v) if k == "policy" else int(v))
                 for k, v in controller_raw.items()
             }
         )

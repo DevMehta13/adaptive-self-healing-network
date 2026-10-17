@@ -149,6 +149,10 @@ class NodeSettings:
     rtt_window: int = 5  # most recent samples kept per neighbor
     rtt_min_samples: int = 3  # fewer fresh samples than this = "unmeasured"
     rtt_max_age_ms: int = 10_000  # older samples are forgotten
+    # Phase 9: how many completed probes per neighbor are remembered as answered / unanswered
+    # (0 = off) and the fewest completed probes before the reporter says anything about them.
+    probe_window: int = 0
+    probe_stats_min: int = 5
     max_routes: int = 8  # installed route entries (one per destination)
     # Phase 4b: local failover. Off by default so earlier scenarios behave exactly as before.
     local_failover: bool = False
@@ -281,6 +285,8 @@ class Node:
         self._probes: dict[int, _Probe] = {}
         self._rtt: dict[int, deque[tuple[int, int]]] = {}  # neighbor -> (time, rtt) samples
         self._rtt_reported: dict[int, bool] = {}  # last "has a measurement" per neighbor
+        # neighbor -> outcomes of its last completed probes (True = answered), Phase 9
+        self._probe_outcomes: dict[int, deque[bool]] = {}
         self._send_failures: dict[int, int] = {}  # neighbor -> consecutive failed sends
         # Link-layer verdicts are processed in the order the frames were sent, like the single
         # radio's callbacks: ticket numbers are issued per transmission.
@@ -340,6 +346,7 @@ class Node:
         self._probes.clear()
         self._rtt.clear()
         self._rtt_reported.clear()
+        self._probe_outcomes.clear()
         self._send_failures.clear()
         self._first_failure_ms.clear()
         self._tickets_issued = self._next_ticket = 0
@@ -390,6 +397,7 @@ class Node:
         self._probes.clear()
         self._rtt.clear()
         self._rtt_reported.clear()
+        self._probe_outcomes.clear()
         self._send_failures.clear()
         self._first_failure_ms.clear()
         self._tickets_issued = self._next_ticket = 0
@@ -781,6 +789,8 @@ class Node:
             return
         now = self._engine.now_ms
         for neighbor_id in sorted(self.permitted):
+            if neighbor_id in self._probes:
+                self._record_probe_outcome(neighbor_id, answered=False)  # last one never came back
             probe = self._new_frame(neighbor_id, ProbePayload(), ttl=1)
             # One outstanding probe per neighbor: a new one replaces an unanswered one, so a
             # silent neighbor costs one small record, not a growing list.
@@ -812,12 +822,37 @@ class Node:
             self._drop("probe_unmatched", frame.identity, sender=self._name(from_node))
             return
         del self._probes[from_node]
+        self._record_probe_outcome(from_node, answered=True)
         now = self._engine.now_ms
         rtt = min(now - outstanding.sent_ms, RTT_MAX_MS)  # this node's clock, both ends
         window = self._rtt.setdefault(from_node, deque(maxlen=self._settings.rtt_window))
         window.append((now, rtt))
         if self._refresh_measurement_flags():
             self._request_report()
+
+    def _record_probe_outcome(self, neighbor_id: int, answered: bool) -> None:
+        """Remember whether a completed probe was answered (a rolling window, Phase 9).
+
+        A neighbor in the lost state is a link that is known to be down, which is not the same
+        thing as a lossy link: its history is discarded and starts again when it returns.
+        """
+        if self._settings.probe_window <= 0:
+            return
+        neighbor = self._neighbors.get(neighbor_id)
+        if neighbor is not None and neighbor.state == NeighborCode.LOST:
+            self._probe_outcomes.pop(neighbor_id, None)
+            return
+        window = self._probe_outcomes.setdefault(
+            neighbor_id, deque(maxlen=self._settings.probe_window)
+        )
+        window.append(answered)
+
+    def _probe_stats(self, neighbor_id: int) -> tuple[int, int] | None:
+        """(answered, completed) over the window, or None if too few probes have completed."""
+        window = self._probe_outcomes.get(neighbor_id)
+        if not window or len(window) < self._settings.probe_stats_min:
+            return None
+        return sum(window), len(window)
 
     def _fresh_samples(self, neighbor_id: int) -> list[int]:
         horizon = self._engine.now_ms - self._settings.rtt_max_age_ms
@@ -1244,6 +1279,7 @@ class Node:
                 neighbor.session,
                 min(now - neighbor.last_heard_ms, AGE_MAX_MS),
                 self._measured_rtt(node),
+                *(self._probe_stats(node) or (None, None)),
             )
             for node, neighbor in sorted(self._neighbors.items())
         )[:MAX_REPORT_ENTRIES]

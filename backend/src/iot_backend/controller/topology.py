@@ -33,6 +33,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
+from iot_backend.controller.quality import DEFAULT_EWMA_ALPHA, LinkQuality
 from iot_backend.protocol import NODE_IDS, NODE_NAMES
 from iot_backend.transports.gateway import (
     Gateway,
@@ -67,6 +68,7 @@ def _name(node: int) -> str:
 class TopologyConfig:
     report_expiry_ms: int = 15_000
     max_events: int = 1_000
+    ewma_alpha: float = DEFAULT_EWMA_ALPHA  # smoothing of reported RTTs (Phase 9)
 
 
 @dataclass(frozen=True)
@@ -79,6 +81,17 @@ class TopologyEvent:
     # link_state_changed
     type: str
     data: dict[str, Any]
+
+
+@dataclass(frozen=True)
+class LinkMetrics:
+    """What the controller knows about an up link; None means not (yet) known at both ends."""
+
+    a: str
+    b: str
+    rtt_ms: int | None  # latest measurement, the larger end
+    smoothed_rtt_ms: int | None  # exponentially weighted average of the reported RTTs
+    delivery: float | None  # answered / completed probes, the lower end
 
 
 @dataclass
@@ -119,6 +132,7 @@ class TopologyView:
         # Times at which an expiry check is already scheduled. Without this a timer that fires
         # re-arms a duplicate of one still pending, and the pending set grows without bound.
         self._armed: set[int] = set()
+        self.quality = LinkQuality(self._config.ewma_alpha)
         gateway.subscribe(self._on_gateway_event)
 
     # ---- public ----
@@ -169,6 +183,21 @@ class TopologyView:
             if cost is not None:
                 result.append((_name(a), _name(b), cost))
         return result
+
+    def link_metrics(self) -> list[LinkMetrics]:
+        """Every up link with the estimates the routing policies use (None = not known)."""
+        self._evaluate()
+        return [
+            LinkMetrics(
+                _name(a),
+                _name(b),
+                self._link_cost(a, b),
+                self.quality.smoothed_rtt_ms(a, b),
+                self.quality.delivery_probability(a, b),
+            )
+            for (a, b), state in sorted(self._links.items())
+            if state.state == LINK_UP
+        ]
 
     def stale_links(self) -> list[tuple[str, str]]:
         """Links whose state is unknown because a report expired (not known to be down)."""
@@ -239,6 +268,9 @@ class TopologyView:
                 # cost the route calculation would use (None = not routable).
                 "rtt_ms": {_name(a): self._rtt_from(a, b), _name(b): self._rtt_from(b, a)},
                 "cost_ms": self._link_cost(a, b) if s.state == LINK_UP else None,
+                # Phase 9: what the two routing policies see (null = not known at both ends)
+                "smoothed_rtt_ms": self.quality.smoothed_rtt_ms(a, b),
+                "delivery_probability": self.quality.delivery_probability(a, b),
             }
             for (a, b), s in sorted(self._links.items())
         ]
@@ -268,6 +300,7 @@ class TopologyView:
             seq=event.seq,
             entries={o.neighbor: o for o in event.neighbors},
         )
+        self.quality.observe(event.origin, event.session, event.neighbors)
         self._evaluate()
         for handler in list(self._update_handlers):
             handler()
