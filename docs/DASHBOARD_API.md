@@ -78,6 +78,7 @@ The complete current state; the source of truth. WebSocket events only describe 
   "nodes": [ ... ],
   "links": [ ... ],
   "route": { ... },
+  "policy": { "current": "lowest_delay", "available": ["immediate_rtt", "lowest_delay", "highest_reliability"], "evaluation_interval_ms": 5000, "hysteresis_evaluations": 3 },
   "readings": { "delivered_unique": 49, "duplicates": 0, "replayed": 0, "recent": [ ... ] },
   "counts": { ... },
   "gateway": { ... },
@@ -137,7 +138,9 @@ Only links that have been reported on appear.
   "directions": { "B->A": true, "A->B": true },
   "since_ms": 1552,
   "rtt_ms": { "A": 30, "B": 30 },
-  "cost_ms": 30
+  "cost_ms": 30,
+  "smoothed_rtt_ms": 30,
+  "delivery_probability": 1.0
 }
 ```
 
@@ -148,6 +151,8 @@ Only links that have been reported on appear.
 | `directions` | `"X->Y": true` means frames sent by X are confirmed to reach Y. |
 | `rtt_ms` | The round trip each end **measured on its own clock**, in ms; `null` for an end with no fresh measurement. A round trip, not a one-way delay. The values are the last reported ones: meaningful when `state` is `up`. |
 | `cost_ms` | What route calculation uses (the larger of the two ends, only if both measured and the link is `up`), else `null`. A link with `null` cost is not used and is never "free". |
+| `smoothed_rtt_ms` | (Phase 9) The controller's exponentially weighted average of the reported RTTs (factor 0.2), the larger of the two ends; `null` unless both ends have reported. What the **lowest delay** policy sums. |
+| `delivery_probability` | (Phase 9) Answered ÷ completed probes over each end's last (up to 20) probes, the **lower** of the two ends; `null` unless both ends have enough completed probes (5), or when the scenario does not keep probe statistics. A *probe* round trip, so a link losing 15 % each way shows about 0.72. What the **highest reliability** policy rates. |
 
 Draw `one_way` and `stale` differently from `up` (for example dashed), and never draw a planned link as healthy without this evidence.
 
@@ -158,7 +163,10 @@ Draw `one_way` and `stale` differently from `up` (for example dashed), and never
   "flow": "A->C", "epoch": 1000, "version": 2, "kind": "route", "state": "active",
   "path": ["A", "D", "C"], "cost_ms": 130,
   "confirmed_by": ["D", "A"], "waiting_for": [],
-  "backups": { "A": "D" }, "backup_entries": { "D": "C" }
+  "backups": { "A": "D" }, "backup_entries": { "D": "C" },
+  "policy": "lowest_delay", "plan_policy": "lowest_delay",
+  "delivery_probability": null,
+  "pending_switch": null
 }
 ```
 
@@ -170,6 +178,11 @@ Draw `one_way` and `stale` differently from `up` (for example dashed), and never
 | `confirmed_by` / `waiting_for` | Nodes whose installation has / has not been acknowledged. |
 | `backups` | Each forwarding node on the route and its installed backup next hop (empty if none). |
 | `backup_entries` | Nodes **off** the route that were given an entry so a backup works. |
+| `policy` | (Phase 9) The policy in force now: `immediate_rtt`, `lowest_delay` or `highest_reliability`. Also in the snapshot's top-level `policy` section. |
+| `plan_policy` | The policy this route was chosen under (it can differ from `policy` for a while after a change). |
+| `cost_ms` | Under `highest_reliability` this is `null`: the cost is −log *p*, not milliseconds. |
+| `delivery_probability` | Under `highest_reliability`, the product of the path's link probabilities (what the policy maximised); otherwise `null`. |
+| `pending_switch` | `null`, or a better route waiting to win the hysteresis: `{"path": [...], "evaluations": 2, "needed": 3, "candidate": {"cost_ms", "delivery_probability"}, "current": {...}}`. Show it as "better route seen 2 of 3 times". |
 
 A node that failed over locally is using its backup even though `route.path` still shows the primary, until the controller's new version is active. The dashboard learns of the failover from the `local_failover` event; it must not infer it from the route.
 
@@ -273,6 +286,30 @@ The history is bounded (default 2000). `complete: false` means it no longer reac
 { "scenarios": ["b-failure-auto-reroute", "live-demo", "normal-via-b"], "current": "live-demo" }
 ```
 
+### `POST /api/policy` (Phase 9; both modes)
+
+```json
+{ "policy": "highest_reliability" }
+```
+
+Chooses how the controller selects routes from now on: `immediate_rtt` (the Phase 4 behaviour: latest measured RTT, a different route as soon as the set of usable links changes), `lowest_delay` (minimise the sum of smoothed link RTTs), `highest_reliability` (maximise the product of link delivery probabilities by minimising the sum of −log *p*). Answer: `{"ok": true, "policy": "...", "changed": true, "run_id": 1, "last_event_id": 103}`; an event `policy_changed` follows. It is a **setting of the controller, not a change to the simulated environment**, so it is not under `/api/control/` and it also works in hardware mode. The same checks apply as for every state-changing request (JSON only, `Origin`, localhost). Errors: `400 bad_request` (not one of the three names, unknown fields), `403`, `415`, `409 not_available` (no controller in this run).
+
+A new policy does **not** move the route by itself: the best route under it has to win three evaluations in a row, like any other better route, unless the route in use is broken. The start-up policy is the scenario's `controller.policy` (the default `live-demo` uses `immediate_rtt`) or `IOT_ROUTING_POLICY`; a reset returns to it.
+
+**The two rules a dashboard should explain.** *Hysteresis:* under the two policies the controller re-examines the choice every 5 s (the topology report interval) and changes route only after the same strictly better route has won **3 evaluations in a row** (about 15 s). *Broken is different from worse:* if a link of the route is gone, or a node on it restarted, or a node fails over locally, the replacement is immediate and not counted.
+
+## Run history and CSV export (Phase 10)
+
+Only when the backend was started with `IOT_HISTORY_DB=<file>`; otherwise these answer `409 history_disabled`. Read-only.
+
+| Endpoint | Answer |
+| --- | --- |
+| `GET /api/runs` | `{"runs": [{"run_id", "mode", "scenario", "live_run_id", "started_utc", "ended_utc", "events", "readings", "events_evicted", "readings_evicted", "complete"}], "limits": {...}}`, newest first. `run_id` is the history's own id (it keeps counting across backend restarts); `live_run_id` is the dashboard's `run_id`. `ended_utc` is `null` while the run is going, or if the backend was killed without closing it. `complete` is `false` if the oldest rows were dropped to stay within the limits. |
+| `GET /api/runs/{id}` | The same fields plus `config`: what the run was started with (the scenario file as it was, the controller settings including the policy; in hardware mode the port, baud and controller settings). |
+| `GET /api/runs/{id}/export?kind=readings` or `kind=events` | A CSV download (`text/csv`, `Content-Disposition: attachment; filename="run-3-readings.csv"`). Readings: `event_id, origin, session, seq, value, via, hops, ttl, received_ms, replayed, delay_ms, observed_path` (`A>B>C`, `?` for a relay C cannot name). Events: `event_id, sim_ms, type, data` (the event's JSON). Errors: `404 unknown_run`, `400 bad_request` for another `kind`. |
+
+What is stored is the stream the dashboard saw: every state-changing event (readings go to their own table instead of the event table) and every reading the controller counted. It is the controller's record, not the simulator's ground truth. Bounds (settings `IOT_HISTORY_MAX_RUNS` 10, `IOT_HISTORY_MAX_EVENTS` 20 000, `IOT_HISTORY_MAX_READINGS` 10 000 per run): the oldest run is deleted whole, and within a run the oldest rows are deleted and counted.
+
 ## Presenter controls (HTTP POST, simulation mode only)
 
 Every control changes **only the simulated environment**. None of them calls the controller or tells it to reroute: the controller must discover the effect through the gateway, as it would on hardware. A test proves it (the controller's state and the commands it sent are identical before and after each control).
@@ -370,9 +407,12 @@ All carry `event_id` and `data.sim_ms`. Examples are real output (fields abbrevi
 
 | `type` | `data` (besides `sim_ms`) |
 | --- | --- |
-| `route_computed` | `flow`, `epoch`, `version`, `path`, `cost_ms`, `graph` (links used with `cost_ms`), `held_down` (`link`, `eligible_in_ms`), `trigger` (`initial`, `topology_changed`, `node_restarted`, `retry_after_failure`, `epoch_advanced`, `local_failover_report`), `backups`, `backup_entries`. |
+| `route_computed` | `flow`, `epoch`, `version`, `policy`, `path`, `cost_ms` (`null` under `highest_reliability`), `delivery_probability` (under `highest_reliability`, else `null`), `graph` (links used: `cost_ms`, or `delivery_probability` under `highest_reliability`), `held_down` (`link`, `eligible_in_ms`), `trigger` (`initial`, `topology_changed`, `node_restarted`, `retry_after_failure`, `epoch_advanced`, `local_failover_report`, `policy_better_route`), `backups`, `backup_entries`. |
 | `route_installing` | `version`, `epoch`, `kind`, `phase` (`backup_relays`, `relays`, `source`), `nodes`. One event per phase. |
-| `route_active` | `version`, `epoch`, `path`, `cost_ms`, `confirmed_by`, `distribution_ms` (computed → every node acknowledged), `trigger`, `backups`. e.g. `{"version":1,"epoch":1000,"path":["A","B","C"],"cost_ms":65,"confirmed_by":["D","B","A"],"distribution_ms":170,"trigger":"initial","backups":{"A":"D"}}` |
+| `route_active` | `version`, `epoch`, `policy`, `path`, `cost_ms` (`null` under `highest_reliability`), `delivery_probability`, `confirmed_by`, `distribution_ms` (computed → every node acknowledged), `trigger`, `backups`. e.g. `{"version":1,"epoch":1000,"path":["A","B","C"],"cost_ms":65,"confirmed_by":["D","B","A"],"distribution_ms":170,"trigger":"initial","backups":{"A":"D"}}` |
+| `policy_changed` | (Phase 9) `old`, `new`. |
+| `route_candidate` | (Phase 9) A better route was seen at an evaluation: `policy`, `path` (the candidate), `current_path`, `evaluations` (in a row so far), `needed` (3), `candidate` and `current` (`{cost_ms, delivery_probability}`). At `evaluations == needed` a `route_computed` with `trigger: policy_better_route` follows in the same instant. |
+| `route_candidate_dropped` | (Phase 9) The candidate stopped being better, was replaced by another, or the route changed: `policy`, `path`, `evaluations`, `reason` (`no_longer_better`, `another_route_is_better`, `route_not_intact`, `route_replaced`, `policy_changed`). |
 | `route_install_failed` | `version`, `epoch`, `kind`, `state` (`failed` or `unconfirmed`), `reason`, `nodes`, `attempts`. |
 | `no_available_route` | `flow`, `epoch`, `version`, `reason`, `graph`, `held_down`, `trigger`, `source_notified` (always `false` here). Headline text for the UI: **"No available route"**. |
 | `no_route_confirmed` | `version`, `epoch`, `confirmed_by`, `distribution_ms` — the source acknowledged being told there is no route. If it never arrives, the source was not told. |
@@ -435,8 +475,7 @@ Regenerate after a deliberate shape change with `uv run python -m iot_backend.li
 ## Not implemented yet
 
 - Hardware mode has been run only against the fake node C (`python -m iot_backend.fake_c`), never against a board. On hardware a controller outage is demonstrated by **stopping the backend**, not by unplugging C's USB cable: the cable also powers C, and C's buffer is in RAM, so unplugging it loses the buffer (the dashboard then sees `serial_port` closed, `gateway_link_lost`, and later `uplink_loss` with `c_restarted`).
-- Experiment history, charts and CSV export (Phase 10).
-- Adaptive routing policies (Phase 9); the route cost is the measured RTT.
+- Charts and any history view in the dashboard itself (Dev's, Phase 10). The backend side of the history and CSV export is implemented (above).
 - `event_id` is not persisted across backend restarts: after a restart `last_event_id` restarts and `run_id` is 1. A client that sees either go backwards must replace all state from the snapshot.
 
 ## Known limits of this draft

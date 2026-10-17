@@ -7,7 +7,7 @@ Laptop-side backend. It contains:
 - a deterministic **simulator** with four virtual nodes (A, B, C, D): manual or controller-installed routing, forwarding, retries, duplicate detection, HELLO discovery, link probes, bounded flooding and failures;
 - a **gateway interface** (`transports/`) and a **controller** (`controller/`): a topology view and, since Phase 4a, Dijkstra route calculation with versioned route installation and automatic rerouting. The controller sees the network only through events that reached node C and acts on it only through commands that node C turns into frames.
 
-Primary routes are calculated and installed automatically (Phase 4a), together with backup next hops that nodes switch to on their own when the primary fails (Phase 4b, local failover). The controller sends node C a heartbeat; if it stops, C keeps the network running and holds what it would have sent up in a bounded buffer, replayed when the controller returns (Phase 5b). Since Phase 6-prep the laptop can also talk to node C over a **USB serial port** (`IOT_MODE=hardware`), using the line format in [docs/SERIAL_PROTOCOL.md](../docs/SERIAL_PROTOCOL.md), with a numbered, acknowledged uplink so that even a one-second interruption loses nothing silently. This has been run only against a **fake C** (the simulated network behind the real line format), never against a board. Adaptive policies and a database do not exist yet.
+Primary routes are calculated and installed automatically (Phase 4a), together with backup next hops that nodes switch to on their own when the primary fails (Phase 4b, local failover). The controller sends node C a heartbeat; if it stops, C keeps the network running and holds what it would have sent up in a bounded buffer, replayed when the controller returns (Phase 5b). Since Phase 6-prep the laptop can also talk to node C over a **USB serial port** (`IOT_MODE=hardware`), using the line format in [docs/SERIAL_PROTOCOL.md](../docs/SERIAL_PROTOCOL.md), with a numbered, acknowledged uplink so that even a one-second interruption loses nothing silently. This has been run only against a **fake C** (the simulated network behind the real line format), never against a board. Since Phase 9 the controller can choose routes by **lowest delay** or **highest reliability** (simulation only, with a many-seed comparison study), and since Phase 10 a run can be kept in a bounded **SQLite history** and exported as **CSV**. The backend is complete in simulation; what remains is Dev's dashboard and firmware and the joint hardware phases (see [docs/HANDOFF_FOR_DEV.md](../docs/HANDOFF_FOR_DEV.md)).
 
 Contracts (all drafts, pending Dev's review): [docs/DASHBOARD_API.md](../docs/DASHBOARD_API.md), [docs/PROTOCOL.md](../docs/PROTOCOL.md) and [docs/SERIAL_PROTOCOL.md](../docs/SERIAL_PROTOCOL.md).
 
@@ -101,6 +101,74 @@ What the watcher prints, in order: `ENV Detach the gateway`; about 3 s later `GA
 A recorded run of this demo, as JSON, is in `tests/dashboard-fixtures/` so the dashboard can be built without the backend. Regenerate it after changing a shape with `uv run python -m iot_backend.live.record`.
 
 Optional configuration: copy `.env.example` to `.env` (`Copy-Item .env.example .env` on Windows, `cp .env.example .env` on macOS) and edit it, or set `IOT_*` environment variables. Defaults work without any file.
+
+## Routing policies and the comparison study (Phase 9)
+
+The controller has three ways to choose a route. Only the last two are new:
+
+| Policy | Chooses | Changes route |
+| --- | --- | --- |
+| `immediate_rtt` (the default; the Phase 4 behaviour) | the lowest latest-measured RTT | as soon as the set of usable links changes |
+| `lowest_delay` | the lowest **sum of smoothed link RTTs** (EWMA factor 0.2 over the reported RTTs) | after a better route has won **3 evaluations in a row** |
+| `highest_reliability` | the highest **product of link delivery probabilities**, from the last 20 acknowledged-or-not probes of each link, as costs of `−log p` so Dijkstra still works | the same 3 evaluations |
+
+Evaluations happen every 5 s. A route that is **broken** (a link of it is gone, a node on it restarted, or a node failed over locally) is replaced at once and never waits; local failover is not delayed by any of this. The dashboard can show a better route that is waiting ("seen 2 of 3 times") from `route.pending_switch`.
+
+**Choose the policy** in the scenario's `controller` section (`"policy": "lowest_delay"`), with `IOT_ROUTING_POLICY` (overrides the scenario), or while running:
+
+```sh
+# macOS / Git Bash
+curl -X POST http://127.0.0.1:8000/api/policy -H "Content-Type: application/json" -d '{"policy":"highest_reliability"}'
+```
+
+```powershell
+# Windows PowerShell
+Invoke-RestMethod -Method Post http://127.0.0.1:8000/api/policy -ContentType application/json -Body '{"policy":"highest_reliability"}'
+```
+
+The policy is in `GET /api/snapshot` (`policy`, `route.policy`, and `smoothed_rtt_ms` / `delivery_probability` on each link) and in the route events (`policy_changed`, `route_candidate`, `route_candidate_dropped`, and `policy` on `route_computed` / `route_active`). The watcher (`python -m iot_backend.watch`) prints them as `POLICY ... -> ...` and `better route A>D>C seen 2 of 3 times`.
+
+**The scenario and the study.** `scenarios/fast-lossy-vs-slow-reliable.json`: A > B > C is fast (10 ms per link) but loses 15 % of frames in each direction on both links; A > D > C is slower (25 ms per link) and loses nothing. These are **simulated settings**. Local failover is off in it, so that false failover triggers do not confound the comparison.
+
+```sh
+uv run python -m iot_backend.simulator ../scenarios/fast-lossy-vs-slow-reliable.json --compare-policies 30
+```
+
+It runs seeds 1 to 30 under each policy (180 simulated seconds each, about a minute in all) and prints, for each: readings delivered and lost, the pooled delivery rate and its worst and best single run, delivery time (first attempt to the acknowledgement; retries included), route changes per run, and when the first route became active. The result of 30 seeds (simulation only, loss 15 % each way on the fast path):
+
+| | `lowest_delay` | `highest_reliability` |
+| --- | --- | --- |
+| delivery rate, pooled | 99.01 % | 99.96 % |
+| readings lost per run, mean (max) | 0.87 (5) | 0.03 (1) |
+| delivery time, mean / median / 95th percentile | 240 / 90 / 1095 ms | 108 / 90 / 126 ms |
+| route changes per run, mean (max) | 6.97 (11) | 0.50 (1) |
+
+Read it honestly: retries hide loss (three attempts), so the delivery rate differs by about one reading in a hundred, and the difference shows mostly in delivery time. Highest reliability had a higher delivery rate in 17 of 30 seeds, equal in 12 and lower in 1. Lowest delay changes route often **because the lossy links keep losing HELLOs and the route keeps breaking**, not because the policy is indecisive. On a loss-free network the two policies tie and highest reliability can stay on the slower path (4 of 20 seeds). More in [docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md) *Decisions recorded in Phase 9*.
+
+## Run history and CSV export (Phase 10)
+
+The backend can keep each run in a SQLite file. It is **off unless you name a file**:
+
+```sh
+# macOS / Git Bash
+IOT_HISTORY_DB=history.sqlite3 uv run python -m iot_backend
+```
+
+```powershell
+# Windows PowerShell
+$env:IOT_HISTORY_DB = "history.sqlite3"; uv run python -m iot_backend
+```
+
+(or put `IOT_HISTORY_DB=history.sqlite3` in `.env`). Each run is stored with its id, its mode, its configuration (the scenario file as it was, the controller settings, or the serial port), every state-changing event the dashboard was shown, and every reading the controller counted. A reset to another scenario starts a new run. Stop the backend with Ctrl+C so that the run is marked as ended (a killed process leaves `ended` empty; the data is still there).
+
+```sh
+uv run python -m iot_backend.history list
+uv run python -m iot_backend.history export 3 --out-dir exports      # run-3-readings.csv and run-3-events.csv
+```
+
+The same data over HTTP while the backend runs: `GET /api/runs`, `GET /api/runs/3`, `GET /api/runs/3/export?kind=readings` (or `kind=events`) downloads a CSV. The command line does not need the backend to be running. In the readings file `value` is in the sensor's unit and `observed_path` is what node C could see (`A>?>C` when it cannot name a relay); in the events file `data` is each event's JSON.
+
+**Bounded size:** at most 10 runs (the oldest is deleted whole), and 20 000 events and 10 000 readings per run (the oldest rows are deleted and counted; `list` and the API say when a run is incomplete for that reason). Change the limits with `IOT_HISTORY_MAX_RUNS`, `IOT_HISTORY_MAX_EVENTS` and `IOT_HISTORY_MAX_READINGS`. What is stored is the controller's record, not the simulator's ground truth. Rows are written in batches, so killing the process can lose the last few rows of the running run.
 
 ## Hardware mode, ports, the fake C and the serial tools (Phase 6-prep)
 
@@ -255,6 +323,12 @@ The six Phase 2 files set `discovery: false` and `ack_delivery: "routed"` so the
 | `stale-replay.json` | Reports only every 30 s and a 45 s outage: replayed reports are older than the 15 s expiry, so they arrive already stale and cannot make a link look fresh. |
 | `heartbeat-timeout.json` | Only the timing: C declares the controller unreachable 3 s after the last heartbeat, the laptop declares the link lost 3 s after hearing nothing, and both recover on return. |
 
+**Phase 9 scenario** (`probe_window` 20 and a `policy` in the controller section):
+
+| Scenario file | What it shows |
+| --- | --- |
+| `fast-lossy-vs-slow-reliable.json` | A fast path that loses 15 % of frames each way and a slower clean path. Lowest delay keeps choosing the fast one; highest reliability moves to the clean one after the probe windows fill and three evaluations agree. Use with `--compare-policies`. |
+
 Measure readings delivered late versus lost for several outage lengths (simulation only):
 
 ```sh
@@ -298,8 +372,9 @@ Command-line options (also usable on top of a scenario file):
 | `--measure-seeds N` | Run a controller scenario with seeds 1..N and print min / median / max of failure detection, route active, distribution, service recovery, delivery gap and readings lost, plus route computation time (wall-clock CPU, reported separately). Prints no trace. |
 | `--outage-study N` | Detach the controller for outages of 5 to 160 s over seeds 1..N and print readings made, delivered late, lost, unexplained and doubled, with delays. Use with `--interval-ms` and `--buffer`. |
 | `--buffer N` | C's buffer capacity for `--outage-study`. |
+| `--compare-policies N` | Run a controller scenario with seeds 1..N under `lowest_delay` and `highest_reliability` (same seeds, same network) and compare delivery rate, delivery time, readings lost and route changes (Phase 9). Use with `fast-lossy-vs-slow-reliable.json`; `--duration` shortens the runs. |
 
-Scenario files are strict JSON (an unknown key is an error, so a typo cannot silently change an experiment). They can set `seed`, `duration_s`, `settings` (interval, timeout, `max_attempts`, `ttl`, `queue_capacity`, `service_ms`, `discovery`, `ack_delivery`, `hello_interval_ms`, `hello_jitter_ms`, `neighbor_timeout_ms`, `report_interval_ms`, `report_coalesce_ms`, `flood_cache_size`, `probe_interval_ms`, `probe_jitter_ms`, `rtt_window`, `rtt_min_samples`, `rtt_max_age_ms`, `max_routes`, `local_failover`, `failover_t1`, `failover_t2_k`, `send_fail_ms`, `failover_report_repeats`, `controller_timeout_ms`, `buffer_capacity`, `replay_spacing_ms`), `routing` (`"manual"` or `"controller"`), `controller` (`epoch`, `hold_down_ms`, `install_timeout_ms`, `install_max_attempts`, `replan_delay_ms`, `max_failed_plans`, `no_route_grace_ms`, `initial_settle_ms`, `backup_next_hops`, `heartbeat_interval_ms`, `link_timeout_ms`), `permitted`, `routes` (manual routing only), `links` (`delay_ms`, `loss`, `drop_frames`, `drop_msg`, `down`), `initial_seq`, and timed `actions`: `stop_node`, `start_node`, `restart_node`, `set_route`, `set_permitted`, `link_down`, `set_link`, `inject_frame`, `restart_controller`, `detach_gateway`, `attach_gateway`.
+Scenario files are strict JSON (an unknown key is an error, so a typo cannot silently change an experiment). They can set `seed`, `duration_s`, `settings` (interval, timeout, `max_attempts`, `ttl`, `queue_capacity`, `service_ms`, `discovery`, `ack_delivery`, `hello_interval_ms`, `hello_jitter_ms`, `neighbor_timeout_ms`, `report_interval_ms`, `report_coalesce_ms`, `flood_cache_size`, `probe_interval_ms`, `probe_jitter_ms`, `rtt_window`, `rtt_min_samples`, `rtt_max_age_ms`, `probe_window` (Phase 9: completed probes remembered per neighbor, 0 = off), `probe_stats_min`, `max_routes`, `local_failover`, `failover_t1`, `failover_t2_k`, `send_fail_ms`, `failover_report_repeats`, `controller_timeout_ms`, `buffer_capacity`, `replay_spacing_ms`), `routing` (`"manual"` or `"controller"`), `controller` (`epoch`, `hold_down_ms`, `install_timeout_ms`, `install_max_attempts`, `replan_delay_ms`, `max_failed_plans`, `no_route_grace_ms`, `initial_settle_ms`, `backup_next_hops`, `heartbeat_interval_ms`, `link_timeout_ms`, `policy`, `policy_eval_interval_ms`, `hysteresis_evaluations`), `permitted`, `routes` (manual routing only), `links` (`delay_ms`, `loss`, `drop_frames`, `drop_msg`, `down`), `initial_seq`, and timed `actions`: `stop_node`, `start_node`, `restart_node`, `set_route`, `set_permitted`, `link_down`, `set_link`, `inject_frame`, `restart_controller`, `detach_gateway`, `attach_gateway`.
 
 Event names in the trace: `frame_sent` (a node created and transmitted a frame), `frame_forwarded` (a relay passed one on), `frame_received`, `frame_rejected`, `frame_dropped`, `frame_dropped_by_link`, `reading_delivered`, `duplicate_received`, `ack_received`, `ack_ignored`, `ack_timeout` (one attempt), `reading_lost`, `neighbor_changed`, `neighbor_restarted`, `node_booted`, `node_stopped`, `route_update_sent` (C originated an instruction), `route_installed` (a node applied it), `route_update_ignored` (duplicate, stale or refused), `send_failed` (the link layer said the next hop's radio did not acknowledge; shown with `--verbose`), `local_failover`, `local_no_route`, `frame_rerouted`, `gateway_detached`, `gateway_attached`. The `delivery_time_ms` on `ack_received` is the time from the *first attempt* to the ACK (time to confirmed delivery), together with `attempts`; it is not an RTT. A frame appears as `A:3905a56d#1`: creator, session id in hex, sequence number.
 
@@ -314,7 +389,8 @@ backend/
     config.py          settings from IOT_* environment variables
     envelope.py        the versioned WebSocket message envelope
     main.py            app factory and server entry point
-    api/               dashboard-facing endpoints (routes.py, control.py, ws.py)
+    api/               dashboard-facing endpoints (routes.py, control.py, policy.py,
+                       history.py, ws.py)
     live/              model.py (what the dashboard is shown, both modes), runtime.py (the
                        paced live simulation), hardware.py (hardware mode on a serial port),
                        schema.py (event and snapshot shapes),
@@ -326,7 +402,8 @@ backend/
                        scenario_file.py (JSON loader), gateway.py (SimulatedGateway),
                        bridge.py (node C's heartbeat watching, buffer and replay),
                        measurements.py (detection and recovery times), studies.py
-                       (mode comparison, false triggers, outage study), __main__.py (CLI)
+                       (mode comparison, false triggers, outage study), policy_study.py
+                       (Phase 9 policy comparison), __main__.py (CLI)
     transports/        the Gateway interface and the typed laptop <-> C messages;
                        wire.py (the serial-level messages), serial_format.py (lines, CRC),
                        laptop_gateway.py (reliable uplink, shared by every carrier),
@@ -335,15 +412,20 @@ backend/
     fake_c.py          a fake node C on a TCP port: python -m iot_backend.fake_c
     serial_probe.py    a serial console for C's bring-up
     vectors.py         writes tests/generated/test_vectors.h for the firmware
+    storage/           store.py (SQLite history, bounded), recorder.py (feeds it from the
+                       live event stream), export.py (CSV)
+    history.py         list and export runs: python -m iot_backend.history
     controller/        topology.py: nodes and links from reports, with freshness and RTT;
-                       routing.py: Dijkstra, versioned installation, hold-down, no-route;
+                       quality.py: smoothed RTT and delivery probability per link (Phase 9);
+                       routing.py: Dijkstra, the three policies, hysteresis, versioned
+                       installation, hold-down, no-route;
                        gateway_session.py: heartbeat and link monitor;
                        readings.py: counts each reading once
   tests/               pytest checks (test_protocol.py loads ../tests/protocol-examples/,
                        test_scenarios.py loads ../scenarios/)
 ```
 
-`src/iot_backend/` is the Python package from plan.md's `backend/` tree. `controller/`, `transports/` and `storage/` will be added inside it by the phases that need them. Backend tests live in `backend/tests/` so the backend can be tested on its own; the shared protocol examples that the firmware will also use live at the repository top level, in `tests/protocol-examples/`.
+`src/iot_backend/` is the Python package from plan.md's `backend/` tree. Backend tests live in `backend/tests/` so the backend can be tested on its own; the shared protocol examples that the firmware will also use live at the repository top level, in `tests/protocol-examples/`.
 
 ## The live simulation in plain language (Phase 5a)
 
@@ -470,6 +552,26 @@ The two channels split the job: `GET /api/snapshot` gives the full current state
 
 **How one controller works with a simulator and with real hardware.** The controller is written against a small interface: "subscribe to events from the network", "send a route update", "send a heartbeat", "what time is it". It never learns what is behind it. The simulator behind it hands over message objects directly; the serial gateway behind it parses text lines; both feed one shared piece of code (`LaptopGateway`) that handles numbering, acknowledgements and decoding. Tests run four scenarios through both and require identical events, and another test fails if the controller ever imports a serial or simulator module. That is what lets the same controller, dashboard model and tests carry over to real boards.
 
+## Routing policies in plain language (Phase 9)
+
+**Why measure loss at all when we already measure delay.** RTT is measured only from probes that *came back*. A link that drops one probe in four still shows the same fast RTT for the three that arrive, so a policy that minimises delay cannot see the loss: it keeps choosing the fast, lossy path and every lost frame costs a retry (a second). The second policy counts what did *not* come back.
+
+**Reliability from probes, and why `−log p`.** Each node remembers whether each of its last 20 probes to a neighbor was answered. If 18 of 20 were, the link's estimated delivery probability is 0.9. The chance that a reading survives a *path* is the **product** of its links' probabilities (0.9 × 0.8 = 0.72), but Dijkstra adds costs. The logarithm turns products into sums: `−ln(0.9) − ln(0.8) = −ln(0.72)`. Minimising the sum of `−ln p` therefore maximises the product, and because every `p` is between 0 and 1 the costs are never negative, which Dijkstra needs. A link that answered nothing would be `−ln 0 = ∞`, so `p` is floored at 0.05 first. A probe is a round trip, so `p` is the chance that a probe *and* its reply both arrived: for a link losing 15 % each way it is about 0.72, not 0.85. It ranks links correctly when both directions behave alike.
+
+**EWMA, in one line.** An exponentially weighted moving average updates a number by moving it a fraction of the way towards each new sample: `new = 0.2 × sample + 0.8 × old`. A single odd sample moves it by a fifth; a lasting change shows up within a handful of samples. Here it is applied to RTTs that are already a median of five probes, so it reacts slowly on purpose.
+
+**Hysteresis, and why the wait is counted in evaluations.** Imagine two paths that are nearly equal and a measurement that wobbles: without a rule the route would swap back and forth every time one dips ahead. The rule is: a candidate must be strictly better for **three evaluations in a row** (every 5 s) before the route changes, and one evaluation where it is not better starts the count again. A route that is *broken* does not wait: waiting for evidence is for improvements, not for repairs. That is also why local failover is untouched: it never asks the controller anything.
+
+**What the study teaches, and what it does not.** In the simulated network (a fast path that loses 15 %, a slower clean path) highest reliability delivered 99.96 % against 99.01 %, took about half as long per reading on average and changed route far less. It does not say real radios behave like this: the loss rate is a setting. It also shows a cost of the policy: with no loss at all, every path costs 0, equal is not better, and it may stay on the slower path.
+
+## Run history in plain language (Phase 10)
+
+**What a run is.** From the moment the backend starts (or a reset starts a new scenario) until the next reset or shutdown. The history keeps it so that a result can be examined after the demo is over: *which route was active when, which readings arrived, how late was each, what the controller decided*. It records what the **controller** knew, in the form the dashboard was shown, so it cannot contain anything the controller could not have known.
+
+**Why bounded.** A long hardware run produces events for as long as it runs. A database that grows without limit eventually fills the disk, so each run keeps only its newest rows and says how many were dropped; the oldest run is deleted whole when a new one starts.
+
+**Why CSV.** It is the one format every spreadsheet and plotting tool opens. There are two files per run because the two have different columns: one row per reading, and one row per event with its JSON.
+
 ## Limitations of the live demo (Phase 5a)
 
 - One live run is shared by everyone connected; presenter controls act on it for all viewers. There is no per-client session and no persistence: a backend restart starts a new run (`run_id` 1).
@@ -494,6 +596,15 @@ The two channels split the job: `GET /api/snapshot` gives the full current state
 - **An outage shorter than C's 3 s timeout** used to lose readings uncounted (a 1 s detach lost every reading in it). Fixed in Phase 6-prep by the reliable uplink (below): the laptop notices the missing numbers and asks again.
 - Ages ignore the serial transfer time and C's clock drift; replay speed (20 ms per entry) is a simulated setting.
 - The buffer is RAM-only: if C loses power, what it held is gone.
+
+## Limitations of the policies and the history (Phases 9 and 10)
+
+- **Simulation only.** The loss rates and delays in the scenario are settings; nothing here measures a radio. The probe-based estimate assumes probes behave like data frames, which real ESP-NOW may not.
+- The estimate is a probe **round trip**, an approximation of the delivery probability of one frame. The first route under `highest_reliability` waits until five probes have completed (about 6 s), and after a link returns its history starts again.
+- With no loss `highest_reliability` can stay on the slower path (equal is not better); no delay tie-break was added.
+- The EWMA smooths numbers that are already medians, so lowest delay is slow to follow a change by design. The 5 s evaluation interval and the 3-evaluation rule are defaults, not tuned.
+- One flow (A to C). The policies apply to the primary route; backups are still chosen by the Phase 4b rule.
+- The history is off by default, records the controller's view, is written in batches (a kill can lose the last rows), has no UI yet (Dev's dashboard), and `event_id` and `run_id` of the live run still restart with each backend start; the history's own run ids do not.
 
 ## Limitations
 

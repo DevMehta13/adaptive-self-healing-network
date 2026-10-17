@@ -92,7 +92,7 @@ A local keep-alive sent to **one** neighbor (`dst` is that neighbor, `ttl` 1). T
 
 The payload length must be exactly `1 + 5 × count`. An empty list is the single byte `00`.
 
-### TOPOLOGY_REPORT (`0x11`) — payload 1 + 8n bytes, n ≤ 8, plus an optional RTT trailer (Phase 3; trailer Phase 4a; pending Dev's review)
+### TOPOLOGY_REPORT (`0x11`) — payload 1 + 8n bytes, n ≤ 8, plus optional RTT and probe-statistics trailers (Phase 3; RTT trailer Phase 4a; probe statistics Phase 9; pending Dev's review)
 
 A node's current neighbor observations, addressed to C (`dst`) and carried by bounded flooding (see *Management traffic* below).
 
@@ -115,6 +115,21 @@ The payload length must be exactly `1 + 8 × count`. Maximum payload is 65 bytes
 | `3 + 8n + 3j` | 2 | `rtt_ms` | Round-trip time to that neighbor in milliseconds, measured by the reporter on **its own clock** (see *Probes*). `0xFFFF` is never sent. |
 
 The payload length is therefore exactly `1 + 8n` (no measurements) or `1 + 8n + 1 + 3m`. A neighbor that is in the entries but not in the trailer is **unmeasured**. A receiver must treat "unmeasured" as *no cost known*, never as zero or as a default. The trailer is left out entirely when nothing is measured, so a report without measurements is byte-for-byte the Phase 3 report, and every Phase 3 reference example is unchanged. Largest report: `14 + 1 + 64 + 1 + 24 = 104` bytes.
+
+**Probe-statistics trailer (Phase 9).** After the RTT trailer, a reporter that has completed enough probes to a neighbor says how many of them were answered:
+
+| Offset | Size | Field | Meaning |
+| --- | --- | --- | --- |
+| after the RTT trailer | 1 | `stats_count` | Number of neighbors with statistics, 1 to 8. |
+| `+ 3k` | 1 | `neighbor` | Node id the statistics are for. |
+| `+ 3k + 1` | 1 | `probes_ok` | Of the last `probes_total` **completed** probes to that neighbor, how many were answered (PROBE_REPLY received). |
+| `+ 3k + 2` | 1 | `probes_total` | How many completed probes the figure covers: 1 to 255, in practice 5 to 20 (the window). `probes_ok` must not exceed it; `0` is invalid. |
+
+A probe is *completed* when its reply arrives (answered) or when the next probe to the same neighbor replaces it unanswered (not answered). One in flight is not counted yet. The window holds the last `probe_window` (default 0 = statistics off; 20 in the Phase 9 scenario) outcomes per neighbor, and a neighbor is reported only after `probe_stats_min` (5) have completed. **A neighbor in the lost state has no window:** the history is thrown away when contact is lost and starts again on return, because a link known to be down is not the same thing as a lossy link.
+
+When the reporter has statistics but **no RTT measurement at all**, the RTT trailer is written as a single `0` byte, so that the statistics trailer after it can still be found. A bare `0` with nothing after it is still invalid (`bad_payload_length`): the trailer is simply left out instead. With both trailers the payload length is exactly `1 + 8n + (1 + 3m) + (1 + 3k)`, or `1 + 8n + 1 + (1 + 3k)` with no RTT trailer entries. The statistics trailer is left out when the window is off, so a report from a node that does not keep statistics is byte for byte what it was before, and every earlier example is unchanged. Largest report: `14 + 1 + 64 + 25 + 25 = 129` bytes.
+
+Because a probe is a round trip, `probes_ok / probes_total` is the chance that a probe **and** its reply both got through: for a link that loses the same share *q* in each direction it is about (1 − *q*)². It ranks links correctly when both directions behave alike, and is not the delivery probability of one frame.
 
 *Why a trailer and not a wider entry:* widening the 8-byte entry would have changed the bytes of every existing report example and of any firmware already written against them. A trailer keeps the Phase 3 prefix valid. One consequence to be aware of: a damaged Phase 3 report whose extra bytes happen to form a valid trailer would parse as a report with measurements; frames are not checksummed at this layer (the radio does that), so this is accepted.
 
@@ -203,10 +218,10 @@ A receiver must validate in this order and stop at the first failure. The frame 
 | 6 | `src` or `dst` is 0 or 255 | `bad_node_id` |
 | 7 | `session` is 0 | `bad_session` |
 | 8 | `payload_len` ≠ total length − 14 | `length_mismatch` |
-| 9 | Payload size is wrong for the type (TELEMETRY ≠ 32, DATA ≠ 4, DELIVERY_ACK ≠ 9, PROBE ≠ 0, PROBE_REPLY ≠ 8, ROUTE_UPDATE ≠ 11, ROUTE_INSTALL_ACK ≠ 10, LOCAL_FAILOVER_REPORT ≠ 12); HELLO or TOPOLOGY_REPORT payload empty, `count` above 8, or length ≠ 1 + entry size × `count` (a report may add an RTT trailer of exactly `1 + 3 × rtt_count` bytes, `rtt_count` 1 to 8) | `bad_payload_length` |
-| 10 | (DELIVERY_ACK `origin`, HELLO `node`, report `neighbor`, report RTT `neighbor`, route `destination`, `next_hop` or `backup_next_hop` equal to 255, failover node ids) is 0 or 255 (`next_hop` and `backup_next_hop` may be 0 = none) | `bad_node_id` |
+| 9 | Payload size is wrong for the type (TELEMETRY ≠ 32, DATA ≠ 4, DELIVERY_ACK ≠ 9, PROBE ≠ 0, PROBE_REPLY ≠ 8, ROUTE_UPDATE ≠ 11, ROUTE_INSTALL_ACK ≠ 10, LOCAL_FAILOVER_REPORT ≠ 12); HELLO or TOPOLOGY_REPORT payload empty, `count` above 8, or length ≠ 1 + entry size × `count` (a report may add an RTT trailer of exactly `1 + 3 × rtt_count` bytes, `rtt_count` 1 to 8, or 0 when a probe-statistics trailer of exactly `1 + 3 × stats_count` bytes, `stats_count` 1 to 8, follows it) | `bad_payload_length` |
+| 10 | (DELIVERY_ACK `origin`, HELLO `node`, report `neighbor`, report RTT `neighbor`, report probe-statistics `neighbor`, route `destination`, `next_hop` or `backup_next_hop` equal to 255, failover node ids) is 0 or 255 (`next_hop` and `backup_next_hop` may be 0 = none) | `bad_node_id` |
 | 11 | (DELIVERY_ACK, HELLO entry, report entry, PROBE_REPLY `probe_session`) session is 0 | `bad_session` |
-| 12 | (report entry) `state` is not 1, 2 or 3; (report RTT) `rtt_ms` is `0xFFFF`; (route messages) `epoch` or `version` is 0; (ROUTE_UPDATE) a backup without a primary or equal to it; (ROUTE_INSTALL_ACK) `status` not 1–3; (LOCAL_FAILOVER_REPORT) `from_next_hop` = `to_next_hop` or `reason` not 1 or 2 | `bad_value` |
+| 12 | (report entry) `state` is not 1, 2 or 3; (report RTT) `rtt_ms` is `0xFFFF`; (report probe statistics) `probes_total` is 0 or `probes_ok` is above it; (route messages) `epoch` or `version` is 0; (ROUTE_UPDATE) a backup without a primary or equal to it; (ROUTE_INSTALL_ACK) `status` not 1–3; (LOCAL_FAILOVER_REPORT) `from_next_hop` = `to_next_hop` or `reason` not 1 or 2 | `bad_value` |
 
 Whether a valid frame is *for this node*, from a *permitted neighbor*, or an *expected type* is behaviour, not decoding; see the next section.
 
@@ -382,6 +397,16 @@ The measured RTT includes the radio service time at both ends and queueing behin
 ### Cost of a link at the controller
 
 Both ends of a link measure it independently, each on its own clock. The controller uses the **larger of the two measurements** as the link's cost, and only when **both** ends have one. A link with a missing end is *unmeasured*: it is left out of the route calculation altogether. It is never given a default or zero cost, because a free link would attract every route to the one link nobody has measured.
+
+### Probe outcomes and the delivery estimate (Phase 9)
+
+| Item | Bytes (2 neighbors) | Bytes (worst case: 8 neighbors) |
+| --- | --- | --- |
+| Outcome window: a 20-bit mask (4 bytes) + a count (1) per neighbor | 10 | 40 |
+| Largest report: 129 B instead of 104 B | 25 | 25 |
+| **Total** | **about 0.04 KB** | **about 0.07 KB** |
+
+Nothing else is added at the node: the EWMA, the −log *p* costs, the policies and the hysteresis all run on the laptop. Defaults: `probe_window` 20 (0 = off, the default for the older scenarios), `probe_stats_min` 5.
 
 ## Route installation (Phase 4a)
 
@@ -619,4 +644,5 @@ Defining ROUTE_UPDATE made the last "still reserved" example wrong by constructi
 - **Phase 4b:** the node-protecting backup rule and three-round installation order; T1 (two-way lost or one-way) and T2 (K consecutive failures, default 3); `to_next_hop` 0 and reason 2 in LOCAL_FAILOVER_REPORT; whether report repeats (5, one per report interval) are acceptable; and that the ESP8266 ESP-NOW send callback behaves as modelled (to be verified in Phase 6).
 - **Phase 5b:** the laptop-to-C message set (heartbeat down; status, replay start and end up; `age_ms` and `replayed` on every up message); the 1 s heartbeat and 3 s timeout; the buffer (50 entries, the eviction order, coalescing) and its estimated RAM, revised in Phase 6-prep to 2.3 KB typical and 5.7 KB worst case because C keeps frames as received; whether C's firmware can keep a monotonic millisecond clock for ages (`millis()` wraps after about 49 days, which is fine for ages if subtracted unsigned); and the 20 ms per replayed entry, which depends on the serial baud rate.
 - **Phase 6-prep:** everything in [SERIAL_PROTOCOL.md](SERIAL_PROTOCOL.md), and here: numbered entries evicted first during a long outage (named in `gone` with their kinds), superseded numbered reports named `S`, and a retried reading keeping the first copy at C.
+- **Phase 9:** the probe-statistics trailer on TOPOLOGY_REPORT (second trailer after the RTT trailer, the RTT trailer written as a lone `0` when only statistics exist; is that easy to pack and parse in C?), a 20-outcome window per neighbor that is thrown away when the neighbor is lost, and the completed-probe rule (answered when the reply arrives, unanswered when the next probe replaces it). Seven new examples cover it.
 - **Phase 4a:** a probe consumes a sequence number, like every created frame. If that is too many numbers per second for your counter or the duplicate window, say so and probes can use a separate counter.
