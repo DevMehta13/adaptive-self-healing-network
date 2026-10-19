@@ -24,6 +24,7 @@ Read the relevant code and check the working tree before making changes. Treat t
 
 ## How to contribute
 
+- For Dev's work on `dev-work`, explain each phase before starting it: its purpose, what will be built, prerequisites, concepts to learn, and the observable completion checks. Work through the approved increments one at a time and stop after each with results and the next step. Preserve this teaching-first workflow across sessions.
 - Implement the specific requested step in a small, working increment. Do not generate the full system from a broad idea or add unsolicited advanced features.
 - Explain the networking concept in simple language, what changes, why it matters, and how to observe it. The owners are beginners who must defend the project during evaluation.
 - Distinguish confirmed decisions, proposals, assumptions, and measured results. Ask focused questions only when an unresolved choice materially changes the task.

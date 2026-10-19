@@ -59,6 +59,27 @@ The controller must receive information through a gateway interface in both mode
 
 ## 3. Phases and completion checkpoints
 
+### Dev's implementation increments (approved 2026-10-19)
+
+Dev approved proceeding one increment at a time, with an explanation before each starts and a result/verification handoff afterward. These **12 increments** divide the remaining work within the original phases; they do not replace Phases 0–10 or authorize edits to Harshal's backend, scenarios, or shared test data. Hardware-dependent contract decisions remain subject to measurements.
+
+| Increment | Scope | Complete when |
+| --- | --- | --- |
+| D0 | Dashboard shell: React/TypeScript/Vite, mode label, backend connection and reconnect | Starts from documented commands; connected/stale/disconnected and snapshot resynchronization verified. Phase 0 still requires both owners' OS checks. |
+| D1 | Fixture-based network graph, readings, counts and timeline | Both recorded runs render evidence, freshness and replay correctly, including a mid-run snapshot. |
+| D2 | Live dashboard, presenter controls and policy selector | Browser-only failure/return/outage demos and reconnect/reset work against the backend (dashboard Phase 5). |
+| F0 | Native C++ radio/serial codecs and validation in PlatformIO | All 79 radio examples and 48 serial cases checked against the generated vectors; no board required. |
+| F1 | Two-board ESP-NOW DATA/ACK bench experiment | 100 readings acknowledged; sender metadata, callback behavior and heap recorded on real boards. |
+| F2 | C's bounded serial bridge, heartbeat and reliable uplink | Real-board serial probe and backend parsing pass; reset-on-open, replay and load measured. Full routing follows in F3. |
+| F3a | Data forwarding, TTL, neighbors, bounded queues/retries and deduplication | Multi-hop delivery plus bypass, loop, ACK-loss, duplicate and restart checks pass. |
+| F3b | Discovery, management flooding, probes/statistics and telemetry | Backend learns reported topology and represents one-way failure/stale evidence correctly. |
+| F3c | Route installation, epochs/versions, backups and local failover | Controller installs confirmed routes; local/controller recovery and outage replay have distinct evidence. |
+| F4a | Four-board evaluation | At least 10 unplug trials plus partition, restart, outage and soak checks recorded (Phase 7). |
+| F4b | Sensor on A with explicit generated-reading mode | Real readings use both paths, survive relay failure; sensor failure leaves networking running (Phase 8). |
+| D3 | Dashboard polish, history/CSV, charts and offline handoff | Both owners reproduce/explain the demonstration and export results (dashboard Phase 10). |
+
+Before each increment, explain the goal, prerequisites, expected outcome, networking/embedded concepts and completion checks in plain language. Commit/push small contributions on `dev-work` and open PRs to `main` for review; do not merge them automatically.
+
 ### Phase 0 — Runnable foundation
 
 **Build:** Minimal backend, dashboard shell, configuration, dependency locks, and automated checks. Provide documented commands for both operating systems.
