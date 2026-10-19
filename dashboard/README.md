@@ -1,7 +1,7 @@
 # Dashboard
 
-Dev's React + TypeScript + Vite dashboard. **D0 implements the connection shell only.**
-The network graph, packet view, presenter controls and history come in later increments.
+Dev's React + TypeScript + Vite dashboard. **D0 provides the live backend connection shell; D1 adds a recorded-run network viewer.**
+Live network updates, presenter controls and history come in later increments.
 The backend is still simulation-only or tested against fake C; no real board is verified.
 
 ## Start on macOS or Windows
@@ -51,6 +51,26 @@ start the backend again. The indicator returns to Connected after a fresh snapsh
 and live message. The last successful snapshot remains labelled with its load time.
 Backend connectivity does **not** prove C is reachable or a sensor packet was delivered.
 
+## D1 recorded network viewer
+
+Below the live connection panel, choose **Relay failure** or **Controller outage** and use the
+run progress slider or checkpoint buttons. The saved runs are bundled from
+`tests/dashboard-fixtures/`; they work even if the backend is stopped. Start and mid-run
+snapshots set the state at those points. The viewer applies only later numbered events,
+so a reading already included in the mid-run snapshot is not counted twice.
+
+The diamond's lines are configured **logical** links. Solid, dashed and grey styles show
+the controller's reported link state. The planned route is shown only after route
+installation was acknowledged; it is separate from the path C observed for a received
+reading. The event list marks presenter actions as injected. During the controller
+outage, an alert says the network view is stale, source counters show the age of A's
+last telemetry, and replayed readings are labelled **delayed** with their hold time.
+The graph is a teaching view of recorded simulation, not a live hardware measurement.
+
+The D1 check compares both runs against their saved mid-run snapshots and verifies
+the local failover, outage, replay and final route/count outcomes. D2 will apply the
+same distinction to live network state and add presenter controls.
+
 ## Connection contract
 
 See [DASHBOARD_API.md](../docs/DASHBOARD_API.md). The WebSocket opens first; updates are
@@ -80,7 +100,8 @@ npm run preview
 ```
 
 `check` checks TypeScript; `test` checks the connection state machine with controlled
-sockets/timers/HTTP responses; `build` type-checks and writes `dist/`; `preview` serves
+sockets/timers/HTTP responses and the recorded-run viewer against the actual fixtures;
+`build` type-checks and writes `dist/`; `preview` serves
 that build on localhost:5173 with the same backend proxy. Stop the dev server before
 starting preview. A standalone static host needs its own `/api` and `/ws` proxy.
 

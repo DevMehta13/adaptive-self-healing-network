@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { DashboardConnection } from './connection';
 import type { ConnectionState } from './connection';
+import { NetworkView } from './NetworkView';
 
 const labels = {
   connecting: 'Connecting', connected: 'Connected', stale: 'Stale', disconnected: 'Disconnected',
@@ -38,11 +39,11 @@ export function App() {
       </header>
 
       <main>
-        <div className="eyebrow"><span /> Network workspace <span className="divider">/</span> Foundation</div>
+        <div className="eyebrow"><span /> Network workspace <span className="divider">/</span> Recorded runs</div>
         <section className="intro" aria-labelledby="page-title">
           <div>
-            <h1 id="page-title">A connection you<br />can keep an eye on.</h1>
-            <p>Your local workspace for the four-node network.<br className="desktop-break" /> Start with a clear view of the backend connection.</p>
+            <h1 id="page-title">See the network<br />change course.</h1>
+            <p>Follow recorded relay failure and controller outage runs.<br className="desktop-break" /> The live backend connection is shown below.</p>
           </div>
           <span className={`mode-tag ${snapshot?.mode ?? 'unknown'}`}>
             {snapshot ? snapshot.mode === 'simulation' ? 'Simulation' : 'Hardware' : 'Mode unconfirmed'}
@@ -65,10 +66,12 @@ export function App() {
           {snapshot && <p className="mode-note">{snapshot.label}</p>}
         </section>
 
+        <NetworkView />
+
         <section className="learning-row" aria-label="About this phase">
-          <div className="phase-number">D0<span>01 / 12</span></div>
-          <div><h2>The foundation is the connection.</h2><p>A snapshot loads the starting state. A live stream keeps the connection in view. If it drops, the dashboard reconnects and loads fresh information.</p></div>
-          <div className="next-note"><span>Up next · D1</span>Network view<br />from recorded runs</div>
+          <div className="phase-number">D1<span>02 / 12</span></div>
+          <div><h2>Read the evidence before changing the network.</h2><p>The fixtures let you compare the controller’s plan, what C actually received, and the presenter’s injected actions. Live controls come next.</p></div>
+          <div className="next-note"><span>Up next · D2</span>Live controls<br />and policy selection</div>
         </section>
       </main>
       <footer><span>Four nodes. One resilient network.</span><span>Local-first · ESP8266</span></footer>
