@@ -53,11 +53,17 @@ Backend connectivity does **not** prove C is reachable or a sensor packet was de
 
 ## D1 recorded network viewer
 
-Below the live connection panel, choose **Relay failure** or **Controller outage** and use the
-run progress slider or checkpoint buttons. The saved runs are bundled from
+Below the live connection panel, choose **Relay failure** or **Controller outage** and use
+**Earlier moment**, **Next moment**, or the named-moment menu. The saved runs are bundled from
 `tests/dashboard-fixtures/`; they work even if the backend is stopped. Start and mid-run
 snapshots set the state at those points. The viewer applies only later numbered events,
 so a reading already included in the mid-run snapshot is not counted twice.
+
+The recordings contain 116 and 98 numbered state changes, respectively. Most are small
+updates such as a link report, a counter report or one reading. D1 processes those
+internally but offers a short story of named moments to the viewer. This makes the
+presenter's action, the network's response and the controller's later knowledge easy
+to distinguish. The **Story so far** list shows those moments in time order.
 
 The diamond's lines are configured **logical** links. Solid, dashed and grey styles show
 the controller's reported link state. The planned route is shown only after route

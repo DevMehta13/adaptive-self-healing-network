@@ -31,6 +31,11 @@ const path = (value: unknown): NodeId[] => Array.isArray(value) ? value.filter((
 function apply(state: NetworkSnapshot, event: RecordedEvent) {
   const d = event.data;
   state.clock.sim_ms = num(d.sim_ms) ?? state.clock.sim_ms;
+  if (state.gateway.state === 'connecting' && ['node_seen', 'link_state_changed', 'telemetry', 'reading_received'].includes(event.type)) {
+    state.gateway.state = 'connected';
+    state.gateway.network_view = 'live';
+    state.gateway.last_heard_ms = state.clock.sim_ms;
+  }
   const node = state.nodes.find(n => n.id === d.node);
   switch (event.type) {
     case 'node_seen':
