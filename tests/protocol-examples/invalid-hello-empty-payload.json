@@ -1,0 +1,7 @@
+{
+  "name": "hello-empty-payload",
+  "description": "HELLO with no payload at all: the count byte is mandatory (this frame was the reserved-type example before HELLO was defined; the bytes are unchanged).",
+  "valid": false,
+  "hex": "011001020d0c0b0a070000000800",
+  "reject_reason": "bad_payload_length"
+}

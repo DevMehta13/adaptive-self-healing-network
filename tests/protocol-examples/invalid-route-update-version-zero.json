@@ -1,0 +1,7 @@
+{
+  "name": "route-update-version-zero",
+  "description": "ROUTE_UPDATE with version 0 (reserved).",
+  "valid": false,
+  "hex": "011203028877665515000000080b00f1536500000000030300",
+  "reject_reason": "bad_value"
+}

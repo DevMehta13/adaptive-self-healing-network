@@ -1,0 +1,7 @@
+{
+  "name": "bad-node-dst-255",
+  "description": "Destination 255 is reserved.",
+  "valid": false,
+  "hex": "010101ff0d0c0b0a07000000080429090000",
+  "reject_reason": "bad_node_id"
+}

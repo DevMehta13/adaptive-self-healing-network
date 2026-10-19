@@ -1,0 +1,18 @@
+{
+  "name": "valid-up-frame-reading-duplicate",
+  "description": "A repeat of a reading C had already accepted (dup 1): C acknowledged it again on the radio; the laptop counts it as a repeat.",
+  "direction": "up",
+  "line": "{\"v\":1,\"t\":\"fr\",\"b\":2766734100,\"n\":13,\"age\":0,\"rp\":0,\"via\":2,\"dup\":1,\"hex\":\"01010103457c32632d0000000704dd070000\"}*E568",
+  "result": "message",
+  "fields": {
+    "v": 1,
+    "t": "fr",
+    "b": 2766734100,
+    "n": 13,
+    "age": 0,
+    "rp": 0,
+    "via": 2,
+    "dup": 1,
+    "hex": "01010103457c32632d0000000704dd070000"
+  }
+}

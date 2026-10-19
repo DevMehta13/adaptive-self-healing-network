@@ -1,0 +1,7 @@
+{
+  "name": "route-update-epoch-zero",
+  "description": "ROUTE_UPDATE with epoch 0 (reserved: it means 'never installed').",
+  "valid": false,
+  "hex": "011203028877665515000000080b0000000003000000030300",
+  "reject_reason": "bad_value"
+}

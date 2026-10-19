@@ -1,0 +1,58 @@
+{
+  "name": "stale-replay",
+  "description": "SIMULATED SETTING, not a measurement: link delays are configured so that A-B and B-C (10 ms one way) are cheaper than A-D and D-C (25 ms one way). Topology reports are sent only every 30 s and the controller is away from 5 s to 50 s. The report held at C is already older than the 15 s freshness rule when it is replayed, so it must not make links look fresh.",
+  "seed": 42,
+  "duration_s": 70,
+  "routing": "controller",
+  "settings": {
+    "probe_interval_ms": 1000,
+    "local_failover": true,
+    "failover_t1": true,
+    "failover_t2_k": 3,
+    "telemetry_interval_ms": 0,
+    "controller_timeout_ms": 3000,
+    "buffer_capacity": 50,
+    "report_interval_ms": 30000
+  },
+  "controller": {
+    "epoch": 1000,
+    "backup_next_hops": true,
+    "heartbeat_interval_ms": 1000
+  },
+  "links": {
+    "A->B": {
+      "delay_ms": 10
+    },
+    "B->A": {
+      "delay_ms": 10
+    },
+    "B->C": {
+      "delay_ms": 10
+    },
+    "C->B": {
+      "delay_ms": 10
+    },
+    "A->D": {
+      "delay_ms": 25
+    },
+    "D->A": {
+      "delay_ms": 25
+    },
+    "D->C": {
+      "delay_ms": 25
+    },
+    "C->D": {
+      "delay_ms": 25
+    }
+  },
+  "actions": [
+    {
+      "at_ms": 5000,
+      "action": "detach_gateway"
+    },
+    {
+      "at_ms": 50000,
+      "action": "attach_gateway"
+    }
+  ]
+}

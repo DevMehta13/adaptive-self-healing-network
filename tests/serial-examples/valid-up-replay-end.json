@@ -1,0 +1,15 @@
+{
+  "name": "valid-up-replay-end",
+  "description": "The replay is over.",
+  "direction": "up",
+  "line": "{\"v\":1,\"t\":\"rpe\",\"b\":2766734100,\"rep\":25,\"drop\":0,\"coal\":36}*7297",
+  "result": "message",
+  "fields": {
+    "v": 1,
+    "t": "rpe",
+    "b": 2766734100,
+    "rep": 25,
+    "drop": 0,
+    "coal": 36
+  }
+}

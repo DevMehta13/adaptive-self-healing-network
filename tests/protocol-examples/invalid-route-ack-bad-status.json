@@ -1,0 +1,7 @@
+{
+  "name": "route-ack-bad-status",
+  "description": "ROUTE_INSTALL_ACK with status 0 (not defined).",
+  "valid": false,
+  "hex": "01130203443322110e000000080a00f15365030000000300",
+  "reject_reason": "bad_value"
+}

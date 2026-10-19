@@ -1,0 +1,18 @@
+{
+  "name": "data-max-fields",
+  "description": "Every field at its maximum; D to C.",
+  "valid": true,
+  "frame": {
+    "version": 1,
+    "type": "DATA",
+    "src": 4,
+    "dst": 3,
+    "session": 4294967295,
+    "seq": 4294967295,
+    "ttl": 255,
+    "payload": {
+      "value": 2147483647
+    }
+  },
+  "hex": "01010403ffffffffffffffffff04ffffff7f"
+}

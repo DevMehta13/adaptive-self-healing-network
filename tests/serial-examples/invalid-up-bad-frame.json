@@ -1,0 +1,8 @@
+{
+  "name": "invalid-up-bad-frame",
+  "description": "The frame inside fails the protocol codec (version byte 2).",
+  "direction": "up",
+  "line": "{\"v\":1,\"t\":\"fr\",\"b\":2766734100,\"n\":12,\"age\":0,\"rp\":0,\"via\":2,\"dup\":0,\"hex\":\"02010103457c32632d0000000704dd070000\"}*B8EE",
+  "result": "rejected",
+  "reason": "bad_frame"
+}

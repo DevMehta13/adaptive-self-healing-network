@@ -2,7 +2,7 @@
 
 A college project about keeping sensor data moving when a wireless relay fails, using four inexpensive ESP8266 NodeMCU boards and a laptop.
 
-**Status: documentation and design only. No firmware, controller, dashboard, or simulator has been implemented or tested.** The software-first phased plan is approved in [plan.md](plan.md). Implementation is waiting for the owner's explicit instruction to start.
+**Status: design plus the Phase 0 backend foundation (a status-only HTTP/WebSocket server), a protocol contract, and a four-node simulator with forwarding, retries, duplicate detection, neighbor discovery, failure *detection*, link probes, and (Phase 4a) controller-calculated routes with backup next hops, installed and changed automatically, and local failover at the nodes, a controller heartbeat with bounded buffering and replay at C while the laptop is unreachable, now also served live to a dashboard through an HTTP/WebSocket API (the dashboard itself does not exist yet), with two selectable routing policies (lowest delay, highest reliability; Phase 9) and a bounded SQLite run history with CSV export (Phase 10). The backend is complete in simulation; what remains is Dev's dashboard and firmware and the joint hardware phases. This is all simulation: no firmware or hardware test exists; the laptop side of the USB serial link (line format, reliable uplink, hardware mode) has been tested only against a fake node C.** Dev: start with [docs/HANDOFF_FOR_DEV.md](docs/HANDOFF_FOR_DEV.md); for the viva see [docs/VIVA_NOTES.md](docs/VIVA_NOTES.md). The software-first phased plan is approved in [plan.md](plan.md); see [docs/STATUS.md](docs/STATUS.md) for what exists.
 
 ## What we are building
 
@@ -74,8 +74,11 @@ Healing requires a surviving path. Failure of C or of both relay paths is outsid
 | [plan.md](plan.md) | Approved software-first phases, technical choices, and completion checkpoints |
 | [Architecture](docs/ARCHITECTURE.md) | Connections, responsibilities, proposed mechanisms, and limitations |
 | [Status](docs/STATUS.md) | What actually exists, pending decisions, and the next discussion |
+| [Backend README](backend/README.md) | Install, run, and test the backend on Windows and macOS |
+| [Dashboard API](docs/DASHBOARD_API.md) | Draft contract between backend and dashboard (pending Dev's review) |
+| [Node protocol](docs/PROTOCOL.md) | Draft radio frame format shared with the firmware (pending Dev's review) |
 | [Contributing](CONTRIBUTING.md) | How to collaborate from macOS and Windows |
 | [AGENTS.md](AGENTS.md) | Shared working instructions for coding agents |
 | [CLAUDE.md](CLAUDE.md) | Claude entry point to the same shared context |
 
-Read the status before starting work. There are no application installation or run commands yet.
+Read the status before starting work. Only the backend foundation has run commands so far (see the [Backend README](backend/README.md)); there are no dashboard, firmware, or hardware setup commands yet.

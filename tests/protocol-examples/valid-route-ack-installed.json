@@ -1,0 +1,21 @@
+{
+  "name": "route-ack-installed",
+  "description": "B confirms it installed route version 3 for destination C.",
+  "valid": true,
+  "frame": {
+    "version": 1,
+    "type": "ROUTE_INSTALL_ACK",
+    "src": 2,
+    "dst": 3,
+    "session": 287454020,
+    "seq": 14,
+    "ttl": 8,
+    "payload": {
+      "epoch": 1700000000,
+      "version": 3,
+      "destination": 3,
+      "status": "INSTALLED"
+    }
+  },
+  "hex": "01130203443322110e000000080a00f15365030000000301"
+}

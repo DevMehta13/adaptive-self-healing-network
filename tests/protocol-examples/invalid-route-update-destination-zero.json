@@ -1,0 +1,7 @@
+{
+  "name": "route-update-destination-zero",
+  "description": "ROUTE_UPDATE whose destination is node 0.",
+  "valid": false,
+  "hex": "011203028877665515000000080b00f1536503000000000300",
+  "reject_reason": "bad_node_id"
+}

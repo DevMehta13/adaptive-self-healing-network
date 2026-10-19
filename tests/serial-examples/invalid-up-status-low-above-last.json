@@ -1,0 +1,8 @@
+{
+  "name": "invalid-up-status-low-above-last",
+  "description": "low cannot be above last + 1.",
+  "direction": "up",
+  "line": "{\"v\":1,\"t\":\"st\",\"b\":1,\"last\":3,\"low\":9,\"reach\":1,\"held\":0,\"unacked\":0,\"cap\":50,\"win\":16,\"drop\":0,\"coal\":0,\"rep\":0,\"rtx\":0,\"out\":0}*EC6D",
+  "result": "rejected",
+  "reason": "bad_value"
+}

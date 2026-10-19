@@ -1,0 +1,7 @@
+{
+  "name": "log-up-boot-message",
+  "description": "A diagnostic line: starts with #. Shown, never parsed.",
+  "direction": "up",
+  "line": "# C booted, session a4e8c214",
+  "result": "log"
+}

@@ -1,0 +1,26 @@
+{
+  "name": "telemetry-relay",
+  "description": "B reports that it forwarded 240 frames and dropped 3.",
+  "valid": true,
+  "frame": {
+    "version": 1,
+    "type": "TELEMETRY",
+    "src": 2,
+    "dst": 3,
+    "session": 287454020,
+    "seq": 30,
+    "ttl": 8,
+    "payload": {
+      "created": 0,
+      "acknowledged": 0,
+      "lost": 0,
+      "no_route": 0,
+      "delivered": 0,
+      "forwarded": 240,
+      "dropped": 3,
+      "failovers": 0,
+      "send_failures": 0
+    }
+  },
+  "hex": "01170203443322111e00000008200000000000000000000000000000000000000000f00000000300000000000000"
+}

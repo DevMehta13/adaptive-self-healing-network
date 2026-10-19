@@ -1,0 +1,7 @@
+{
+  "name": "failover-from-zero",
+  "description": "LOCAL_FAILOVER_REPORT that names no abandoned next hop (from 0).",
+  "valid": false,
+  "hex": "011601030d0c0b0a4a000000080c00f153650400000003000401",
+  "reject_reason": "bad_node_id"
+}

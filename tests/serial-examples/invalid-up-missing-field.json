@@ -1,0 +1,8 @@
+{
+  "name": "invalid-up-missing-field",
+  "description": "rpe without coal.",
+  "direction": "up",
+  "line": "{\"v\":1,\"t\":\"rpe\",\"b\":1,\"rep\":1,\"drop\":0}*F9A2",
+  "result": "rejected",
+  "reason": "missing_field"
+}

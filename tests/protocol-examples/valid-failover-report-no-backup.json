@@ -1,0 +1,23 @@
+{
+  "name": "failover-report-no-backup",
+  "description": "A lost B and had no usable backup: to_next_hop is 0 (none) and A now has no route.",
+  "valid": true,
+  "frame": {
+    "version": 1,
+    "type": "LOCAL_FAILOVER_REPORT",
+    "src": 1,
+    "dst": 3,
+    "session": 168496141,
+    "seq": 72,
+    "ttl": 8,
+    "payload": {
+      "epoch": 1700000000,
+      "version": 4,
+      "destination": 3,
+      "from_next_hop": 2,
+      "to_next_hop": null,
+      "reason": "NEIGHBOR_LOST"
+    }
+  },
+  "hex": "011601030d0c0b0a48000000080c00f153650400000003020001"
+}

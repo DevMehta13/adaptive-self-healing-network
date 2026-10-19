@@ -1,0 +1,7 @@
+{
+  "name": "failover-same-hop",
+  "description": "A failover that 'switches' from B to B.",
+  "valid": false,
+  "hex": "011601030d0c0b0a46000000080c00f153650400000003020201",
+  "reject_reason": "bad_value"
+}

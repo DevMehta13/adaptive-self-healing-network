@@ -1,0 +1,17 @@
+{
+  "name": "valid-up-frame-report",
+  "description": "B's topology report (with its RTT trailer). Not DATA, so there is no dup field.",
+  "direction": "up",
+  "line": "{\"v\":1,\"t\":\"fr\",\"b\":2766734100,\"n\":14,\"age\":0,\"rp\":0,\"via\":2,\"hex\":\"011102034e65fabcd20000000818020102457c326378000302d1030000540102011e00032300\"}*1337",
+  "result": "message",
+  "fields": {
+    "v": 1,
+    "t": "fr",
+    "b": 2766734100,
+    "n": 14,
+    "age": 0,
+    "rp": 0,
+    "via": 2,
+    "hex": "011102034e65fabcd20000000818020102457c326378000302d1030000540102011e00032300"
+  }
+}

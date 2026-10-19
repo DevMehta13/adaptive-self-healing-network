@@ -1,0 +1,7 @@
+{
+  "name": "probe-reply-short",
+  "description": "PROBE_REPLY with only 4 payload bytes.",
+  "valid": false,
+  "hex": "01150201443322110900000001040d0c0b0a",
+  "reject_reason": "bad_payload_length"
+}

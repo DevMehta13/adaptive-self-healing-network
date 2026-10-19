@@ -1,0 +1,26 @@
+{
+  "name": "manual-switch-to-d",
+  "description": "At 9 s an operator edits the routing tables of A and C to use D. Later readings go A > D > C. Nothing is detected or calculated; this is a manual change.",
+  "seed": 42,
+  "duration_s": 20,
+  "settings": {
+    "discovery": false,
+    "ack_delivery": "routed"
+  },
+  "actions": [
+    {
+      "at_ms": 9000,
+      "action": "set_route",
+      "node": "A",
+      "dst": "C",
+      "next_hop": "D"
+    },
+    {
+      "at_ms": 9000,
+      "action": "set_route",
+      "node": "C",
+      "dst": "A",
+      "next_hop": "D"
+    }
+  ]
+}

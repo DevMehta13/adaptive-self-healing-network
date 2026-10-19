@@ -1,0 +1,16 @@
+{
+  "name": "probe-basic",
+  "description": "A probes neighbor B. No payload: the header's session and seq identify the probe.",
+  "valid": true,
+  "frame": {
+    "version": 1,
+    "type": "PROBE",
+    "src": 1,
+    "dst": 2,
+    "session": 168496141,
+    "seq": 40,
+    "ttl": 1,
+    "payload": {}
+  },
+  "hex": "011401020d0c0b0a280000000100"
+}

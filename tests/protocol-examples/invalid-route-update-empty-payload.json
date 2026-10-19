@@ -1,0 +1,7 @@
+{
+  "name": "route-update-empty-payload",
+  "description": "ROUTE_UPDATE with no payload. This frame was the reserved-type example before ROUTE_UPDATE was defined; the bytes are unchanged, the reason is now bad_payload_length.",
+  "valid": false,
+  "hex": "011201020d0c0b0a010000000800",
+  "reject_reason": "bad_payload_length"
+}

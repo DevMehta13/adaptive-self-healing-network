@@ -1,0 +1,51 @@
+{
+  "name": "hello-max-neighbors",
+  "description": "HELLO listing the maximum of 8 neighbors (41-byte payload).",
+  "valid": true,
+  "frame": {
+    "version": 1,
+    "type": "HELLO",
+    "src": 1,
+    "dst": 2,
+    "session": 4294967295,
+    "seq": 4294967295,
+    "ttl": 255,
+    "payload": {
+      "neighbors": [
+        {
+          "node": 1,
+          "session": 4294967294
+        },
+        {
+          "node": 2,
+          "session": 4294967293
+        },
+        {
+          "node": 3,
+          "session": 4294967292
+        },
+        {
+          "node": 4,
+          "session": 4294967291
+        },
+        {
+          "node": 5,
+          "session": 4294967290
+        },
+        {
+          "node": 6,
+          "session": 4294967289
+        },
+        {
+          "node": 7,
+          "session": 4294967288
+        },
+        {
+          "node": 8,
+          "session": 4294967287
+        }
+      ]
+    }
+  },
+  "hex": "01100102ffffffffffffffffff290801feffffff02fdffffff03fcffffff04fbffffff05faffffff06f9ffffff07f8ffffff08f7ffffff"
+}

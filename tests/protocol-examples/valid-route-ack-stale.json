@@ -1,0 +1,21 @@
+{
+  "name": "route-ack-stale",
+  "description": "A refuses an old update; epoch and version carry the values A holds (epoch 1700000000, v9).",
+  "valid": true,
+  "frame": {
+    "version": 1,
+    "type": "ROUTE_INSTALL_ACK",
+    "src": 1,
+    "dst": 3,
+    "session": 168496141,
+    "seq": 55,
+    "ttl": 8,
+    "payload": {
+      "epoch": 1700000000,
+      "version": 9,
+      "destination": 3,
+      "status": "STALE"
+    }
+  },
+  "hex": "011301030d0c0b0a37000000080a00f15365090000000302"
+}

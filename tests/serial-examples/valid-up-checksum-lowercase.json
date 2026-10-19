@@ -1,0 +1,15 @@
+{
+  "name": "valid-up-checksum-lowercase",
+  "description": "The checksum's hex digits may be lower case.",
+  "direction": "up",
+  "line": "{\"v\":1,\"t\":\"rpe\",\"b\":2766734100,\"rep\":1,\"drop\":0,\"coal\":0}*5190",
+  "result": "message",
+  "fields": {
+    "v": 1,
+    "t": "rpe",
+    "b": 2766734100,
+    "rep": 1,
+    "drop": 0,
+    "coal": 0
+  }
+}

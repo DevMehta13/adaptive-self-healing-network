@@ -1,0 +1,7 @@
+{
+  "name": "report-count-mismatch",
+  "description": "Report says 1 entry but carries bytes for 2.",
+  "valid": false,
+  "hex": "011101030d0c0b0a0100000008110102020500000000000402060000000000",
+  "reject_reason": "bad_payload_length"
+}
