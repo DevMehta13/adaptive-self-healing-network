@@ -1,0 +1,52 @@
+name: Firmware
+
+on:
+  push:
+    paths:
+      - "firmware/**"
+      - "tests/generated/test_vectors.h"
+      - ".github/workflows/firmware.yml"
+  pull_request:
+    paths:
+      - "firmware/**"
+      - "tests/generated/test_vectors.h"
+      - ".github/workflows/firmware.yml"
+
+jobs:
+  vectors:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: firmware
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: firmware/requirements.txt
+      - name: Install PlatformIO
+        run: python -m pip install -r requirements.txt
+      - name: Check shared protocol vectors
+        run: pio test -e native
+
+  esp8266-build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: firmware
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: firmware/requirements.txt
+      - name: Install PlatformIO
+        run: python -m pip install -r requirements.txt
+      - name: Cross-compile for NodeMCU v2
+        run: pio run -e nodemcuv2
