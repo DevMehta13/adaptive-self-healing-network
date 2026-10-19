@@ -2,7 +2,7 @@
 
 A college project about keeping sensor data moving when a wireless relay fails, using four inexpensive ESP8266 NodeMCU boards and a laptop.
 
-**Status: design plus the Phase 0 backend foundation (a status-only HTTP/WebSocket server), a protocol contract, and a four-node simulator with forwarding, retries, duplicate detection, neighbor discovery, failure *detection*, link probes, and (Phase 4a) controller-calculated routes with backup next hops, installed and changed automatically, and local failover at the nodes, a controller heartbeat with bounded buffering and replay at C while the laptop is unreachable, now also served live to a dashboard through an HTTP/WebSocket API (the D0 connection shell, D1 recorded viewer and D2 live controls now exist), with two selectable routing policies (lowest delay, highest reliability; Phase 9) and a bounded SQLite run history with CSV export (Phase 10). F0 now provides bounded native C++ radio and serial codecs that match all shared reference vectors and cross-compile for the selected ESP8266 NodeMCU target. The backend is complete in simulation; what remains is the later dashboard increment, radio/bridge firmware and joint hardware phases. No physical board, radio or USB-serial behavior has been tested; the laptop side of the USB serial link has been tested only against a fake node C.** Dev: start with [docs/HANDOFF_FOR_DEV.md](docs/HANDOFF_FOR_DEV.md); for the viva see [docs/VIVA_NOTES.md](docs/VIVA_NOTES.md). The software-first phased plan is approved in [plan.md](plan.md); see [docs/STATUS.md](docs/STATUS.md) for what exists.
+**Status: design plus the Phase 0 backend foundation (a status-only HTTP/WebSocket server), a protocol contract, and a four-node simulator with forwarding, retries, duplicate detection, neighbor discovery, failure *detection*, link probes, and controller-calculated routes. F0 provides bounded native C++ radio and serial codecs that match all shared reference vectors; F3a–F3c provide a fixed-memory NodeMCU implementation for forwarding, discovery, versioned controller route installation, controller-installed backup selection, local failover, and C's bounded controller-outage replay boundary. The backend is complete in simulation; what remains is the later dashboard increment and joint hardware phases. No physical board, radio or USB-serial behavior has been tested; the laptop side of the USB serial link has been tested only against a fake node C.** Dev: start with [docs/HANDOFF_FOR_DEV.md](docs/HANDOFF_FOR_DEV.md); for the viva see [docs/VIVA_NOTES.md](docs/VIVA_NOTES.md). The software-first phased plan is approved in [plan.md](plan.md); see [docs/STATUS.md](docs/STATUS.md) for what exists.
 
 ## What we are building
 
@@ -32,7 +32,10 @@ The lines between boards represent wireless links. Each board also needs electri
 ## Hardware and cost
 
 - Four **ESP8266 NodeMCU development boards** are the selected hardware. ESP32-C3 was considered but is not the current choice.
-- A cheap sensor and necessary wires will be selected and purchased later.
+- The sensor will be selected from parts actually available in the lab before
+  Phase 8. It must be compatible with the ESP8266 NodeMCU's 3.3 V logic; its
+  exact model, wiring and firmware will be recorded only after availability is
+  confirmed.
 - Suitable USB cables and power sources are required; use existing equipment where possible. Programming and C's laptop connection require a data-capable cable.
 - Preferred hardware spend is **₹800**, with a target below **₹1,000**. This is a budget constraint, not a verified shopping total. Delivery, tax, cables, and available power supplies still need checking.
 - No hardware has been purchased or tested as of the initial documentation handoff.

@@ -4,7 +4,9 @@ Last updated: 2026-10-19
 
 ## Project state
 
-**The backend is complete in simulation.** D0, D1 and D2, the dashboard connection shell, recorded-run viewer and live demonstration, now exist and are locally verified on macOS. F0 now supplies bounded C++ codecs for the radio frames and C-to-laptop serial lines; they match all 79 radio and 48 serial reference cases and cross-compile for the ESP8266 NodeMCU target. Full Phase 0 still requires both owners to start it from a fresh checkout on their operating systems. Phases 1, 2, 3, 4a, 4b, 5a, 5b, **9 (adaptive routing, simulation only)** and the backend part of **10**, and the laptop side of Phase 6 ("6-prep"), are done on the backend side. **What remains is Dev's radio and serial-bridge firmware, the later dashboard increment, and the joint hardware phases (6, 7, 8).** [docs/HANDOFF_FOR_DEV.md](HANDOFF_FOR_DEV.md) is the single document for Dev to review it all. The agreed project uses four ESP8266 NodeMCU boards. Hardware has not been purchased; no physical radio, USB or sensor test has been performed. The dashboard now shows live network state and presenter controls, with a separate recorded network viewer; run history browsing is pending. The laptop side of the USB serial link exists (a serial line format, a `SerialGateway`, hardware mode) and has been run only against a fake node C. The running backend provides a status API, protocol codec, simulator and controller. F0 validates message bytes only: ESP-NOW transmission, callback behavior, memory under the complete firmware, USB serial and end-to-end delivery remain unproven until later increments.
+**The backend is complete in simulation.** D0, D1 and D2 now exist and are locally verified on macOS. F0 supplies bounded C++ codecs, while F3a–F3c provide source-level forwarding, discovery, controller-installed versioned routes, controller-installed backups, local failover, and C's bounded serial outage/replay boundary. Full Phase 0 still requires both owners to start from fresh checkouts. Phases 1–5b, **9 (simulation only)**, the backend part of **10**, and laptop-side 6-prep are complete on the backend side. **What remains is the later dashboard increment and joint hardware phases (6, 7, 8).** The agreed project uses four ESP8266 NodeMCU boards. No physical radio, USB, sensor, callback, heap, or end-to-end recovery test has been performed; the laptop serial link has been exercised only against a fake C.
+
+**Plan amendment, 2026-10-19:** Dev approved a software-ready-before-lab workflow. The remaining node firmware, host-side tests, role builds, visual assembly reference and lab runbook will be completed before the first hardware session. The hardware session verifies and measures the prepared work and may produce focused compatibility fixes; it is not a substitute for software development. `plan.md` now gives every firmware increment separate software-ready and hardware-validation checkpoints. The laptop simulator remains evidence for simulated behaviour only; a visual circuit diagram is not a substitute for ESP-NOW radio validation. The exact sensor still needs selection before its final wiring and firmware can be completed.
 
 ### Ownership split (agreed between the owners)
 
@@ -16,6 +18,85 @@ Last updated: 2026-10-19
 The two sides meet only through written contracts. The first is [docs/DASHBOARD_API.md](DASHBOARD_API.md), currently **Draft — pending Dev's review**.
 
 ## Completed
+
+- 2026-10-19: **Sensor decision deferred to lab availability by the owner**:
+  do not purchase or design around a named module yet. Phase 8 will use a
+  sensor confirmed available in the lab and compatible with ESP8266 3.3 V
+  logic. Before firmware/wiring work, record its exact model, power and signal
+  requirements, pinout, measurement unit and expected unplug/failure behaviour.
+  Generated readings remain the labelled source mode until that work is done.
+
+- 2026-10-19: **Four-board pre-lab package prepared**: added
+  [firmware/FOUR_BOARD_LAB_PACKAGE.md](../firmware/FOUR_BOARD_LAB_PACKAGE.md)
+  with the power/USB layout, role-by-role F3c upload commands, runtime-only
+  MAC setup, expected evidence patterns, result sheets and the F1–F3c test
+  checklist. F3 role images now print their local station MAC and initial free
+  heap at boot, so the required peer addresses can be collected without a
+  separate sketch. The package and code were reviewed locally; PlatformIO and
+  physical boards were unavailable here, so no target build, USB, radio,
+  callback, heap or end-to-end result is claimed. Next: run the documented
+  pre-lab build checks, then execute the package with four boards and record
+  measured results.
+
+- 2026-10-19: **F3c route/failover/replay implementation** (authorized by Dev
+  on `dev-work`): added four F3c role configurations. Nodes now accept only
+  C-originated versioned route updates, preserve primary/backup next hops, send
+  install acknowledgements, reject stale replacements, and do not compute or
+  locally switch routes back. After a loss of two-way contact or three
+  consecutive next-hop failures, they select only an installed, two-way backup
+  and flood bounded local-failover reports. C now originates checked serial
+  route commands and joins received radio evidence to its existing bounded
+  heartbeat/outage/replay bridge. A new deterministic mock-radio test covers
+  ordered installation, stale-version rejection, local backup selection,
+  failover evidence, and delivery through D; existing fake-C tests cover
+  controller-loss buffering and replay. Changed native engine/bridge sources
+  compiled with `g++` warnings-as-errors and whitespace checks passed.
+  PlatformIO is unavailable in this environment, so the Unity suite and four
+  ESP8266 target builds were not run; no board, radio, callback, USB, heap or
+  end-to-end recovery claim is made. Next: run the documented native and F3c
+  target checks where PlatformIO is installed, then use the F1–F3c lab runbook.
+
+- 2026-10-19: **F3b discovery/control-plane software-ready** (authorized by
+  Dev on `dev-work`): extended F3a's fixed-memory node engine with per-logical-
+  neighbor HELLO state (one-way, two-way and lost), coalesced/periodic topology
+  reports, a 64-entry management identity cache, eight-hop bounded flooding,
+  one-outstanding-probe-per-neighbor RTT samples and fixed-size cumulative
+  telemetry. DELIVERY_ACK now uses the management flood rather than the data
+  route, while the source still does the only end-to-end ACK matching. C exposes
+  received management evidence through a narrow callback boundary for the
+  serial gateway; no node sees controller topology state or calculates a route.
+  Deterministic mock-radio tests passed HELLO two-way confirmation, one-way and
+  stale evidence, topology reports reaching C, flooded telemetry, probes and
+  all earlier F0–F3a cases. The 79 radio vectors, 48 serial vectors and four
+  F3b NodeMCU role images built locally on macOS with PlatformIO 6.1.18. Static
+  F3b image use was about 39,688–39,700 bytes RAM (48.4–48.5%) and 277,899–278,287
+  bytes flash (26.6%); these are build figures, not free-heap measurements.
+  No board, ESP-NOW timing/callback behaviour, radio delivery, USB serial
+  evidence, physical queue behaviour or four-board demonstration was tested.
+  Next: F3c versioned controller route installation and backup failover.
+
+- 2026-10-19: **F3a forwarding software-ready** (authorized by Dev on
+  `dev-work`): added a fixed-memory C++ data-plane engine and explicit A, B,
+  C and D NodeMCU build targets. It enforces the configured logical-neighbor
+  diamond, uses manual Phase-2 routes, decrements TTL only at forwarders,
+  limits outgoing and pending readings to 16 each, retries identical DATA
+  frames at most three times, and matches final DELIVERY_ACKs only at the
+  origin. C remembers up to eight `(source, session)` streams using a
+  wrap-safe 64-sequence bitmap: duplicates are acknowledged again but counted
+  once, while stale packets get no ACK. A deterministic mock-radio suite
+  passed normal forwarding, prohibited A→C bypass rejection, a route loop
+  stopped by TTL, a deliberately lost ACK with retry/deduplication, and
+  sequence reuse after a new source session. All 79 radio vectors, 48 serial
+  vectors, prior F1/F2 checks, and the four F3a NodeMCU images passed locally
+  on macOS with PlatformIO 6.1.18. F3a image RAM use was 38,236–38,256 bytes
+  (46.7%) and flash use 274,879–275,283 bytes (26.3%); these are static build
+  figures, not free-heap measurements. No board, ESP-NOW callback, radio
+  delivery, physical queue behaviour or four-board demonstration was tested.
+  Next: F3b discovery, bounded management flooding, probes and telemetry.
+
+- 2026-10-19: **F2 serial bridge software-ready** (authorized by Dev on `dev-work`): added a fixed-memory C++ bridge for C with a 20-entry RAM buffer and 16-entry unacknowledged window. It checks downlink serial lines through the shared codec; sends checksummed `hello`, `st`, `fr`, `rps` and `rpe` lines; numbers retained radio evidence; handles cumulative acknowledgements and resend requests; and, after three seconds without a heartbeat, holds new evidence until the next heartbeat triggers replay. The `f2_c` NodeMCU image runs the bounded downlink reader and bridge in `loop()`; its radio ingress is deliberately an interface for F3, not a claim that ESP-NOW forwarding exists. Native fake-C checks passed for initial holding, acknowledgement, resend, timeout/replay and overflow, alongside all 79 radio and 48 serial vectors. F2 and baseline NodeMCU target builds passed with PlatformIO 6.1.18 on macOS; F2's complete image reports 35,460 bytes of static RAM allocation (43.3%) and 274,779 bytes flash (26.3%), which is neither a free-heap measurement nor the final radio firmware. No board, USB port, reset-on-open, serial throughput, radio ingress or replay under real load was tested. Next: F3a's software-ready forwarding engine, then physical validation of F1–F3 together.
+
+- 2026-10-19: **F1 software-ready, awaiting physical run** (authorized by Dev on `dev-work`): added two ESP8266 NodeMCU images: A sends DATA frames one at a time and C decodes each valid frame before creating the matching DELIVERY_ACK. The sender requires 100 matched end-to-end ACKs before it reports completion. ESP-NOW send callbacks are counted separately from matched acknowledgements, C reports the radio sender MAC through the received frame's callback metadata, and both images report receive-queue drops, decode/unexpected-frame counts and free heap. The callback copies received bytes into a fixed four-slot queue; frame handling and ACK creation happen in `loop()`. The sender's ACK-matching rule is shared with a native test that accepts only the intended acknowledgement and rejects incorrect type, endpoints, origin, session, sequence, length and null payload. C's MAC is entered at A over USB at run time and is not stored in the repository. macOS native tests and sender, receiver and baseline NodeMCU cross-compiles passed with PlatformIO 6.1.18. [firmware/F1_LAB_RUNBOOK.md](../firmware/F1_LAB_RUNBOOK.md) now provides equipment, upload/run steps, expected logs, pass/fail criteria, a result table and failure recovery. No NodeMCU serial port or board was available on this machine (only Bluetooth ports appeared), so neither image was uploaded and no real callback, heap or 100-reading result was measured. F1 is software-ready, not hardware-validated. Next: explain and implement F2's software-ready part.
 
 - 2026-10-19: **F0, native firmware codecs** (authorized by Dev on `dev-work`): added one fixed-buffer C++ implementation of the shared radio and serial formats, a native PlatformIO test target, a NodeMCU v2 cross-compile target, pinned setup instructions and firmware CI. The native tests pass all **79 radio vectors and 48 serial vectors**, including their exact rejection reasons, valid byte-for-byte radio round trips, serial CRC and output bounds. The ESP8266 target builds successfully; the complete Arduino image reports 28,140 bytes of RAM allocation (34.4%) and 265,611 bytes of flash (25.4%), which is not a codec-only measurement. Tested locally on macOS with PlatformIO 6.1.18; no physical board, ESP-NOW radio, USB serial, manual Windows run or end-to-end delivery was tested. Next is F1, the first two-board ESP-NOW DATA/ACK bench experiment, after the owner reviews this handoff.
 
@@ -164,7 +245,7 @@ Harshal authorized **Phase 0 (backend half), its follow-ups, Phases 1, 2, 3, 4a,
 - Phase 0 is complete only when Dev's shell connects to the backend from a fresh checkout on both operating systems.
 - Local macOS verification of the backend is recorded below (2026-10-19). This does not establish a CI run, Windows re-verification, or physical USB/radio behavior.
 
-**Next step:** Explain F1 before beginning it. F1 is the first hardware increment: two ESP8266 boards exchange DATA and end-to-end ACK messages, and real callback behavior and memory are recorded. Dev's explain-before-starting workflow is recorded in AGENTS.md, and the 12 approved increments are in `plan.md`. Owners' manual fresh-checkout verification remains open; contract discrepancies above remain recorded for Harshal.
+**Next step:** Explain and implement F3a's software-ready part: the four node roles' data forwarding, TTL, permitted-neighbor filtering, bounded queues/retries and duplicate handling against a deterministic mock radio. F1–F3c will be physically validated together in the lab. Dev's explain-before-starting workflow is recorded in AGENTS.md, and `plan.md` gives each firmware increment separate software-ready and hardware-validation checkpoints. Owners' manual fresh-checkout verification remains open; contract discrepancies above remain recorded for Harshal.
 
 **Layout note:** `plan.md` lists a top-level `tests/` folder. Backend tests live in `backend/tests/` so the backend can be tested on its own; the top-level `tests/protocol-examples/` holds the shared protocol examples that both Python and firmware check.
 
@@ -175,7 +256,7 @@ Harshal authorized **Phase 0 (backend half), its follow-ups, Phases 1, 2, 3, 4a,
 | Item | Why it remains open |
 | --- | --- |
 | Complete shopping cost | Need exact seller, delivery/tax, available cables/power, and whether accessories are included in the stated budget |
-| Sensor and wiring | Purchased later; model and required connections not selected |
+| Sensor and wiring | Choose from sensors actually available in the lab; then record its exact model, 3.3 V compatibility, wiring and hardware validation |
 | Physical hardware sharing | Need to arrange access to all four boards for integration; simulation is planned for independent software work |
 | Firmware/toolchain versions | Must validate ESP8266 ESP-NOW and serial behavior on actual boards |
 | Peer RSSI | Reliable measurement method on the chosen ESP8266 framework is unverified |

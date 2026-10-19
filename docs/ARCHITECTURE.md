@@ -4,11 +4,25 @@ This document separates the agreed system shape from mechanisms that still need 
 
 ## Connections and responsibilities
 
-Four ESP8266 NodeMCU boards form the permitted wireless links A–B, B–C, A–D, and D–C. The links must support communication in both directions for probes, acknowledgements, and management traffic. Each board needs power. C connects through a USB data cable to the laptop; a future sensor connects to A's pins using the wiring appropriate to the selected sensor.
+Four ESP8266 NodeMCU boards form the permitted wireless links A–B, B–C, A–D, and D–C. The links must support communication in both directions for probes, acknowledgements, and management traffic. Each board needs power. C connects through a USB data cable to the laptop; a sensor selected from parts actually available in the lab will later connect to A using its model-appropriate wiring.
+
+## Sensor selection rule
+
+Phase 8 will use a sensor that is confirmed available in the lab and compatible
+with the ESP8266 NodeMCU's 3.3 V logic. Before implementation, record the exact
+model, supply-voltage requirement, signal type, breakout pull-ups (if any), pin
+assignment, measurement unit and failure behaviour. The generated-reading mode
+stays available until that sensor is wired and verified.
 
 The current communication proposal is **ESP-NOW** between boards and USB serial between C and the laptop. ESP-NOW carries individual device-to-device frames; our firmware must implement the forwarding and routing behavior. The laptop communicates through C, not directly through its own Wi-Fi radio. A router and internet connection are not required for this design.
 
-ESP8266-specific SDK behavior must be checked. ESP32 examples and callback signatures are not automatically compatible with ESP8266. Choose and pin the firmware toolchain after a minimal real-board communication test.
+ESP8266-specific SDK behavior must be checked. ESP32 examples and callback signatures are not automatically compatible with ESP8266. The firmware is written and target-compiled before the lab, but only a minimal real-board communication test can validate the selected ESP8266 API, delivery callbacks, available heap, radio behaviour and USB-reset behaviour.
+
+## Pre-lab development and hardware validation
+
+The project follows a two-gate workflow. Before the lab, fixed-capacity firmware modules are exercised with host-side mock radio and serial transports, cross-compiled for each node role, and checked against the laptop simulator's documented behaviour. The team also prepares the visual four-board power/USB layout, per-board upload configuration, expected serial logs and a written test runbook. This work reduces lab time but is not physical-radio evidence.
+
+At the lab, the goal is to assemble and power the separate wireless boards, upload the prepared images, enter real MAC addresses and serial-port choices, and execute the scripted tests. The resulting measurements decide any API, timing or buffer adjustments. ESP-NOW needs no data wire between A, B, C and D; each board needs power, and only C needs a USB data connection to the laptop. A breadboard is needed only for a selected sensor on A or optional indicators.
 
 | Component | Responsibility |
 | --- | --- |
