@@ -6,6 +6,9 @@
 #include "iot_codec.h"
 #include "test_vectors.h"
 
+extern "C" void setUp() {}
+extern "C" void tearDown() {}
+
 namespace {
 
 void check_expected_fields(const iot::SerialMessage &message,
