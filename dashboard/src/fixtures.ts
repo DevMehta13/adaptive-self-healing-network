@@ -11,8 +11,8 @@ export interface LinkView { a: NodeId; b: NodeId; state: string; usable: boolean
 export interface RouteView { state: string; kind: string | null; path?: NodeId[]; version?: number | null; policy?: string; backups?: Record<string, string>; cost_ms?: number | null; delivery_probability?: number | null }
 export interface Reading { origin: NodeId; session: number; seq: number; value: number; via: NodeId | null; observed_path: (NodeId | null)[]; received_ms: number; replayed: boolean; delay_ms: number }
 export interface Count { value: number; known_by: string; as_of_ms?: number | null; age_ms?: number | null }
-export interface RecordedEvent { v: number; seq: number; type: string; event_id?: number; data: Record<string, unknown> }
-export interface NetworkSnapshot { v: number; mode: string; run_id: number; last_event_id: number; clock: { sim_ms: number }; nodes: NodeView[]; links: LinkView[]; route: RouteView; gateway: { state: string; network_view?: string; last_heard_ms?: number | null }; readings: { delivered_unique: number; duplicates: number; replayed: number; recent: Reading[] }; counts: Record<string, Count | null>; recent_events: RecordedEvent[] }
+export interface RecordedEvent { v?: number; seq?: number; type: string; event_id?: number; data: Record<string, unknown> }
+export interface NetworkSnapshot { v: number; mode: string; run_id: number; last_event_id: number; scenario?: string | null; clock: { sim_ms: number; speed?: number; paused?: boolean }; nodes: NodeView[]; links: LinkView[]; route: RouteView; policy?: { current: string; available: string[] }; presenter?: { conditions?: { stopped_nodes?: string[]; gateway_attached?: boolean } | null }; gateway: { state: string; network_view?: string; last_heard_ms?: number | null; serial?: { state: string } }; readings: { delivered_unique: number; duplicates: number; replayed: number; recent: Reading[] }; counts: Record<string, Count | null>; recent_events: RecordedEvent[] }
 export interface RecordedRun { name: string; description: string; initial: NetworkSnapshot; mid: NetworkSnapshot; events: RecordedEvent[] }
 
 const load = <T,>(raw: string): T => JSON.parse(raw) as T;

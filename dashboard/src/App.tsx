@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { DashboardConnection } from './connection';
 import type { ConnectionState } from './connection';
 import { NetworkView } from './NetworkView';
+import { LiveView } from './LiveView';
 
 const labels = {
   connecting: 'Connecting', connected: 'Connected', stale: 'Stale', disconnected: 'Disconnected',
@@ -39,11 +40,11 @@ export function App() {
       </header>
 
       <main>
-        <div className="eyebrow"><span /> Network workspace <span className="divider">/</span> Recorded runs</div>
+        <div className="eyebrow"><span /> Network workspace <span className="divider">/</span> Live simulation</div>
         <section className="intro" aria-labelledby="page-title">
           <div>
             <h1 id="page-title">See the network<br />change course.</h1>
-            <p>Follow recorded relay failure and controller outage runs.<br className="desktop-break" /> The live backend connection is shown below.</p>
+            <p>Watch readings travel, stop a relay, and see how the network responds.<br className="desktop-break" /> Learn the same sequence step by step in the saved runs below.</p>
           </div>
           <span className={`mode-tag ${snapshot?.mode ?? 'unknown'}`}>
             {snapshot ? snapshot.mode === 'simulation' ? 'Simulation' : 'Hardware' : 'Mode unconfirmed'}
@@ -66,12 +67,14 @@ export function App() {
           {snapshot && <p className="mode-note">{snapshot.label}</p>}
         </section>
 
-        <NetworkView />
+        <LiveView connection={connection} />
+
+        <details className="recorded-details"><summary><span><strong>Explore saved runs</strong><small>Relay failure and controller outage, explained moment by moment · works offline</small></span><span aria-hidden="true">▾</span></summary><NetworkView /></details>
 
         <section className="learning-row" aria-label="About this phase">
-          <div className="phase-number">D1<span>02 / 12</span></div>
-          <div><h2>Read the evidence before changing the network.</h2><p>The fixtures let you compare the controller’s plan, what C actually received, and the presenter’s injected actions. Live controls come next.</p></div>
-          <div className="next-note"><span>Up next · D2</span>Live controls<br />and policy selection</div>
+          <div className="phase-number">D2<span>03 / 12</span></div>
+          <div><h2>Change the simulation, then watch for evidence.</h2><p>A button records what the presenter did. The route and readings show what the network and controller observed later.</p></div>
+          <div className="next-note"><span>Coming later</span>Physical boards<br />and hardware evidence</div>
         </section>
       </main>
       <footer><span>Four nodes. One resilient network.</span><span>Local-first · ESP8266</span></footer>

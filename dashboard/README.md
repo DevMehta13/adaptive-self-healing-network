@@ -1,7 +1,7 @@
 # Dashboard
 
-Dev's React + TypeScript + Vite dashboard. **D0 provides the live backend connection shell; D1 adds a recorded-run network viewer.**
-Live network updates, presenter controls and history come in later increments.
+Dev's React + TypeScript + Vite dashboard. **D0 provides the backend connection shell, D1 a recorded-run viewer, and D2 the live network view and presenter controls.**
+Run history browsing comes in a later increment.
 The backend is still simulation-only or tested against fake C; no real board is verified.
 
 ## Start on macOS or Windows
@@ -51,9 +51,31 @@ start the backend again. The indicator returns to Connected after a fresh snapsh
 and live message. The last successful snapshot remains labelled with its load time.
 Backend connectivity does **not** prove C is reachable or a sensor packet was delivered.
 
+## D2 live demonstration
+
+The top network view refreshes from the backend snapshot about once a second while the
+WebSocket is healthy. It shows the controller's planned route separately from the path
+of the last reading C received. Counts state who reported them and how old A's
+telemetry is. During an outage, the gateway warning says the view is stale. If the
+backend disconnects, the last view remains labelled as old and controls are disabled;
+reconnecting replaces it with a fresh snapshot, including after a backend restart.
+
+In simulation mode, use **Stop B / Start B** to test failover and return, **Detach C /
+Attach C** to test a laptop-link outage and replay, **Pause / Resume** to inspect a
+moment, and **Reset run** to start the current scenario again. Each command reports
+that the presenter action was accepted; the graph and readings are the separate
+evidence of what happened afterward. A changed policy can take several evaluations
+before an intact route switches. The policy menu also works in hardware mode, but
+simulation controls do not. None of these browser checks proves radio delivery.
+
+The **Recent network changes** list highlights controller changes and presenter
+actions without exposing every telemetry and reading update. The backend keeps only
+its most recent 100 events in a snapshot, so older changes leave that list. Expand
+**Explore saved runs** to review the complete teaching examples offline.
+
 ## D1 recorded network viewer
 
-Below the live connection panel, choose **Relay failure** or **Controller outage** and use
+Under **Explore saved runs**, choose **Relay failure** or **Controller outage** and use
 **Earlier moment**, **Next moment**, or the named-moment menu. The saved runs are bundled from
 `tests/dashboard-fixtures/`; they work even if the backend is stopped. Start and mid-run
 snapshots set the state at those points. The viewer applies only later numbered events,
@@ -74,8 +96,7 @@ last telemetry, and replayed readings are labelled **delayed** with their hold t
 The graph is a teaching view of recorded simulation, not a live hardware measurement.
 
 The D1 check compares both runs against their saved mid-run snapshots and verifies
-the local failover, outage, replay and final route/count outcomes. D2 will apply the
-same distinction to live network state and add presenter controls.
+the local failover, outage, replay and final route/count outcomes.
 
 ## Connection contract
 
@@ -106,7 +127,8 @@ npm run preview
 ```
 
 `check` checks TypeScript; `test` checks the connection state machine with controlled
-sockets/timers/HTTP responses and the recorded-run viewer against the actual fixtures;
+sockets/timers/HTTP responses, the recorded-run viewer against the actual fixtures,
+and live snapshot/action handling;
 `build` type-checks and writes `dist/`; `preview` serves
 that build on localhost:5173 with the same backend proxy. Stop the dev server before
 starting preview. A standalone static host needs its own `/api` and `/ws` proxy.
