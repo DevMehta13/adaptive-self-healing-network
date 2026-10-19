@@ -1,0 +1,16 @@
+{
+  "name": "valid-up-hello",
+  "description": "C has just booted with session (boot) 2766734100.",
+  "direction": "up",
+  "line": "{\"v\":1,\"t\":\"hello\",\"b\":2766734100,\"node\":3,\"cap\":50,\"win\":16,\"fw\":\"0.1.0\"}*46B6",
+  "result": "message",
+  "fields": {
+    "v": 1,
+    "t": "hello",
+    "b": 2766734100,
+    "node": 3,
+    "cap": 50,
+    "win": 16,
+    "fw": "0.1.0"
+  }
+}

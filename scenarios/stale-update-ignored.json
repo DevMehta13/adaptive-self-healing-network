@@ -1,0 +1,60 @@
+{
+  "name": "stale-update-ignored",
+  "description": "SIMULATED SETTING, not a measurement: link delays are configured so that A-B and B-C (10 ms one way) are cheaper than A-D and D-C (25 ms one way). B stops at 12 s and the route moves to D (version 2). At 25 s two late, stale ROUTE_UPDATEs reach A from D: version 1 of the current epoch, and version 77 of an older epoch. Both would send readings to the dead B if applied. A ignores them and keeps version 2.",
+  "seed": 42,
+  "duration_s": 40,
+  "routing": "controller",
+  "settings": {
+    "probe_interval_ms": 1000
+  },
+  "controller": {
+    "epoch": 1000
+  },
+  "links": {
+    "A->B": {
+      "delay_ms": 10
+    },
+    "B->A": {
+      "delay_ms": 10
+    },
+    "B->C": {
+      "delay_ms": 10
+    },
+    "C->B": {
+      "delay_ms": 10
+    },
+    "A->D": {
+      "delay_ms": 25
+    },
+    "D->A": {
+      "delay_ms": 25
+    },
+    "D->C": {
+      "delay_ms": 25
+    },
+    "C->D": {
+      "delay_ms": 25
+    }
+  },
+  "actions": [
+    {
+      "at_ms": 12000,
+      "action": "stop_node",
+      "node": "B"
+    },
+    {
+      "at_ms": 25000,
+      "action": "inject_frame",
+      "node": "A",
+      "from": "D",
+      "hex": "0112030101eeffc0a0bb0d00080be803000001000000030200"
+    },
+    {
+      "at_ms": 26000,
+      "action": "inject_frame",
+      "node": "A",
+      "from": "D",
+      "hex": "0112030101eeffc0a1bb0d00080be70300004d000000030200"
+    }
+  ]
+}

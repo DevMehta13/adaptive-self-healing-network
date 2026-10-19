@@ -2,7 +2,7 @@
 
 A college project about keeping sensor data moving when a wireless relay fails, using four inexpensive ESP8266 NodeMCU boards and a laptop.
 
-**Status: documentation and design only. No firmware, controller, dashboard, or simulator has been implemented or tested.** The software-first phased plan is approved in [plan.md](plan.md). Implementation is waiting for the owner's explicit instruction to start.
+**Status: design plus the Phase 0 backend foundation (a status-only HTTP/WebSocket server), a protocol contract, and a four-node simulator with forwarding, retries, duplicate detection, neighbor discovery, failure *detection*, link probes, and controller-calculated routes. F0 provides bounded native C++ radio and serial codecs that match all shared reference vectors; F3a–F3c provide a fixed-memory NodeMCU implementation for forwarding, discovery, versioned controller route installation, controller-installed backup selection, local failover, and C's bounded controller-outage replay boundary. The backend is complete in simulation; what remains is the later dashboard increment and joint hardware phases. No physical board, radio or USB-serial behavior has been tested; the laptop side of the USB serial link has been tested only against a fake node C.** Dev: start with [docs/HANDOFF_FOR_DEV.md](docs/HANDOFF_FOR_DEV.md); for the viva see [docs/VIVA_NOTES.md](docs/VIVA_NOTES.md). The software-first phased plan is approved in [plan.md](plan.md); see [docs/STATUS.md](docs/STATUS.md) for what exists.
 
 ## What we are building
 
@@ -32,7 +32,10 @@ The lines between boards represent wireless links. Each board also needs electri
 ## Hardware and cost
 
 - Four **ESP8266 NodeMCU development boards** are the selected hardware. ESP32-C3 was considered but is not the current choice.
-- A cheap sensor and necessary wires will be selected and purchased later.
+- The sensor will be selected from parts actually available in the lab before
+  Phase 8. It must be compatible with the ESP8266 NodeMCU's 3.3 V logic; its
+  exact model, wiring and firmware will be recorded only after availability is
+  confirmed.
 - Suitable USB cables and power sources are required; use existing equipment where possible. Programming and C's laptop connection require a data-capable cable.
 - Preferred hardware spend is **₹800**, with a target below **₹1,000**. This is a budget constraint, not a verified shopping total. Delivery, tax, cables, and available power supplies still need checking.
 - No hardware has been purchased or tested as of the initial documentation handoff.
@@ -74,8 +77,11 @@ Healing requires a surviving path. Failure of C or of both relay paths is outsid
 | [plan.md](plan.md) | Approved software-first phases, technical choices, and completion checkpoints |
 | [Architecture](docs/ARCHITECTURE.md) | Connections, responsibilities, proposed mechanisms, and limitations |
 | [Status](docs/STATUS.md) | What actually exists, pending decisions, and the next discussion |
+| [Backend README](backend/README.md) | Install, run, and test the backend on Windows and macOS |
+| [Dashboard API](docs/DASHBOARD_API.md) | Draft contract between backend and dashboard (pending Dev's review) |
+| [Node protocol](docs/PROTOCOL.md) | Radio frame format now checked by the F0 C++ codec; radio behavior still needs boards |
 | [Contributing](CONTRIBUTING.md) | How to collaborate from macOS and Windows |
 | [AGENTS.md](AGENTS.md) | Shared working instructions for coding agents |
 | [CLAUDE.md](CLAUDE.md) | Claude entry point to the same shared context |
 
-Read the status before starting work. There are no application installation or run commands yet.
+Read the status before starting work. Run the backend using the [Backend README](backend/README.md), the dashboard using the [Dashboard README](dashboard/README.md), and the native firmware checks using the [Firmware README](firmware/README.md). Board setup and hardware testing remain pending.

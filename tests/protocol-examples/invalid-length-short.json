@@ -1,0 +1,7 @@
+{
+  "name": "length-short",
+  "description": "Header declares 4 payload bytes but only 3 follow.",
+  "valid": false,
+  "hex": "010101020d0c0b0a070000000804290900",
+  "reject_reason": "length_mismatch"
+}

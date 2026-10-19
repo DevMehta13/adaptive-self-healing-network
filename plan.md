@@ -1,12 +1,14 @@
 # Software-first plan for the Adaptive Self-Healing IoT Network
 
-**Approved plan. Implementation has not started.** The owner authorized saving this plan only and will explicitly say when to begin. All phases below are pending. This file is the canonical phased plan; do not create a separate roadmap unless requested.
+**Approved plan. Implementation is authorized one step at a time by the owners; see [docs/STATUS.md](docs/STATUS.md) for what exists and what is authorized next.** This file is the canonical phased plan; do not create a separate roadmap unless requested.
 
 **Amendment, 2026-10-11:** Both owners approved two resilience additions: controller-computed backup next hops with local fast-failover, and fail-static forwarding with bounded buffering at C while the controller is unreachable. They are folded into Phases 4, 5, 6, 7 and 9, the interfaces, and the test scenarios below. This amendment changes the plan only; it does not authorize implementation.
 
+**Amendment, 2026-10-19 — software-ready before lab:** The owners approved completing the remaining firmware, host-side tests, node configurations, visual build reference, and lab runbook before the first hardware session. The lab session is for assembly, flashing, measurement and targeted compatibility fixes—not for designing the system. This changes the sequencing of validation, not the ESP8266 target, ESP-NOW protocol, topology, or requirement for real-board evidence. A laptop simulator may demonstrate intended logic and a circuit diagram may show physical assembly; neither proves ESP-NOW delivery, callback behaviour, radio range, USB-reset behaviour, or free heap on a NodeMCU.
+
 ## 1. What we will finish
 
-Build a working simulation first, connect four real ESP8266 NodeMCU boards next, then add the sensor, adaptive routing, and presentation polish.
+Build the full simulated system and the complete pre-lab firmware package first. Then use one planned hardware-validation session with four ESP8266 NodeMCU boards to assemble, flash, measure and correct any board-specific compatibility issues. Add the selected sensor and complete the presentation handoff after the core network works on hardware.
 
 The finished project will demonstrate:
 
@@ -17,7 +19,7 @@ The finished project will demonstrate:
 - A comparison between routes selected for low delay and high reliability.
 - The same controller and dashboard working with either simulated nodes or real hardware.
 
-A is the source, B and D are relays, and C is the destination and USB gateway to the laptop. Each phase ends with a working demonstration and recorded checks. We move forward when its checks pass, without waiting for a fixed calendar deadline.
+A is the source, B and D are relays, and C is the destination and USB gateway to the laptop. Every firmware increment has two gates: a **software-ready** gate (code, host tests, target compilation and simulator evidence) and a **hardware-validated** gate (real-board measurement). We do not claim a hardware result until its latter gate passes.
 
 ## 2. Project scaffolding and technical choices
 
@@ -58,6 +60,39 @@ PlatformIO provides an ESP8266 NodeMCU target, and Cytoscape.js provides network
 The controller must receive information through a gateway interface in both modes. It must not inspect the simulator's private state to learn that a node failed.
 
 ## 3. Phases and completion checkpoints
+
+### Dev's implementation increments (approved 2026-10-19)
+
+Dev approved proceeding one increment at a time, with an explanation before each starts and a result/verification handoff afterward. These **12 increments** divide the remaining work within the original phases; they do not replace Phases 0–10 or authorize edits to Harshal's backend, scenarios, or shared test data. Under the software-ready-before-lab amendment, F1 through F3c are implemented in order without waiting for a board between them. Their real-board checks are executed together in the lab-validation session. Hardware-dependent contract decisions remain subject to measurements.
+
+| Increment | Scope | Software-ready checkpoint | Hardware-validation checkpoint |
+| --- | --- | --- | --- |
+| D0 | Dashboard shell: React/TypeScript/Vite, mode label, backend connection and reconnect | Starts from documented commands; connected/stale/disconnected and snapshot resynchronization verified. Phase 0 still requires both owners' OS checks. | No board required. |
+| D1 | Fixture-based network graph, readings, counts and timeline | Both recorded runs render evidence, freshness and replay correctly, including a mid-run snapshot. | No board required. |
+| D2 | Live dashboard, presenter controls and policy selector | Browser-only failure/return/outage demos and reconnect/reset work against the backend (dashboard Phase 5). | Hardware-mode display is checked after C's serial bridge works. |
+| F0 | Native C++ radio/serial codecs and validation in PlatformIO | All 79 radio examples and 48 serial cases checked against generated vectors; target configurations compile. | No radio claim; the codecs are exercised by F1 onward. |
+| F1 | Two-board ESP-NOW DATA/ACK bench | Sender/receiver images compile; host tests cover frame and ACK matching; runbook names expected logs and pass/fail criteria. | Two boards deliver 100 matched DATA/ACK exchanges; sender metadata, callback counts and free heap are recorded. |
+| F2 | C's bounded serial bridge, heartbeat and reliable uplink | Bridge logic has host tests, a fake-C/integration run, target compilation and documented reset/replay/load cases. | Real-board serial probe and backend parsing pass; reset-on-open, replay and load are measured. |
+| F3a | Data forwarding, TTL, neighbors, bounded queues/retries and deduplication | Node engine is exercised against a deterministic mock radio for bypass, loop, ACK-loss, duplicate and restart cases; all four roles compile. | Four boards show multi-hop delivery and pass the same cases where physically practical. |
+| F3b | Discovery, management flooding, probes/statistics and telemetry | Deterministic tests prove topology reports and the backend's representation of one-way/stale evidence. | Four boards report topology through real permitted links; observed timing and heap are recorded. |
+| F3c | Route installation, epochs/versions, backups and local failover | Tests prove versioned installation, local backup selection, controller-loss buffering and replay through simulated radio/serial transports. | Controller installs confirmed routes; physical local/controller recovery and outage replay have distinct evidence. |
+| F4a | Four-board evaluation | Lab script, result sheet and dashboard views are prepared; no simulated result is relabelled as hardware. | At least 10 unplug trials plus partition, restart, outage and soak checks are recorded (Phase 7). |
+| F4b | Sensor on A with explicit generated-reading mode | Generated-reading mode and a sensor adapter are tested; exact firmware and wiring follow selection from the lab's available, 3.3 V-compatible sensors. | The chosen sensor produces real readings on both paths; sensor failure leaves networking running (Phase 8). |
+| D3 | Dashboard polish, history/CSV, charts and offline handoff | Fixture-backed history, exports, charts, offline setup and presenter guide are complete. | Hardware run data renders correctly; both owners reproduce and explain the demonstration. |
+
+Before each increment, explain the goal, prerequisites, expected outcome, networking/embedded concepts and completion checks in plain language. Commit/push small contributions on `dev-work` and open PRs to `main` for review; do not merge them automatically.
+
+### Pre-lab package and lab-validation session
+
+Before the hardware visit, finish these reusable artifacts:
+
+- One firmware codebase with explicit A, B, C and D build configurations; no device MAC address or serial path is committed.
+- Host-side deterministic tests using mock radio and serial transports for every node rule that does not depend on physical radio behaviour.
+- The existing laptop simulator demonstrating normal delivery, B failure, recovery through D, controller loss and replay.
+- A visual four-board power/USB layout and, after choosing the sensor, its exact A wiring diagram. The visual layout is an assembly reference, not an ESP-NOW simulation or proof of radio behaviour.
+- A lab runbook: upload commands, how to discover each board's MAC and serial port, expected logs, pass/fail criteria, a result sheet, and a short recovery path for common upload or serial failures.
+
+The first lab session has a narrow goal: transfer the prebuilt firmware to real boards, run F1 through F3c in the written order, measure callback behaviour and free heap, then make only evidence-based compatibility or timing adjustments. It is not the place to invent protocol behaviour, write untested features, or substitute a radio callback for an end-to-end acknowledgement. Select the sensor from parts available in the lab before F4b; its final wiring diagram and firmware then need to be completed and checked with that exact module.
 
 ### Phase 0 — Runnable foundation
 
@@ -143,23 +178,25 @@ Animations must come from packet events. Clicking “Stop B” changes the simul
 
 **Complete when:** Either contributor can perform the complete simulated unplug-and-recover demonstration from the browser, including B failing while the gateway is disconnected, followed by buffered replay on reconnection.
 
-**This is the hardware transition checkpoint.** The software works end to end; visual polish can wait.
+**This is the software-readiness checkpoint.** The software works end to end; the pre-lab firmware package and lab artifacts are completed next, then real boards validate the assumptions.
 
-### Phase 6 — Hardware purchase and two-board validation
+### Phase 6 — Pre-lab firmware completion and two-board validation
 
-**Build:** The first ESP8266 firmware and a two-board communication experiment.
+**Build:** Complete the ESP8266 node roles and C's serial bridge with host-side tests and target builds, then validate the first sender/receiver and C/laptop links on two real boards.
 
 Verify programming, node identity, ESP-NOW delivery, acknowledgements, and USB serial. Use one firmware codebase with per-node configuration.
 
 Compare encoded firmware packets against the reference examples from Phase 1. Keep radio packets within the ESP-NOW v1 limit of 250 bytes. See [Espressif documentation](https://docs.espressif.com/projects/esp-faq/en/latest/application-solution/esp-now.html).
 
-**Complete when:** Two real boards exchange verified packets and C's gateway connection works with the laptop.
+**Software-ready when:** The F1 and F2 images, configuration instructions and fake-transport tests are complete; the full target build succeeds without a board.
+
+**Hardware-validated when:** Two real boards exchange verified packets and C's gateway connection works with the laptop.
 
 Record macOS and Windows checks separately. Verify peer RSSI feasibility here; show unavailable if reliable collection is unsupported. Measure free heap to size C's buffer and the node tables.
 
-### Phase 7 — Four-board self-healing network
+### Phase 7 — Four-board self-healing network and lab validation
 
-**Build:** Port the tested node behavior to all four boards: forwarding, discovery, management traffic, route installation, backup next hops and local failover, fail-static behavior with C's buffer, retries, and telemetry.
+**Build:** Complete and host-test the node behaviour before the lab, then run it on all four boards: forwarding, discovery, management traffic, route installation, backup next hops and local failover, fail-static behaviour with C's buffer, retries, and telemetry.
 
 Connect C through USB and switch the controller's gateway connection from simulation to serial. Keep the controller and dashboard behavior shared.
 

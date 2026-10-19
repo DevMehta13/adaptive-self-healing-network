@@ -1,0 +1,7 @@
+{
+  "name": "bad-session-zero",
+  "description": "Session 0 is reserved.",
+  "valid": false,
+  "hex": "010101020000000007000000080429090000",
+  "reject_reason": "bad_session"
+}

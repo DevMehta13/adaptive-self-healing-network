@@ -1,0 +1,8 @@
+{
+  "name": "invalid-down-payload-too-big",
+  "description": "A payload over 40 bytes is refused: downlink lines must stay short (C's receive buffer).",
+  "direction": "down",
+  "line": "{\"v\":1,\"t\":\"tx\",\"dst\":2,\"mt\":18,\"p\":\"0000000000000000000000000000000000000000000000000000000000000000000000000000000000\"}*BEF8",
+  "result": "rejected",
+  "reason": "bad_value"
+}

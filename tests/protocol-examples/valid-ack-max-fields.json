@@ -1,0 +1,20 @@
+{
+  "name": "ack-max-fields",
+  "description": "Acknowledgement with every field at its maximum.",
+  "valid": true,
+  "frame": {
+    "version": 1,
+    "type": "DELIVERY_ACK",
+    "src": 3,
+    "dst": 4,
+    "session": 4294967295,
+    "seq": 4294967295,
+    "ttl": 255,
+    "payload": {
+      "origin": 4,
+      "session": 4294967295,
+      "seq": 4294967295
+    }
+  },
+  "hex": "01020304ffffffffffffffffff0904ffffffffffffffff"
+}

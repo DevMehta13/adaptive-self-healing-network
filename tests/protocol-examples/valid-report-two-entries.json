@@ -1,0 +1,31 @@
+{
+  "name": "report-two-entries",
+  "description": "A reports B as two-way (heard 120 ms ago) and D as lost (silent 3100 ms).",
+  "valid": true,
+  "frame": {
+    "version": 1,
+    "type": "TOPOLOGY_REPORT",
+    "src": 1,
+    "dst": 3,
+    "session": 168496141,
+    "seq": 20,
+    "ttl": 8,
+    "payload": {
+      "entries": [
+        {
+          "neighbor": 2,
+          "state": "TWO_WAY",
+          "session": 572662306,
+          "age_ms": 120
+        },
+        {
+          "neighbor": 4,
+          "state": "LOST",
+          "session": 1145324612,
+          "age_ms": 3100
+        }
+      ]
+    }
+  },
+  "hex": "011101030d0c0b0a1400000008110202022222222278000403444444441c0c"
+}

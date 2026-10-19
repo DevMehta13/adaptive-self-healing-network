@@ -1,0 +1,15 @@
+{
+  "name": "valid-up-gone",
+  "description": "Numbers 5 to 7 are no longer held by C: a reading (lost), a report superseded by a newer one from the same node (not lost), a management frame (lost).",
+  "direction": "up",
+  "line": "{\"v\":1,\"t\":\"gone\",\"b\":2766734100,\"from\":5,\"to\":7,\"kinds\":\"RSM\"}*9C74",
+  "result": "message",
+  "fields": {
+    "v": 1,
+    "t": "gone",
+    "b": 2766734100,
+    "from": 5,
+    "to": 7,
+    "kinds": "RSM"
+  }
+}

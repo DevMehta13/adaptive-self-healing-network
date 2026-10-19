@@ -1,0 +1,17 @@
+{
+  "name": "valid-up-frame-route-ack",
+  "description": "B acknowledges route version 2 of epoch 1000 (installed).",
+  "direction": "up",
+  "line": "{\"v\":1,\"t\":\"fr\",\"b\":2766734100,\"n\":15,\"age\":0,\"rp\":0,\"via\":2,\"hex\":\"011302034e65fabcd3000000080ae8030000020000000301\"}*5B97",
+  "result": "message",
+  "fields": {
+    "v": 1,
+    "t": "fr",
+    "b": 2766734100,
+    "n": 15,
+    "age": 0,
+    "rp": 0,
+    "via": 2,
+    "hex": "011302034e65fabcd3000000080ae8030000020000000301"
+  }
+}

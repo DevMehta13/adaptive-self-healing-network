@@ -1,0 +1,10 @@
+{
+  "name": "normal-via-b",
+  "description": "Readings travel A > B > C and ACKs return C > B > A using manual routes.",
+  "seed": 42,
+  "duration_s": 20,
+  "settings": {
+    "discovery": false,
+    "ack_delivery": "routed"
+  }
+}

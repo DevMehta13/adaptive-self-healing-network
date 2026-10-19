@@ -1,0 +1,13 @@
+{
+  "name": "valid-down-resend",
+  "description": "Please resend numbered messages from 18.",
+  "direction": "down",
+  "line": "{\"v\":1,\"t\":\"rs\",\"b\":2766734100,\"from\":18}*33A4",
+  "result": "message",
+  "fields": {
+    "v": 1,
+    "t": "rs",
+    "b": 2766734100,
+    "from": 18
+  }
+}

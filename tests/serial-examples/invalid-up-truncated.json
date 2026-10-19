@@ -1,0 +1,8 @@
+{
+  "name": "invalid-up-truncated",
+  "description": "A line cut short (the start of the next line was lost): the checksum cannot match.",
+  "direction": "up",
+  "line": "{\"v\":1,\"t\":\"fr\",\"b\":2766734100,\"n\":12,\"age\":0,\"rp\":0,\"via\":2",
+  "result": "rejected",
+  "reason": "no_checksum"
+}

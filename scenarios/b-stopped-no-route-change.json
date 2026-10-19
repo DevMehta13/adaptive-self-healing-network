@@ -1,0 +1,17 @@
+{
+  "name": "b-stopped-no-route-change",
+  "description": "B loses power at 7 s and nothing reroutes (no healing until Phase 3-4). Readings after that are retried three times and then reported lost; D is never used.",
+  "seed": 42,
+  "duration_s": 20,
+  "settings": {
+    "discovery": false,
+    "ack_delivery": "routed"
+  },
+  "actions": [
+    {
+      "at_ms": 7000,
+      "action": "stop_node",
+      "node": "B"
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "name": "empty",
+  "description": "Zero-length frame.",
+  "valid": false,
+  "hex": "",
+  "reject_reason": "truncated"
+}

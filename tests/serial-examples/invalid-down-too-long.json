@@ -1,0 +1,8 @@
+{
+  "name": "invalid-down-too-long",
+  "description": "Longer than the 128-byte downlink limit.",
+  "direction": "down",
+  "line": "{yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy",
+  "result": "rejected",
+  "reason": "too_long"
+}

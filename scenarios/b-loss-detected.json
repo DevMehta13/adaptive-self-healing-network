@@ -1,0 +1,7 @@
+{
+  "name": "b-loss-detected",
+  "description": "B stops at 8 s. A and C stop hearing its HELLOs, time it out after 3 s, and report it lost; the reports reach C by flooding (A's through D). The controller declares loss of contact. Data still uses the manual routes, so readings via B are lost (no healing before Phase 4).",
+  "seed": 42,
+  "duration_s": 20,
+  "actions": [{ "at_ms": 8000, "action": "stop_node", "node": "B" }]
+}

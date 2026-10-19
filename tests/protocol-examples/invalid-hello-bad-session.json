@@ -1,0 +1,7 @@
+{
+  "name": "hello-bad-session",
+  "description": "HELLO neighbor session 0 is reserved.",
+  "valid": false,
+  "hex": "011001020d0c0b0a010000000106010200000000",
+  "reject_reason": "bad_session"
+}

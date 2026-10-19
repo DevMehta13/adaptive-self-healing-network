@@ -1,0 +1,18 @@
+{
+  "name": "data-negative-value",
+  "description": "Negative reading; seq 0 and TTL 0 are legal values.",
+  "valid": true,
+  "frame": {
+    "version": 1,
+    "type": "DATA",
+    "src": 1,
+    "dst": 2,
+    "session": 1,
+    "seq": 0,
+    "ttl": 0,
+    "payload": {
+      "value": -150
+    }
+  },
+  "hex": "01010102010000000000000000046affffff"
+}

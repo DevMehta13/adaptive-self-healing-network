@@ -1,0 +1,8 @@
+{
+  "name": "invalid-up-downlink-type",
+  "description": "C must not send laptop types (hb is a downlink message).",
+  "direction": "up",
+  "line": "{\"v\":1,\"t\":\"hb\",\"b\":0,\"ack\":0}*6918",
+  "result": "rejected",
+  "reason": "unknown_type"
+}

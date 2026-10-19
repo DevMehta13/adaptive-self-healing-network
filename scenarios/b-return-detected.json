@@ -1,0 +1,10 @@
+{
+  "name": "b-return-detected",
+  "description": "B stops at 8 s and starts again at 14 s with a new session. Its neighbors hear it again, the controller regains contact and flags the restart, and the links return to two-way.",
+  "seed": 42,
+  "duration_s": 25,
+  "actions": [
+    { "at_ms": 8000, "action": "stop_node", "node": "B" },
+    { "at_ms": 14000, "action": "start_node", "node": "B" }
+  ]
+}

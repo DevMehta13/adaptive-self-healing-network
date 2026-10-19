@@ -1,0 +1,51 @@
+{
+  "name": "local-failover-one-way-a-b",
+  "description": "SIMULATED SETTING, not a measurement: link delays are configured so that A-B and B-C (10 ms one way) are cheaper than A-D and D-C (25 ms one way). At 12 s frames from A to B stop arriving while B stays alive and A still hears B. A timeout alone would never fire; A fails over when B stops being two-way (T1) or when sends to B fail (T2).",
+  "seed": 42,
+  "duration_s": 30,
+  "routing": "controller",
+  "settings": {
+    "probe_interval_ms": 1000,
+    "local_failover": true,
+    "failover_t1": true,
+    "failover_t2_k": 3
+  },
+  "controller": {
+    "epoch": 1000,
+    "backup_next_hops": true
+  },
+  "links": {
+    "A->B": {
+      "delay_ms": 10
+    },
+    "B->A": {
+      "delay_ms": 10
+    },
+    "B->C": {
+      "delay_ms": 10
+    },
+    "C->B": {
+      "delay_ms": 10
+    },
+    "A->D": {
+      "delay_ms": 25
+    },
+    "D->A": {
+      "delay_ms": 25
+    },
+    "D->C": {
+      "delay_ms": 25
+    },
+    "C->D": {
+      "delay_ms": 25
+    }
+  },
+  "actions": [
+    {
+      "at_ms": 12000,
+      "action": "link_down",
+      "link": "A->B",
+      "down": true
+    }
+  ]
+}

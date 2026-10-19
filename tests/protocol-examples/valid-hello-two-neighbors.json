@@ -1,0 +1,27 @@
+{
+  "name": "hello-two-neighbors",
+  "description": "HELLO from A to B listing B and D with the sessions A heard them in.",
+  "valid": true,
+  "frame": {
+    "version": 1,
+    "type": "HELLO",
+    "src": 1,
+    "dst": 2,
+    "session": 168496141,
+    "seq": 12,
+    "ttl": 1,
+    "payload": {
+      "neighbors": [
+        {
+          "node": 2,
+          "session": 572662306
+        },
+        {
+          "node": 4,
+          "session": 1145324612
+        }
+      ]
+    }
+  },
+  "hex": "011001020d0c0b0a0c000000010b0202222222220444444444"
+}

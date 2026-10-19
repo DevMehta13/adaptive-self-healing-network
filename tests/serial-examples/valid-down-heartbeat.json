@@ -1,0 +1,13 @@
+{
+  "name": "valid-down-heartbeat",
+  "description": "Heartbeat: the controller is alive, and it has every number up to 17 of boot 2766734100.",
+  "direction": "down",
+  "line": "{\"v\":1,\"t\":\"hb\",\"b\":2766734100,\"ack\":17}*FA9B",
+  "result": "message",
+  "fields": {
+    "v": 1,
+    "t": "hb",
+    "b": 2766734100,
+    "ack": 17
+  }
+}

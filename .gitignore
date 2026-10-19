@@ -8,9 +8,12 @@ Desktop.ini
 .env.*
 !.env.example
 .venv/
+.platformio-venv/
 venv/
 __pycache__/
 *.py[cod]
+.pytest_cache/
+.ruff_cache/
 
 # Build and dependency output (when components are introduced)
 .pio/
@@ -20,3 +23,8 @@ dist/
 # Local editor/session state
 .idea/
 .claude/settings.local.json
+
+# Run history databases (Phase 10)
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm

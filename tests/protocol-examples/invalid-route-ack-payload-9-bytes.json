@@ -1,0 +1,7 @@
+{
+  "name": "route-ack-payload-9-bytes",
+  "description": "ROUTE_INSTALL_ACK one byte short.",
+  "valid": false,
+  "hex": "01130203443322110e000000080900f153650300000003",
+  "reject_reason": "bad_payload_length"
+}

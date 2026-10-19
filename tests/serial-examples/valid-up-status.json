@@ -1,0 +1,24 @@
+{
+  "name": "valid-up-status",
+  "description": "C's answer to a heartbeat: numbering (last, low), buffer and outage counters.",
+  "direction": "up",
+  "line": "{\"v\":1,\"t\":\"st\",\"b\":2766734100,\"last\":17,\"low\":15,\"reach\":1,\"held\":0,\"unacked\":3,\"cap\":50,\"win\":16,\"drop\":2,\"coal\":33,\"rep\":22,\"rtx\":1,\"out\":1}*C6AA",
+  "result": "message",
+  "fields": {
+    "v": 1,
+    "t": "st",
+    "b": 2766734100,
+    "last": 17,
+    "low": 15,
+    "reach": 1,
+    "held": 0,
+    "unacked": 3,
+    "cap": 50,
+    "win": 16,
+    "drop": 2,
+    "coal": 33,
+    "rep": 22,
+    "rtx": 1,
+    "out": 1
+  }
+}

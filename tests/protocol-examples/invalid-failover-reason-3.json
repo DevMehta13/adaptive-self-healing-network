@@ -1,0 +1,7 @@
+{
+  "name": "failover-reason-3",
+  "description": "LOCAL_FAILOVER_REPORT with a reason that is not defined.",
+  "valid": false,
+  "hex": "011601030d0c0b0a49000000080c00f153650400000003020403",
+  "reject_reason": "bad_value"
+}

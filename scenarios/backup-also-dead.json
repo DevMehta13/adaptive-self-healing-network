@@ -1,0 +1,55 @@
+{
+  "name": "backup-also-dead",
+  "description": "SIMULATED SETTING, not a measurement: link delays are configured so that A-B and B-C (10 ms one way) are cheaper than A-D and D-C (25 ms one way). B and D both stop at 12 s. A's backup is dead too, so A enters no_route locally, drops new readings with reason no_route, and originates a failover report with no target. A is cut off, so the report cannot leave it; it is repeated a bounded number of times and nothing grows.",
+  "seed": 42,
+  "duration_s": 40,
+  "routing": "controller",
+  "settings": {
+    "probe_interval_ms": 1000,
+    "local_failover": true,
+    "failover_t1": true,
+    "failover_t2_k": 3
+  },
+  "controller": {
+    "epoch": 1000,
+    "backup_next_hops": true
+  },
+  "links": {
+    "A->B": {
+      "delay_ms": 10
+    },
+    "B->A": {
+      "delay_ms": 10
+    },
+    "B->C": {
+      "delay_ms": 10
+    },
+    "C->B": {
+      "delay_ms": 10
+    },
+    "A->D": {
+      "delay_ms": 25
+    },
+    "D->A": {
+      "delay_ms": 25
+    },
+    "D->C": {
+      "delay_ms": 25
+    },
+    "C->D": {
+      "delay_ms": 25
+    }
+  },
+  "actions": [
+    {
+      "at_ms": 12000,
+      "action": "stop_node",
+      "node": "B"
+    },
+    {
+      "at_ms": 12000,
+      "action": "stop_node",
+      "node": "D"
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "name": "invalid-up-dup-missing",
+  "description": "A DATA frame without dup.",
+  "direction": "up",
+  "line": "{\"v\":1,\"t\":\"fr\",\"b\":2766734100,\"n\":12,\"age\":0,\"rp\":0,\"via\":2,\"hex\":\"01010103457c32632d0000000704dd070000\"}*56FF",
+  "result": "rejected",
+  "reason": "missing_field"
+}

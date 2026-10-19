@@ -1,0 +1,48 @@
+{
+  "name": "route-ack-lost",
+  "description": "SIMULATED SETTING, not a measurement: link delays are configured so that A-B and B-C (10 ms one way) are cheaper than A-D and D-C (25 ms one way). B installs the route but its ROUTE_INSTALL_ACK is dropped on both of its links. The controller retries; B recognises the repeat, does not install twice, and acknowledges again.",
+  "seed": 42,
+  "duration_s": 20,
+  "routing": "controller",
+  "settings": {
+    "probe_interval_ms": 1000
+  },
+  "controller": {
+    "epoch": 1000
+  },
+  "links": {
+    "A->B": {
+      "delay_ms": 10
+    },
+    "B->A": {
+      "delay_ms": 10,
+      "drop_frames": [
+        1
+      ],
+      "drop_msg": "ROUTE_INSTALL_ACK"
+    },
+    "B->C": {
+      "delay_ms": 10,
+      "drop_frames": [
+        1
+      ],
+      "drop_msg": "ROUTE_INSTALL_ACK"
+    },
+    "C->B": {
+      "delay_ms": 10
+    },
+    "A->D": {
+      "delay_ms": 25
+    },
+    "D->A": {
+      "delay_ms": 25
+    },
+    "D->C": {
+      "delay_ms": 25
+    },
+    "C->D": {
+      "delay_ms": 25
+    }
+  },
+  "actions": []
+}

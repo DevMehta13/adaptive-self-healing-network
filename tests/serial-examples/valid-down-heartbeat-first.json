@@ -1,0 +1,13 @@
+{
+  "name": "valid-down-heartbeat-first",
+  "description": "The laptop's first heartbeat: it knows no boot of C yet (b 0), so ack means nothing.",
+  "direction": "down",
+  "line": "{\"v\":1,\"t\":\"hb\",\"b\":0,\"ack\":0}*6918",
+  "result": "message",
+  "fields": {
+    "v": 1,
+    "t": "hb",
+    "b": 0,
+    "ack": 0
+  }
+}

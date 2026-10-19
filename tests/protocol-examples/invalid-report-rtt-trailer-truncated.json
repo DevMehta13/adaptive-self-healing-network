@@ -1,0 +1,7 @@
+{
+  "name": "report-rtt-trailer-truncated",
+  "description": "A report whose RTT trailer promises 2 entries but carries 1.",
+  "valid": false,
+  "hex": "011101030d0c0b0a1f00000008150202022222222278000402444444445a0002021600",
+  "reject_reason": "bad_payload_length"
+}

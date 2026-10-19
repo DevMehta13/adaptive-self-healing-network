@@ -1,0 +1,7 @@
+{
+  "name": "report-bad-state-0",
+  "description": "State 0 is not defined (unknown is absence).",
+  "valid": false,
+  "hex": "011101030d0c0b0a010000000809010200050000000000",
+  "reject_reason": "bad_value"
+}
