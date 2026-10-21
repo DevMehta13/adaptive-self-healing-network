@@ -619,12 +619,14 @@ void setup() {
 #endif
 #endif
   if (!radio_ok) {
-    Serial.println("F3_SETUP_FAILED");
+    Serial.println("\n# F3_SETUP_FAILED");
     return;
   }
   uint8_t local_mac[6] = {};
   WiFi.macAddress(local_mac);
-  Serial.print("F3_READY role=");
+  // Leading newline + "#": C shares this line with the checksummed serial protocol,
+  // and the bridge's hello line may not have been terminated yet.
+  Serial.print("\n# F3_READY role=");
   Serial.print(kF3Id);
   Serial.print(" mac=");
   print_mac(local_mac);
@@ -633,11 +635,11 @@ void setup() {
   Serial.print(" free_heap=");
   Serial.println(ESP.getFreeHeap());
 #if defined(F3C_ENABLED)
-  Serial.println("F3C_READY controller-installed routes, backups and replay enabled; enter neighbor peer MACs");
+  Serial.println("# F3C_READY controller-installed routes, backups and replay enabled; enter neighbor peer MACs");
 #elif defined(F3B_ENABLED)
-  Serial.println("F3B_READY HELLO/report/probe/telemetry enabled; enter neighbor peer MACs");
+  Serial.println("# F3B_READY HELLO/report/probe/telemetry enabled; enter neighbor peer MACs");
 #else
-  Serial.println("F3A_READY enter configured-neighbor peer MACs, then use send on A");
+  Serial.println("# F3A_READY enter configured-neighbor peer MACs, then use send on A");
 #endif
   return;
 #elif !defined(F1_ROLE_SENDER) && !defined(F1_ROLE_RECEIVER)

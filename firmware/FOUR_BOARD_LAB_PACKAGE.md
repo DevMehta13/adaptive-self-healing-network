@@ -20,6 +20,17 @@ adapter for D, and a Windows laptop with the repository,
 PlatformIO and the backend dependencies already installed. Do not use an
 unlabelled charging-only cable for an upload or serial monitor.
 
+## Board D has no USB data link in the lab
+
+The lab laptop has too few USB ports, so D is powered from a 5 V wall adapter
+and is never connected for data during the run. D therefore has to be plugged
+into a laptop USB port **once beforehand**: flash `f3c_d`, read its MAC, and
+enter its two peer entries (`peer 1 MAC_A`, `peer 3 MAC_C`). Peer entries live
+only in RAM, so after D is moved to the adapter and powered, it has lost them
+unless a different persistence step is added. That is a **known gap**: with the
+current firmware D cannot be configured while it is only wall-powered, and the
+firmware has not yet been changed to remember peers across a power cycle.
+
 ## Power, USB and logical-radio layout
 
 ```text
@@ -117,8 +128,8 @@ into Git or this document.
 Expected boot evidence (the hexadecimal values and heap are examples only):
 
 ```text
-F3_READY role=1 mac=AA:BB:CC:DD:EE:01 channel=1 free_heap=250000
-F3C_READY controller-installed routes, backups and replay enabled; enter neighbor peer MACs
+# F3_READY role=1 mac=AA:BB:CC:DD:EE:01 channel=1 free_heap=250000
+# F3C_READY controller-installed routes, backups and replay enabled; enter neighbor peer MACs
 ```
 
 The ESP32 boot-ROM and bootloader text (also at 115200 baud) can precede this
