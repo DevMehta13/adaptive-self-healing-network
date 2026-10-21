@@ -8,6 +8,7 @@
 #include <esp_now.h>
 #include <esp_system.h>
 #include <esp_wifi.h>
+#include <Preferences.h>
 
 // ESP32-S (Arduino-ESP32 2.x) port.  Two differences from the ESP8266 SDK shape
 // every callback below:
@@ -397,6 +398,36 @@ bool f3_send(void *, uint8_t next_hop, const uint8_t *bytes, size_t len) {
   return esp_now_send(g_f3_peers[next_hop].mac, bytes, len) == ESP_OK;
 }
 
+// Peer MACs are kept in the board's own flash (NVS namespace "peers", keys p1..p4)
+// so a board configured once keeps its neighbors across power cycles, e.g. D on a
+// wall adapter with no USB data link.  The MACs never enter the repository.
+void f3_save_peer(uint8_t id, const uint8_t *mac) {
+  Preferences store;
+  if (!store.begin("peers", false)) return;
+  const char key[3] = {'p', static_cast<char>('0' + id), '\0'};
+  store.putBytes(key, mac, 6);
+  store.end();
+}
+
+// Called once from setup(), after the radio is up.  Returns how many were restored.
+uint8_t f3_load_peers() {
+  Preferences store;
+  if (!store.begin("peers", true)) return 0;
+  uint8_t restored = 0;
+  for (uint8_t id = 1; id <= 4; ++id) {
+    const char key[3] = {'p', static_cast<char>('0' + id), '\0'};
+    uint8_t mac[6] = {};
+    if (store.getBytes(key, mac, sizeof(mac)) != sizeof(mac) || !radio_add_peer(mac)) continue;
+    portENTER_CRITICAL(&g_radio_lock);
+    memcpy(g_f3_peers[id].mac, mac, sizeof(mac));
+    g_f3_peers[id].set = true;
+    portEXIT_CRITICAL(&g_radio_lock);
+    ++restored;
+  }
+  store.end();
+  return restored;
+}
+
 bool f3_set_peer_from_line(const char *line) {
   if (strncmp(line, "peer ", 5) != 0 || !isdigit(line[5]) || line[6] != ' ') return false;
   const uint8_t id = static_cast<uint8_t>(line[5] - '0');
@@ -407,6 +438,7 @@ bool f3_set_peer_from_line(const char *line) {
   memcpy(g_f3_peers[id].mac, mac, sizeof(mac));
   g_f3_peers[id].set = added;
   portEXIT_CRITICAL(&g_radio_lock);
+  if (added) f3_save_peer(id, mac);
   Serial.println(added ? "# peer_set" : "# peer_failed");
   return true;
 }
@@ -622,6 +654,7 @@ void setup() {
     Serial.println("\n# F3_SETUP_FAILED");
     return;
   }
+  const uint8_t restored_peers = f3_load_peers();
   uint8_t local_mac[6] = {};
   WiFi.macAddress(local_mac);
   // Leading newline + "#": C shares this line with the checksummed serial protocol,
@@ -632,6 +665,8 @@ void setup() {
   print_mac(local_mac);
   Serial.print(" channel=");
   Serial.print(kEspNowChannel);
+  Serial.print(" peers_restored=");
+  Serial.print(restored_peers);
   Serial.print(" free_heap=");
   Serial.println(ESP.getFreeHeap());
 #if defined(F3C_ENABLED)

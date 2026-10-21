@@ -23,13 +23,13 @@ unlabelled charging-only cable for an upload or serial monitor.
 ## Board D has no USB data link in the lab
 
 The lab laptop has too few USB ports, so D is powered from a 5 V wall adapter
-and is never connected for data during the run. D therefore has to be plugged
-into a laptop USB port **once beforehand**: flash `f3c_d`, read its MAC, and
-enter its two peer entries (`peer 1 MAC_A`, `peer 3 MAC_C`). Peer entries live
-only in RAM, so after D is moved to the adapter and powered, it has lost them
-unless a different persistence step is added. That is a **known gap**: with the
-current firmware D cannot be configured while it is only wall-powered, and the
-firmware has not yet been changed to remember peers across a power cycle.
+and is never connected for data during the run. D is therefore plugged into a
+laptop USB port **once beforehand**: flash `f3c_d`, read its MAC and enter its
+two peer entries (`peer 1 MAC_A`, `peer 3 MAC_C`). Peer entries are stored in
+each board's own flash (NVS) and restored at boot (`peers_restored=2` in the
+`F3_READY` line), so D keeps them when it is later powered from the adapter
+alone. Entering a peer again overwrites the stored one. The MACs live only on
+the boards, never in the repository.
 
 ## Power, USB and logical-radio layout
 
@@ -121,14 +121,15 @@ F3c images after the F1 bench.
 ## MAC-address setup
 
 Every F3c board prints its own station MAC at boot. Record it first, then
-enter only the board's permitted neighbours. The addresses live only in RAM;
-after a reset or reflash, enter them again. Never put real lab MAC addresses
+enter only the board's permitted neighbours. The addresses are saved in the
+board's flash and survive a reset or power cycle (a reflash that erases flash
+would lose them; then enter them again). Never put real lab MAC addresses
 into Git or this document.
 
 Expected boot evidence (the hexadecimal values and heap are examples only):
 
 ```text
-# F3_READY role=1 mac=AA:BB:CC:DD:EE:01 channel=1 free_heap=250000
+# F3_READY role=1 mac=AA:BB:CC:DD:EE:01 channel=1 peers_restored=0 free_heap=250000
 # F3C_READY controller-installed routes, backups and replay enabled; enter neighbor peer MACs
 ```
 
