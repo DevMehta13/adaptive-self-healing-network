@@ -370,6 +370,10 @@ uint8_t g_f3_head = 0, g_f3_tail = 0;
 uint8_t g_f3_result_head = 0, g_f3_result_tail = 0;
 volatile uint32_t g_f3_receive_drops = 0;
 volatile uint32_t g_f3_send_result_drops = 0;
+// One frame at a time on the radio: set when a send is accepted, cleared by its callback.
+volatile bool g_f3_tx_busy = false;
+volatile uint32_t g_f3_send_errors = 0;
+volatile uint32_t g_f3_tx_wait_timeouts = 0;
 f3::NodeEngine *g_f3_engine = nullptr;
 #if defined(F3C_GATEWAY)
 cbridge::CSerialBridge *g_f3_bridge = nullptr;
@@ -395,7 +399,27 @@ uint8_t f3_peer_id(const uint8_t *mac) {
 // Called from loop() only, which is the only writer of g_f3_peers.
 bool f3_send(void *, uint8_t next_hop, const uint8_t *bytes, size_t len) {
   if (next_hop == 0 || next_hop > 4 || !g_f3_peers[next_hop].set) return false;
-  return esp_now_send(g_f3_peers[next_hop].mac, bytes, len) == ESP_OK;
+  // The engine hands over one frame per loop() pass, which is far faster than the radio.
+  // esp_now_send() then fails with ESP_ERR_ESPNOW_NO_MEM (0x3067) once its queue is full,
+  // and the frame is silently lost.  Wait (briefly) for the previous send's callback.
+  const uint32_t waited_from = millis();
+  while (g_f3_tx_busy && millis() - waited_from < 25) delay(1);
+  if (g_f3_tx_busy) ++g_f3_tx_wait_timeouts;
+  g_f3_tx_busy = true;
+  const esp_err_t err = esp_now_send(g_f3_peers[next_hop].mac, bytes, len);
+  if (err != ESP_OK) {
+    g_f3_tx_busy = false;
+    ++g_f3_send_errors;
+    // Diagnostic only, rate limited: how often does the Wi-Fi driver refuse a frame?
+    static uint16_t reported = 0;
+    if (reported < 20) {
+      ++reported;
+      Serial.print("\n# esp_now_send_failed hop="); Serial.print(next_hop);
+      Serial.print(" type="); Serial.print(len > 1 ? bytes[1] : 0);
+      Serial.print(" err=0x"); Serial.println(static_cast<unsigned>(err), HEX);
+    }
+  }
+  return err == ESP_OK;
 }
 
 // Peer MACs are kept in the board's own flash (NVS namespace "peers", keys p1..p4)
@@ -417,7 +441,10 @@ uint8_t f3_load_peers() {
   for (uint8_t id = 1; id <= 4; ++id) {
     const char key[3] = {'p', static_cast<char>('0' + id), '\0'};
     uint8_t mac[6] = {};
-    if (store.getBytes(key, mac, sizeof(mac)) != sizeof(mac) || !radio_add_peer(mac)) continue;
+    // isKey() first: getBytes() on a missing key makes the NVS library log an error line to Serial.
+    if (!store.isKey(key) || store.getBytes(key, mac, sizeof(mac)) != sizeof(mac) ||
+        !radio_add_peer(mac))
+      continue;
     portENTER_CRITICAL(&g_radio_lock);
     memcpy(g_f3_peers[id].mac, mac, sizeof(mac));
     g_f3_peers[id].set = true;
@@ -446,6 +473,7 @@ bool f3_set_peer_from_line(const char *line) {
 // Link-layer result for one frame to one neighbor.  It is queued, not applied:
 // the engine is not thread-safe and must only run in loop().
 void f3_send_callback(const uint8_t *mac, esp_now_send_status_t status) {
+  g_f3_tx_busy = false;
   const uint8_t peer = f3_peer_id(mac);
   if (peer == 0) return;
   portENTER_CRITICAL(&g_radio_lock);
@@ -512,8 +540,21 @@ void f3_drain() {
 }
 
 #if defined(F3C_GATEWAY)
+// The engine calls this for management frames addressed to C.  Frames that other nodes
+// sent reach the bridge through f3_drain() already, so only C's *own* reports (its view
+// of the B-C and C-D links) are handed up here.  Without it the controller never sees
+// C's end of those links and every route stays unconfirmed.
+void f3_management(void *, const iot::FrameView &frame) {
+  if (frame.src != kF3Id || !g_f3_bridge) return;
+  uint8_t bytes[iot::kMaxRadioFrame] = {};
+  size_t len = 0;
+  if (!iot::encode_frame(frame, bytes, sizeof(bytes), &len)) return;
+  g_f3_bridge->receive_radio(bytes, len, kF3Id, false, millis());
+}
+
 void f3_write(void *, const char *line, size_t len) {
   Serial.write(reinterpret_cast<const uint8_t *>(line), len);
+  Serial.write('\n');  // SERIAL_PROTOCOL.md section 1: every line ends with LF
 }
 bool f3_transmit_route(void *, uint8_t destination, const uint8_t *payload,
                        size_t payload_len) {
@@ -565,6 +606,18 @@ void f3_command() {
     Serial.print("acknowledged="); Serial.println(c.acknowledged);
     Serial.print("duplicates="); Serial.println(c.duplicates);
     Serial.print("queue_drops="); Serial.println(c.dropped_queue_full + g_f3_receive_drops);
+    Serial.print("route_installed="); Serial.println(c.route_installed);
+    Serial.print("route_rejected="); Serial.println(c.route_rejected);
+    Serial.print("route_stale="); Serial.println(c.route_stale);
+    Serial.print("local_failovers="); Serial.println(c.local_failovers);
+    Serial.print("send_failures="); Serial.println(c.send_failures);
+    Serial.print("radio_send_errors="); Serial.println(g_f3_send_errors);
+    Serial.print("tx_wait_timeouts="); Serial.println(g_f3_tx_wait_timeouts);
+    Serial.print("flooded="); Serial.println(c.flooded);
+    Serial.print("flood_duplicates="); Serial.println(c.flood_duplicates);
+    Serial.print("dropped_not_permitted="); Serial.println(c.dropped_not_permitted);
+    Serial.print("dropped_decode="); Serial.println(c.dropped_decode);
+    Serial.print("dropped_ttl="); Serial.println(c.dropped_ttl);
     Serial.print("send_result_drops="); Serial.println(g_f3_send_result_drops);
     Serial.print("free_heap="); Serial.println(ESP.getFreeHeap());
     Serial.print("min_free_heap="); Serial.println(ESP.getMinFreeHeap());
@@ -588,6 +641,7 @@ bool g_f2_discard = false;
 void f2_write(void *, const char *line, size_t len) {
   // Called only from loop(), never the ESP-NOW callback.
   Serial.write(reinterpret_cast<const uint8_t *>(line), len);
+  Serial.write('\n');  // SERIAL_PROTOCOL.md section 1: every line ends with LF
 }
 
 void f2_read_serial() {
@@ -625,8 +679,13 @@ void setup() {
   // Radio first, so the session numbers below are drawn with Wi-Fi running.
   const bool radio_ok = radio_start(f3_send_callback, f3_receive_callback);
 #if defined(F3B_ENABLED)
+#if defined(F3C_GATEWAY)
+  static f3::NodeEngine engine(kF3Id, random_nonzero(), kF3Neighbors, 2, f3_send,
+                               nullptr, 1000, &kF3bSettings, f3_management, nullptr);
+#else
   static f3::NodeEngine engine(kF3Id, random_nonzero(), kF3Neighbors, 2, f3_send,
                                nullptr, 1000, &kF3bSettings, nullptr, nullptr);
+#endif
 #else
   static f3::NodeEngine engine(kF3Id, random_nonzero(), kF3Neighbors, 2, f3_send, nullptr);
 #endif

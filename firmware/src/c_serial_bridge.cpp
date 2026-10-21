@@ -22,6 +22,13 @@ void hex(const uint8_t *bytes, size_t len, char *out) {
   out[len * 2] = '\0';
 }
 
+int hex_value(char c) {
+  if (c >= '0' && c <= '9') return c - '0';
+  if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+  if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+  return -1;
+}
+
 uint32_t number_or(const iot::SerialMessage &message, const char *key,
                    uint32_t fallback) {
   const uint32_t *value = iot::serial_number(message, key);
@@ -245,11 +252,9 @@ void CSerialBridge::receive_down(const char *line, size_t len, uint32_t now_ms) 
     for (uint8_t i = 0; i < 11; ++i) {
       const char high = payload->data[i * 2];
       const char low = payload->data[i * 2 + 1];
-      const bool high_ok = (high >= '0' && high <= '9') || (high >= 'A' && high <= 'F');
-      const bool low_ok = (low >= '0' && low <= '9') || (low >= 'A' && low <= 'F');
-      if (!high_ok || !low_ok) { ++counters_.rejected_down; return; }
-      const uint8_t h = static_cast<uint8_t>((high <= '9') ? high - '0' : high - 'A' + 10);
-      const uint8_t l = static_cast<uint8_t>((low <= '9') ? low - '0' : low - 'A' + 10);
+      // The laptop writes lowercase hex (valid-down-transmit-route-update); accept both cases.
+      const int h = hex_value(high), l = hex_value(low);
+      if (h < 0 || l < 0) { ++counters_.rejected_down; return; }
       bytes[i] = static_cast<uint8_t>((h << 4) | l);
     }
     if (!transmit_ || !transmit_(transmit_context_, static_cast<uint8_t>(number_or(message, "dst", 0)), bytes, sizeof(bytes)))

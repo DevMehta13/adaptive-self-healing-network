@@ -319,6 +319,20 @@ void test_f3c_c_accepts_only_route_update_serial_commands() {
   TEST_ASSERT_EQUAL_UINT32(1, bridge.counters().rejected_down);
 }
 
+void test_f3c_bridge_accepts_the_laptops_lowercase_route_update_payload() {
+  // Payload copied from tests/serial-examples/valid-down-transmit-route-update.json: the
+  // backend writes bytes with Python's .hex(), i.e. lowercase.
+  FakeSerial serial = {};
+  RouteCommandCapture command = {};
+  cbridge::CSerialBridge bridge(44, capture_line, &serial, capture_route_command, &command);
+  down(bridge, "{\"v\":1,\"t\":\"tx\",\"dst\":2,\"mt\":18,\"p\":\"e803000002000000030300\"}", 0);
+  TEST_ASSERT_EQUAL_UINT8(1, command.calls);
+  TEST_ASSERT_EQUAL_UINT8(2, command.destination);
+  TEST_ASSERT_EQUAL_HEX8(0xE8, command.payload[0]);
+  TEST_ASSERT_EQUAL_HEX8(0x00, command.payload[10]);
+  TEST_ASSERT_EQUAL_UINT32(0, bridge.counters().rejected_down);
+}
+
 struct RadioMessage {
   uint8_t from;
   uint8_t to;
@@ -618,6 +632,7 @@ int main(int, char **) {
   RUN_TEST(test_f2_fake_c_timeout_buffers_and_replays);
   RUN_TEST(test_f2_fake_c_buffer_is_bounded);
   RUN_TEST(test_f3c_c_accepts_only_route_update_serial_commands);
+  RUN_TEST(test_f3c_bridge_accepts_the_laptops_lowercase_route_update_payload);
   RUN_TEST(test_f3a_forwards_only_over_permitted_neighbors);
   RUN_TEST(test_f3a_ttl_stops_a_misconfigured_route_loop);
   RUN_TEST(test_f3a_lost_ack_retries_identically_and_destination_deduplicates);
