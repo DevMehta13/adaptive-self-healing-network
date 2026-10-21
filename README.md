@@ -1,8 +1,8 @@
 # Adaptive Self-Healing IoT Network
 
-A college project about keeping sensor data moving when a wireless relay fails, using four inexpensive ESP8266 NodeMCU boards and a laptop.
+A college project about keeping sensor data moving when a wireless relay fails, using four inexpensive ESP32-S NodeMCU-style boards and a laptop.
 
-**Status: design plus the Phase 0 backend foundation (a status-only HTTP/WebSocket server), a protocol contract, and a four-node simulator with forwarding, retries, duplicate detection, neighbor discovery, failure *detection*, link probes, and controller-calculated routes. F0 provides bounded native C++ radio and serial codecs that match all shared reference vectors; F3a–F3c provide a fixed-memory NodeMCU implementation for forwarding, discovery, versioned controller route installation, controller-installed backup selection, local failover, and C's bounded controller-outage replay boundary. The backend is complete in simulation; what remains is the later dashboard increment and joint hardware phases. No physical board, radio or USB-serial behavior has been tested; the laptop side of the USB serial link has been tested only against a fake node C.** Dev: start with [docs/HANDOFF_FOR_DEV.md](docs/HANDOFF_FOR_DEV.md); for the viva see [docs/VIVA_NOTES.md](docs/VIVA_NOTES.md). The software-first phased plan is approved in [plan.md](plan.md); see [docs/STATUS.md](docs/STATUS.md) for what exists.
+**Status: design plus the Phase 0 backend foundation (a status-only HTTP/WebSocket server), a protocol contract, and a four-node simulator with forwarding, retries, duplicate detection, neighbor discovery, failure *detection*, link probes, and controller-calculated routes. F0 provides bounded native C++ radio and serial codecs that match all shared reference vectors; F3a–F3c provide a fixed-memory ESP32-S implementation for forwarding, discovery, versioned controller route installation, controller-installed backup selection, local failover, and C's bounded controller-outage replay boundary. The backend is complete in simulation; what remains is the later dashboard increment and joint hardware phases. No physical board, radio or USB-serial behavior has been tested; the laptop side of the USB serial link has been tested only against a fake node C.** Dev: start with [docs/HANDOFF_FOR_DEV.md](docs/HANDOFF_FOR_DEV.md); for the viva see [docs/VIVA_NOTES.md](docs/VIVA_NOTES.md). The software-first phased plan is approved in [plan.md](plan.md); see [docs/STATUS.md](docs/STATUS.md) for what exists.
 
 ## What we are building
 
@@ -31,9 +31,9 @@ The lines between boards represent wireless links. Each board also needs electri
 
 ## Hardware and cost
 
-- Four **ESP8266 NodeMCU development boards** are the selected hardware. ESP32-C3 was considered but is not the current choice.
+- Four **ESP32-S NodeMCU-style development boards** are the selected hardware (the project began on ESP8266 NodeMCU and was ported to ESP32-S on 2026-10-21; the port is software-only so far and untested on boards). A, B and C take power from the Windows laptop's USB ports, D from a 5 V USB wall adapter; only C needs an active USB data connection during the network run. The boards talk over ESP-NOW, so no wires connect them to each other. The planned DHT11 module (three-pin) attaches to A only: `S`/`OUT` to `P4`/GPIO4, `+`/`VCC` to `3V3`, `-` to `GND`; no pull-up resistor, and never `VIN`, `5V`, `RX` or `TX`. No DHT11 code exists yet.
 - The sensor will be selected from parts actually available in the lab before
-  Phase 8. It must be compatible with the ESP8266 NodeMCU's 3.3 V logic; its
+  Phase 8. It must be compatible with the ESP32's 3.3 V logic; its
   exact model, wiring and firmware will be recorded only after availability is
   confirmed.
 - Suitable USB cables and power sources are required; use existing equipment where possible. Programming and C's laptop connection require a data-capable cable.
@@ -50,7 +50,7 @@ The lines between boards represent wireless links. Each board also needs electri
 - Fail-static forwarding while the laptop is unreachable, with bounded buffering of readings at C and replay on reconnection.
 - Packet identifiers, bounded retries, delivery acknowledgements, duplicate detection, and TTL to limit forwarding.
 - A local dashboard showing node state, links, intended and observed routes, readings, and failure/recovery events.
-- Delivery counts, packet loss, RTT, and recovery measurements; RSSI where reliable ESP8266 measurement is validated.
+- Delivery counts, packet loss, RTT, and recovery measurements; RSSI where reliable ESP32 measurement is validated.
 - Performance history and clearly labeled simulated failure testing.
 - Adaptive routing with a measured comparison of lowest-delay and highest-reliability policies after the hardware core works.
 - A real sensor after communication works. Software simulation is planned to support development without all boards present.

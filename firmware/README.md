@@ -1,6 +1,14 @@
-# ESP8266 firmware
+# ESP32-S firmware
 
-F0 provides the bounded C++ codecs shared by all four ESP8266 nodes. It does not use
+The firmware targets four ESP32-S NodeMCU-style boards (PlatformIO board `esp32dev`,
+platform `espressif32@6.9.0`, Arduino-ESP32 2.x). It was ported from the ESP8266 SDK on
+2026-10-21: the codecs, node engine and serial bridge are unchanged; `src/main.cpp` uses
+`esp_now.h`, and because ESP32 radio callbacks run in the Wi-Fi task (concurrently with
+`loop()`), they only copy into small fixed queues under a spinlock. **The port has been
+compiled and host-tested only; no image has been uploaded to a board.** Every board is
+pinned to Wi-Fi channel 1.
+
+F0 provides the bounded C++ codecs shared by all four nodes. It does not use
 ESP-NOW or a physical board yet. The radio decoder checks the 14-byte header and every
 defined payload in the documented order. The serial decoder checks line limits,
 printable ASCII, CRC, strict fields and embedded radio frames. Both use caller-owned
@@ -9,7 +17,7 @@ buffers and fixed-capacity views; an invalid message changes no node state.
 ## Prerequisite
 
 Install Python 3.11 or newer, then install PlatformIO Core in an isolated environment.
-The commands are portable between macOS Terminal and Windows PowerShell:
+The final laptop is Windows; the commands also work in macOS Terminal:
 
 ```sh
 cd firmware
@@ -33,30 +41,34 @@ Then install the pinned tool and run the checks:
 ```sh
 python -m pip install -r requirements.txt
 pio test -e native
-pio run -e nodemcuv2
+pio run -e f1_sender -e f1_receiver -e f2_c
+pio run -e f3c_a -e f3c_b -e f3c_c -e f3c_d
 ```
 
-The native check runs all 79 radio vectors and all 48 serial vectors from
-`tests/generated/test_vectors.h`. The NodeMCU command cross-compiles the same codec for
-the selected ESP8266 board. Neither command uploads firmware or proves radio behavior.
+`pio run -e esp32dev` builds the plain codec image with no radio role. The native check
+runs all 79 radio vectors and all 48 serial vectors from
+`tests/generated/test_vectors.h`, plus the mock-radio and fake-C engine tests. The `pio run`
+commands cross-compile the same code for `esp32dev`. Neither command uploads firmware or proves radio behavior.
 
 ## F1: two-board DATA/ACK bench
 
-F1 uses exactly two ESP8266 NodeMCU boards. The sender is node A and emits one
+F1 uses exactly two ESP32-S boards. The sender is node A and emits one
 DATA frame at a time. The receiver is node C and sends a protocol DELIVERY_ACK
 only after it has decoded a valid DATA frame. A successful ESP-NOW send callback
 means the radio link layer reported success; it is counted separately and is not
 treated as delivery. The bench succeeds only when A reports 100 matched ACKs.
 
-Build and upload the receiver first, then the sender. Replace the port names with
-the ports shown by `pio device list`; do not commit them.
+Build and upload the receiver first, then the sender. Read the ports from
+`pio device list` into PowerShell variables; never commit them.
 
-```sh
-pio run -e f1_receiver --target upload --upload-port YOUR_C_PORT
-pio device monitor --port YOUR_C_PORT --baud 115200
+```powershell
+$PortC = "<C's port from pio device list>"
+$PortA = "<A's port from pio device list>"
+pio run -e f1_receiver --target upload --upload-port $PortC
+pio device monitor --port $PortC --baud 115200
 
-pio run -e f1_sender --target upload --upload-port YOUR_A_PORT
-pio device monitor --port YOUR_A_PORT --baud 115200
+pio run -e f1_sender --target upload --upload-port $PortA
+pio device monitor --port $PortA --baud 115200
 ```
 
 C prints `F1_READY ... mac=AA:BB:CC:DD:EE:FF`. In A's monitor enter the following
@@ -103,7 +115,7 @@ The native fake-C checks cover heartbeats, cumulative acknowledgement, resend,
 timeout, buffering, replay markers and an overflow boundary. The `f2_c` image
 accepts laptop lines and reports its boot/status; F3 will connect its
 `receive_radio(...)` entry point to C's ESP-NOW receive queue and route-update
-sender. The host test and cross-compile do not prove that opening a NodeMCU USB
+sender. The host test and cross-compile do not prove that opening an ESP32 board's USB
 port avoids reset, that serial throughput is sufficient, or that the buffer fits
 alongside the full radio firmware. Those are the F2 hardware-validation checks.
 

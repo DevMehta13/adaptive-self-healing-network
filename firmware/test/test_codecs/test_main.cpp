@@ -329,7 +329,7 @@ struct RadioMessage {
 struct MockRadio {
   RadioMessage messages[128];
   uint8_t count;
-  bool drop_next_ack;
+  bool drop_acks;  // while set, every DELIVERY_ACK copy is lost (ACKs are flooded)
 };
 
 struct Endpoint { MockRadio *radio; uint8_t from; };
@@ -370,7 +370,7 @@ struct Diamond {
       iot::FrameView frame = {};
       const bool ack = iot::decode_frame(pending[i].bytes, pending[i].len, &frame) ==
                            iot::DecodeError::kNone && frame.type == f3::kDeliveryAckType;
-      if (ack && radio.drop_next_ack) { radio.drop_next_ack = false; continue; }
+      if (ack && radio.drop_acks) continue;
       if (pending[i].to == 1) a.receive(pending[i].from, pending[i].bytes, pending[i].len, now);
       else if (pending[i].to == 2) b.receive(pending[i].from, pending[i].bytes, pending[i].len, now);
       else if (pending[i].to == 3) c.receive(pending[i].from, pending[i].bytes, pending[i].len, now);
@@ -491,40 +491,44 @@ void test_f3b_flooding_probes_and_telemetry_are_bounded_and_reach_c() {
   TEST_ASSERT_LESS_OR_EQUAL_UINT8(16, network.a.queued());
 }
 
-void install(ControlDiamond &network, uint8_t node, uint32_t version,
+// Advances a monotonic clock in HELLO-interval steps so neighbors stay two-way
+// (the test's neighbor timeout is 30 ms), then installs one route.
+void install(ControlDiamond &network, uint32_t &now, uint8_t node, uint32_t version,
              uint8_t primary, uint8_t backup) {
+  for (uint8_t round = 0; round < 2; ++round) network.pump(now += 10);
   uint8_t payload[11] = {};
   const uint32_t epoch = 700;
   memcpy(payload, &epoch, 4); memcpy(payload + 4, &version, 4);
   payload[8] = 3; payload[9] = primary; payload[10] = backup;
   TEST_ASSERT_TRUE(network.c.originate_route_update(node, payload));
-  network.pump(100 + version);
+  network.pump(now);
 }
 
 void test_f3c_installs_versioned_routes_and_fails_over_to_confirmed_backup() {
   ControlDiamond network;
-  network.pump(0); network.pump(10);  // Establish two-way neighbors first.
-  install(network, 4, 1, 3, 0);  // Backup relay before the source.
-  install(network, 2, 1, 3, 0);
-  install(network, 1, 1, 2, 4);
+  uint32_t now = 0;
+  network.pump(now); network.pump(now += 10);  // Establish two-way neighbors first.
+  install(network, now, 4, 1, 3, 0);  // Backup relay before the source.
+  install(network, now, 2, 1, 3, 0);
+  install(network, now, 1, 1, 2, 4);
   TEST_ASSERT_EQUAL_UINT8(2, network.a.installed_next_hop(3));
   TEST_ASSERT_TRUE(captured(network.capture, f3::kRouteInstallAckType, 1));
 
   // T2: three next-hop send failures move A to its controller-installed backup.
-  network.a.report_send_result(2, false, 110);
-  network.a.report_send_result(2, false, 111);
-  network.a.report_send_result(2, false, 112);
+  network.a.report_send_result(2, false, now);
+  network.a.report_send_result(2, false, now);
+  network.a.report_send_result(2, false, now);
   TEST_ASSERT_EQUAL_UINT8(4, network.a.installed_next_hop(3));
-  network.pump(112);
+  network.pump(now);
   TEST_ASSERT_TRUE(captured(network.capture, f3::kLocalFailoverReportType, 1));
-  TEST_ASSERT_TRUE(network.a.create_data(3, 88, 113));
-  network.pump(113);
+  TEST_ASSERT_TRUE(network.a.create_data(3, 88, now));
+  network.pump(now);
   TEST_ASSERT_EQUAL_UINT32(1, network.c.counters().delivered);
 
   // Only a newer controller version can choose a primary again; an older late
   // update cannot pull A back to the abandoned relay.
-  install(network, 1, 2, 4, 2);
-  install(network, 1, 1, 2, 4);
+  install(network, now, 1, 2, 4, 2);
+  install(network, now, 1, 1, 2, 4);
   TEST_ASSERT_EQUAL_UINT8(4, network.a.installed_next_hop(3));
   TEST_ASSERT_GREATER_THAN_UINT32(0, network.a.counters().route_stale);
 }
@@ -559,11 +563,12 @@ void test_f3a_ttl_stops_a_misconfigured_route_loop() {
 
 void test_f3a_lost_ack_retries_identically_and_destination_deduplicates() {
   Diamond network;
-  network.radio.drop_next_ack = true;
+  network.radio.drop_acks = true;
   TEST_ASSERT_TRUE(network.a.create_data(3, 7, 0));
   network.pump(0);
   TEST_ASSERT_EQUAL_UINT32(1, network.c.counters().delivered);
   TEST_ASSERT_EQUAL_UINT32(0, network.a.counters().acknowledged);
+  network.radio.drop_acks = false;  // the retry's re-ACK gets through
   network.pump(1000);
   TEST_ASSERT_EQUAL_UINT32(1, network.c.counters().delivered);
   TEST_ASSERT_EQUAL_UINT32(1, network.c.counters().duplicates);

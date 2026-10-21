@@ -6,7 +6,7 @@ retry policy, or routing logic during this run.
 
 ## Bring
 
-- Two ESP8266 NodeMCU boards and two known data-capable USB cables.
+- Two ESP32-S NodeMCU-style boards and two known data-capable USB cables.
 - A laptop with this repository, PlatformIO, and the firmware dependencies
   already installed.
 - Two terminal windows, one for each board's serial monitor.
@@ -70,8 +70,10 @@ by itself. The matching DELIVERY_ACK is the end-to-end F1 evidence.
    and C's MAC was copied exactly into A's `peer` command.
 2. Reset both boards, repeat the run once, and save both failed summaries.
 3. If upload fails, first change the USB cable or port; a charging-only cable
-   cannot upload firmware or provide serial logs.
+   cannot upload firmware or provide serial logs. If PlatformIO stays on
+   `Connecting....`, hold the board's BOOT button while it connects, then release
+   it (some ESP32 boards need this; unverified for ours).
 4. If `F1_SETUP_FAILED` appears, preserve the complete monitor output and the
-   PlatformIO version. Do not replace ESP8266-specific APIs with ESP32 examples.
+   PlatformIO version (`pio --version`). Do not swap in different ESP-NOW calls from examples written for another Arduino-ESP32 version; the firmware is written for the pinned `espressif32@6.9.0` (Arduino-ESP32 2.x).
 5. If the second run also fails, stop and record the evidence. The next change
    must be based on that evidence, not a guessed timing value.

@@ -4,19 +4,19 @@ This document separates the agreed system shape from mechanisms that still need 
 
 ## Connections and responsibilities
 
-Four ESP8266 NodeMCU boards form the permitted wireless links A–B, B–C, A–D, and D–C. The links must support communication in both directions for probes, acknowledgements, and management traffic. Each board needs power. C connects through a USB data cable to the laptop; a sensor selected from parts actually available in the lab will later connect to A using its model-appropriate wiring.
+Four ESP32-S NodeMCU-style boards form the permitted wireless links A–B, B–C, A–D, and D–C. The links must support communication in both directions for probes, acknowledgements, and management traffic. Each board needs power. C connects through a USB data cable to the laptop; a sensor selected from parts actually available in the lab will later connect to A using its model-appropriate wiring.
 
 ## Sensor selection rule
 
 Phase 8 will use a sensor that is confirmed available in the lab and compatible
-with the ESP8266 NodeMCU's 3.3 V logic. Before implementation, record the exact
+with the ESP32's 3.3 V logic. Before implementation, record the exact
 model, supply-voltage requirement, signal type, breakout pull-ups (if any), pin
 assignment, measurement unit and failure behaviour. The generated-reading mode
 stays available until that sensor is wired and verified.
 
 The current communication proposal is **ESP-NOW** between boards and USB serial between C and the laptop. ESP-NOW carries individual device-to-device frames; our firmware must implement the forwarding and routing behavior. The laptop communicates through C, not directly through its own Wi-Fi radio. A router and internet connection are not required for this design.
 
-ESP8266-specific SDK behavior must be checked. ESP32 examples and callback signatures are not automatically compatible with ESP8266. The firmware is written and target-compiled before the lab, but only a minimal real-board communication test can validate the selected ESP8266 API, delivery callbacks, available heap, radio behaviour and USB-reset behaviour.
+ESP32-specific behavior must be checked. The firmware was ported from the ESP8266 SDK to Arduino-ESP32 2.x (`esp_now.h`) on 2026-10-21. ESP-NOW callbacks now run in the Wi-Fi task concurrently with `loop()`, so they only copy into small fixed queues under a spinlock and the engine runs in `loop()`. The firmware is written and target-compiled before the lab, but only a minimal real-board communication test can validate the selected ESP32 API, delivery callbacks, available heap, radio behaviour and USB-reset behaviour.
 
 ## Pre-lab development and hardware validation
 
@@ -84,7 +84,7 @@ The controller calculates routes, but surviving a single relay failure should no
 **Fail-static forwarding and buffering at C.** The controller sends C a periodic heartbeat over the gateway interface. When the heartbeat stops, C marks the controller unreachable. Nodes keep forwarding on their last confirmed routes and backups, but no new routes are calculated. C continues to acknowledge readings, because those acknowledgements come from C rather than the laptop. C stores readings and node events in a bounded ring buffer, dropping and counting the oldest entry when full. On reconnection, C replays the buffer; the controller counts each reading once by source, session and sequence, and the dashboard labels replayed readings as delayed.
 
 - C is powered by the same USB cable that connects it to the laptop, so unplugging it removes C entirely. Controller loss is tested by stopping the controller software. The buffer is RAM-only and is lost if C loses power.
-- Buffer size depends on ESP8266 free heap, measured in Phase 6.
+- Buffer size depends on ESP32 free heap, measured in Phase 6.
 - Pre-installed backups cover only the failures the last route version anticipated. A second failure while the controller is unreachable may leave no route.
 
 Decisions recorded in Phase 5b (simulation; the message set and values are pending Dev's review):
@@ -101,8 +101,8 @@ Decisions recorded in Phase 5b (simulation; the message set and values are pendi
 Decisions recorded in Phase 6-prep (laptop side; the serial format is pending Dev's review, see [SERIAL_PROTOCOL.md](SERIAL_PROTOCOL.md)):
 
 - **Newline-delimited JSON on the USB line, binary on the radio.** The radio has 250-byte frames and an 80 MHz microcontroller, so it uses a packed binary header. The serial line has no such limit, and the first thing anyone does when a board misbehaves is read what it prints in a terminal; a line of JSON is readable there, and a laptop parses it with the standard library. The two never mix: a serial line carries a radio frame as a hex string, so there is one binary format and one decoder.
-- **Diagnostics are separated from data.** Data lines are JSON followed by a checksum; anything the firmware prints for humans starts with `#`, and anything else (the ESP8266's boot ROM prints at a different baud rate) is noise. Only checked data lines are parsed. Otherwise a `Serial.println("got here")` in the middle of debugging would corrupt the stream, or worse, be parsed as data.
-- **Every data line has a CRC-16.** The weak point is the UART between the ESP8266 and the USB chip. A lost byte there turns `"n":12` into `"n":2`, which is still valid JSON. A bad line is dropped whole and counted; nothing in it is ever half-applied.
+- **Diagnostics are separated from data.** Data lines are JSON followed by a checksum; anything the firmware prints for humans starts with `#`, and anything else (the ESP32's boot ROM prints at 115200 baud, so boot text can precede the first line) is noise. Only checked data lines are parsed. Otherwise a `Serial.println("got here")` in the middle of debugging would corrupt the stream, or worse, be parsed as data.
+- **Every data line has a CRC-16.** The weak point is the UART between the ESP32 and the USB chip. A lost byte there turns `"n":12` into `"n":2`, which is still valid JSON. A bad line is dropped whole and counted; nothing in it is ever half-applied.
 - **C forwards frames, not decoded events.** The firmware stays small and the tested Python codec is the only decoder. C adds what only it knows: the neighbor that handed it the frame, its duplicate verdict, and its age.
 - **The laptop sends payloads; C writes the header.** Nodes accept a ROUTE_UPDATE only from the gateway's source id, and sequence numbers must be unique per boot of C, so a counter in C is the only correct place for them. The laptop supplies type, destination and payload.
 - **A reliable uplink, in the style of TCP.** C numbers what it hands up and keeps it until the laptop's cumulative acknowledgement ("everything up to n"). The laptop asks for a resend when it sees a gap. If C no longer holds a number it says so, with the kind of message it was, so the loss is counted, not silent. This closes the Phase 5b limitation that an outage shorter than C's 3 s timeout lost readings uncounted. Differences from TCP: the receiver asks for the resend (so C needs no retransmission timer), the window is a fixed 16, and "gone" is an answer.
@@ -138,7 +138,7 @@ Decisions recorded in Phase 4b (simulation; pending Dev's review where they touc
 - **Backup rule: loop-free and node-protecting.** For node N with primary next hop P, a neighbor n is a valid backup only if n's own shortest path to the destination passes through neither N nor P. In the diamond A's backup is D and B and D have none. "Loop-free" alone (not through N) is not enough: a backup that routes through P fails together with P.
 - **Backup entries are installed and confirmed first.** Order: backup relays, primary relays, source. A route is active only when the primary path and all backup entries are acknowledged.
 - **Two triggers, measured separately.** T1: the next hop is no longer two-way (lost or one-way). T2: K consecutive link-layer failures to it. T1 must test two-way, not a timeout: in a one-way A→B failure A keeps hearing B and a timeout never fires.
-- **The link-layer callback is a next-hop signal.** It can say "failed" for a frame that arrived (the acknowledgement was lost) and "ok" for a frame the relay then drops. It is never end-to-end confirmation. Real ESP8266 behaviour is unverified until Phase 6.
+- **The link-layer callback is a next-hop signal.** It can say "failed" for a frame that arrived (the acknowledgement was lost) and "ok" for a frame the relay then drops. It is never end-to-end confirmation. Real ESP32 behaviour is unverified until Phase 6.
 - **No local switch-back.** Only a newer controller version ends a failover; the controller decides by policy and the existing hold-down. A node that re-receives a dead primary abandons it again immediately, so the controller cannot fight the failover.
 - **The controller treats a failover report as a distinct recovery.** It records `local_failover`, holds the abandoned link down for the hold-down (as if it had left), and installs the resulting route as a new version: the backup path promoted to primary, with a new backup if one exists.
 - **Expired information is not a failure.** A link whose reports have merely expired keeps its last known cost and is not treated as having left, and no route is withdrawn because the controller stopped hearing anything. Otherwise a detached controller would announce "no route" on its own blindness (found by the failover-without-controller scenario). A link the view says is down or one-way still leaves the graph.
@@ -172,7 +172,7 @@ Nodes cannot reliably distinguish an unplugged device from an unreachable radio 
 
 ## Packet and reliability requirements
 
-Proposed message families: HELLO, neighbor/topology report, route update, route-install acknowledgement, sensor data, delivery acknowledgement, probe request/response, and local-failover report. A controller heartbeat travels only over the gateway interface between the laptop and C. The radio frame is a compact binary format with a fixed 14-byte little-endian header (decision made in Phase 1, chosen over JSON for the 250-byte ESP-NOW limit and ESP8266 memory); the draft layout, decoding rules and reference examples are in [PROTOCOL.md](PROTOCOL.md) and are pending Dev's review. Every message family above now has a payload definition (LOCAL_FAILOVER_REPORT is defined but not yet sent; that is Phase 4b). Forwarding, TTL, retry and duplicate rules (Phase 2) are in the same document and add no header fields.
+Proposed message families: HELLO, neighbor/topology report, route update, route-install acknowledgement, sensor data, delivery acknowledgement, probe request/response, and local-failover report. A controller heartbeat travels only over the gateway interface between the laptop and C. The radio frame is a compact binary format with a fixed 14-byte little-endian header (decision made in Phase 1, chosen over JSON for the 250-byte ESP-NOW limit and small-microcontroller memory); the draft layout, decoding rules and reference examples are in [PROTOCOL.md](PROTOCOL.md) and are pending Dev's review. Every message family above now has a payload definition (LOCAL_FAILOVER_REPORT is defined but not yet sent; that is Phase 4b). Forwarding, TTL, retry and duplicate rules (Phase 2) are in the same document and add no header fields.
 
 Protocol design must include a version, type, source/destination, restart/session identity, sequence number, hop limit, route generation where applicable, and a bounded payload. Do not assume a sequence number stays unique after a node restarts.
 
@@ -192,7 +192,7 @@ Protocol design must include a version, type, source/destination, restart/sessio
 | Delivered readings | Unique readings accepted at C, identified by source, session, and sequence |
 | Packet loss | Generated readings not received within a stated evaluation window; distinguish pending readings, retries, and duplicates |
 | RTT | Time from a probe/send to its response on the same device's clock; label per-link versus end-to-end |
-| RSSI | Received signal strength for the actual peer observation, only if the ESP8266 implementation can obtain it reliably |
+| RSSI | Received signal strength for the actual peer observation, only if the ESP32 implementation can obtain it reliably |
 | Failure detection | Time until loss of contact is declared; exact physical unplug time needs a recorded reference |
 | Route computation | Time spent calculating a route, separate from distributing it. Simulation: wall-clock CPU time of the Dijkstra call on the laptop. Not simulated time, so it is reported separately from every other row |
 | Service recovery | Time from a documented failure reference to the first confirmed restored delivery |
@@ -207,7 +207,7 @@ The laptop can timestamp observations consistently, but those include reporting 
 
 The intended dashboard shows node reachability, permitted and observed links, calculated and confirmed routes, sensor values, packet counts, RTT, available RSSI, history charts, and a failure/recovery timeline. Planned failure controls must label software-injected events separately from real disconnections. Recovery events state whether they came from local failover or a controller reroute, and replayed readings are labeled as delayed. Show telemetry freshness so stale state does not look live.
 
-A deterministic simulator exists for four virtual nodes (a virtual clock, seeded links, and nodes that exchange encoded protocol frames), with a gateway interface and a controller that reuse the same protocol module. Since Phase 5a the simulation also runs live inside the backend and is served to the dashboard. Simulation cannot validate ESP8266 radio performance, physical RSSI, power stability, or USB drivers. The approved transition to hardware follows the working simulated demo in Phase 5, before dashboard polish and adaptive routing.
+A deterministic simulator exists for four virtual nodes (a virtual clock, seeded links, and nodes that exchange encoded protocol frames), with a gateway interface and a controller that reuse the same protocol module. Since Phase 5a the simulation also runs live inside the backend and is served to the dashboard. Simulation cannot validate ESP32 radio performance, physical RSSI, power stability, or USB drivers. The approved transition to hardware follows the working simulated demo in Phase 5, before dashboard polish and adaptive routing.
 
 Decisions recorded in Phase 5a (simulation; pending Dev's review where they touch the protocol or the API):
 
@@ -243,7 +243,7 @@ Avoid creating package files, selecting versions, or claiming run commands until
 ## Primary references
 
 - [Espressif ESP-NOW user guide](https://www.espressif.com/sites/default/files/documentation/esp-now_user_guide_en.pdf)
-- [ESP8266 Non-OS SDK API reference](https://www.espressif.com/sites/default/files/documentation/2c-esp8266_non_os_sdk_api_reference_en.pdf)
+- [ESP-IDF ESP-NOW API reference](https://docs.espressif.com/projects/esp-idf/en/v4.4.8/esp32/api-reference/network/esp_now.html)
 - [PlatformIO installation documentation](https://docs.platformio.org/en/latest/core/installation/)
 
 These references support tool and transport investigation, not claims that this project's proposed implementation has been validated.

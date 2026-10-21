@@ -1,7 +1,7 @@
 # Four-board lab package
 
-This package prepares the first real-board session for the four ESP8266
-NodeMCU boards. It is an assembly and measurement guide, not evidence that
+This package prepares the first real-board session for the four ESP32-S
+NodeMCU-style boards (PlatformIO board `esp32dev`). It is an assembly and measurement guide, not evidence that
 the radio network already works. Record the actual observations in the result
 sheet; do not substitute the example logs below for measurements.
 
@@ -14,9 +14,9 @@ routes, local backup failover, and C's replay boundary. An ESP-NOW send
 callback is only evidence about the next hop. A matching DELIVERY_ACK at A is
 the delivery evidence.
 
-Bring four NodeMCU boards labelled **A**, **B**, **C** and **D**, five
-known data-capable USB cables (four for flashing, one spare), three suitable
-USB power sources or a powered hub, and a laptop with the repository,
+Bring four ESP32-S boards labelled **A**, **B**, **C** and **D**, five
+known data-capable USB cables (four for flashing, one spare), one 5 V USB wall
+adapter for D, and a Windows laptop with the repository,
 PlatformIO and the backend dependencies already installed. Do not use an
 unlabelled charging-only cable for an upload or serial monitor.
 
@@ -31,15 +31,20 @@ unlabelled charging-only cable for an upload or serial monitor.
                                                       \         /
                                                        A (node 1)
 
-  C receives USB power from the laptop. A, B and D receive USB power from
-  suitable adapters or a powered hub. Permitted logical links: A--B, B--C,
-  A--D and D--C.
+  A, B and C are powered from the laptop's three USB ports; D is powered
+  from a 5 V USB wall adapter. Only C needs an active USB data connection to
+  the laptop during the network run. No wires connect the boards to each
+  other: they talk over ESP-NOW. Permitted logical links: A--B, B--C, A--D
+  and D--C.
 
 Normal data: A -> B -> C        Installed backup: A -> D -> C
 ```
 
-Only C keeps a USB **data** cable connected to the laptop during the final
-four-board run. A, B and D need power only after flashing. The diamond is a
+Only C needs an active USB **data** connection during the final four-board
+run; A and B use their laptop USB ports for power (and for flashing or a
+monitor beforehand), and D uses the wall adapter. The DHT11 sensor is not part
+of this session: it is added later on A only (`S`/`OUT` to `P4`/GPIO4, `+`/`VCC`
+to `3V3`, `-` to `GND`; no pull-up resistor; never `VIN`, `5V`, `RX` or `TX`). The diamond is a
 configured logical topology: boards may physically hear a non-neighbour, but
 the firmware must reject that traffic.
 
@@ -49,41 +54,55 @@ USB cable powers it and its RAM buffer is then lost.
 
 ## Before flashing
 
-From `firmware/`, activate the documented PlatformIO environment and run:
+From `firmware/` in Windows PowerShell, activate the documented PlatformIO
+environment and run:
 
-```sh
+```powershell
+.platformio-venv\Scripts\Activate.ps1
 pio test -e native
 pio device list
 ```
 
-Write the observed port beside each board in the result sheet. macOS ports
-usually look like `/dev/cu.usbserial-...` or `/dev/cu.SLAB_USBtoUART`; Windows
-ports look like `COM3`. They are local lab values, not source configuration.
+Write the observed port beside each board in the result sheet (Windows shows
+them as `COM` plus a number; macOS as `/dev/cu.*`). They are local lab values,
+not source configuration, and are never typed into a file in the repository.
 
 ## Role builds and uploads
 
-Use the F3c image set for the final four-board run. Each command may compile
-before uploading; replace only the placeholder port.
+Use the F3c image set for the final four-board run. First store the ports that
+`pio device list` showed for this session in PowerShell variables (do this in
+your terminal, never in a file):
+
+```powershell
+$PortA = "<A's port from pio device list>"
+$PortB = "<B's port>"
+$PortC = "<C's port>"
+$PortD = "<D's port>"
+```
 
 | Board | Role | Build and upload command |
 | --- | --- | --- |
-| A | source, node 1 | `pio run -e f3c_a --target upload --upload-port YOUR_A_PORT` |
-| B | relay, node 2 | `pio run -e f3c_b --target upload --upload-port YOUR_B_PORT` |
-| C | destination and USB gateway, node 3 | `pio run -e f3c_c --target upload --upload-port YOUR_C_PORT` |
-| D | relay/backup, node 4 | `pio run -e f3c_d --target upload --upload-port YOUR_D_PORT` |
+| A | source, node 1 | `pio run -e f3c_a --target upload --upload-port $PortA` |
+| B | relay, node 2 | `pio run -e f3c_b --target upload --upload-port $PortB` |
+| C | destination and USB gateway, node 3 | `pio run -e f3c_c --target upload --upload-port $PortC` |
+| D | relay/backup, node 4 | `pio run -e f3c_d --target upload --upload-port $PortD` |
 
 For F1, flash C first and then A:
 
-```sh
-pio run -e f1_receiver --target upload --upload-port YOUR_C_PORT
-pio run -e f1_sender --target upload --upload-port YOUR_A_PORT
+```powershell
+pio run -e f1_receiver --target upload --upload-port $PortC
+pio run -e f1_sender --target upload --upload-port $PortA
 ```
 
 Use one serial monitor at a time when discovering MACs:
 
-```sh
-pio device monitor --port YOUR_PORT --baud 115200
+```powershell
+pio device monitor --port $PortA --baud 115200
 ```
+
+If PlatformIO stays on `Connecting....` during an upload, hold that board's
+BOOT button until the upload starts (some ESP32 boards need this; not yet
+observed on ours).
 
 The F3c images are not interchangeable with the F1 pair. Reflash the four
 F3c images after the F1 bench.
@@ -98,12 +117,13 @@ into Git or this document.
 Expected boot evidence (the hexadecimal values and heap are examples only):
 
 ```text
-F3_READY role=1 mac=AA:BB:CC:DD:EE:01 free_heap=40112
+F3_READY role=1 mac=AA:BB:CC:DD:EE:01 channel=1 free_heap=250000
 F3C_READY controller-installed routes, backups and replay enabled; enter neighbor peer MACs
 ```
 
-The ESP8266 boot-ROM text at 74880 baud can precede this output; it is noise,
-not a failed test. `F3_SETUP_FAILED` means ESP-NOW setup failed: save the
+The ESP32 boot-ROM and bootloader text (also at 115200 baud) can precede this
+output; it is noise, not a failed test. All four boards are pinned to Wi-Fi
+channel 1. `F3_SETUP_FAILED` means ESP-NOW setup failed: save the
 full log and stop rather than guessing a replacement API.
 
 With the following local placeholders:
@@ -150,20 +170,15 @@ These are patterns to look for, not values promised by the project:
 To inspect C without the dashboard, run the backend serial probe from
 `backend/` (with C as the only process using its port):
 
-```sh
-uv run python -m iot_backend.serial_probe --port YOUR_C_PORT
+```powershell
+uv run python -m iot_backend.serial_probe --port $PortC
 ```
 
 For the integrated hardware run, start the backend instead:
 
-```sh
-# macOS / Git Bash
-IOT_MODE=hardware IOT_SERIAL_PORT=YOUR_C_PORT uv run python -m iot_backend
-```
-
 ```powershell
 # Windows PowerShell
-$env:IOT_MODE = "hardware"; $env:IOT_SERIAL_PORT = "YOUR_C_PORT"; uv run python -m iot_backend
+$env:IOT_MODE = "hardware"; $env:IOT_SERIAL_PORT = $PortC; uv run python -m iot_backend
 ```
 
 Run `uv run python -m iot_backend.watch --no-heartbeats` in another terminal
@@ -216,7 +231,9 @@ Copy this sheet into the lab notes. Capture complete terminal logs separately.
 
 If an upload fails, try the spare data cable and re-check the selected port. If
 the port never appears, identify its CH340/CP210x USB chip and install the
-vendor driver appropriate to the operating system. If the F1 bench fails,
+vendor driver appropriate to Windows. Opening C's port may reset an ESP32
+board through DTR/RTS (the backend clears both before opening); whether it
+does is an F2 hardware check, not yet observed. If the F1 bench fails,
 follow its runbook: confirm roles and C's copied MAC, reset both boards once,
 then preserve both failed summaries. If F3 peer setup fails, do not alter
 routes or timing constants; correct the role/MAC configuration first. If a

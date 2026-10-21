@@ -14,7 +14,7 @@ Read the relevant code and check the working tree before making changes. Treat t
 
 ## Project constraints
 
-- Target **four ESP8266 NodeMCU boards**. Do not switch to ESP32 or require extra hardware without discussing the cost and reason.
+- Target **four ESP32-S NodeMCU-style boards** (PlatformIO board `esp32dev`, Arduino-ESP32 2.x). The project moved from ESP8266 to ESP32-S on 2026-10-21 at the owner's direction; ESP8266 results in older notes are historical. Do not require extra hardware without discussing the cost and reason.
 - A is the source; B and D are relays; C is the destination and USB gateway. The laptop computes routes.
 - Prefer ₹800 hardware spend and target below ₹1,000. No complete bill of materials has been verified.
 - Support macOS and Windows. Avoid hardcoded device paths and platform-specific scripts where portable alternatives suffice.
@@ -41,7 +41,7 @@ Read the relevant code and check the working tree before making changes. Treat t
 - A radio callback reporting success is not an end-to-end application acknowledgement.
 - Handle duplicates, sequence-number reuse after restart, stale topology, unreachable destinations, and bounded retries explicitly when implementing those behaviors.
 - RTT is not one-way delay; clocks on different boards are not assumed synchronized.
-- Verify ESP8266-specific APIs. Never fabricate peer RSSI or substitute access-point RSSI.
+- Verify ESP32 ESP-NOW and Arduino-ESP32 APIs against the pinned core; ESP-NOW callbacks run in the Wi-Fi task, not in `loop()`. Never fabricate peer RSSI or substitute access-point RSSI.
 - C failure and complete network partitions are not covered by the initial healing guarantee. During controller loss, nodes may use only confirmed, controller-installed backup next hops; they must not calculate routes themselves.
 - Do not promise zero packet loss, a fixed recovery time, or a route through B regardless of policy.
 

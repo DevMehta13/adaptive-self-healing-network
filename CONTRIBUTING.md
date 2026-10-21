@@ -50,7 +50,7 @@ The intended toolchain is portable; PlatformIO documents support for both [macOS
 
 ## Verification expectations
 
-Documentation changes need consistency and link checks. Firmware changes eventually need a build for the selected ESP8266 board and relevant hardware observations. Routing/protocol changes need meaningful tests for the changed behavior, including relevant failure cases. Dashboard data should agree with controller evidence.
+Documentation changes need consistency and link checks. Firmware changes eventually need a build for the selected ESP32-S (`esp32dev`) board and relevant hardware observations. Routing/protocol changes need meaningful tests for the changed behavior, including relevant failure cases. Dashboard data should agree with controller evidence.
 
 Label results as simulated or hardware-based. Record the tested operating system, devices, and setup where relevant. If hardware or another platform is unavailable, say so and leave that validation pending.
 

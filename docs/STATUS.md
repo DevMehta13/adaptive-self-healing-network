@@ -1,10 +1,10 @@
 # Current status
 
-Last updated: 2026-10-19
+Last updated: 2026-10-21
 
 ## Project state
 
-**The backend is complete in simulation.** D0, D1 and D2 now exist and are locally verified on macOS. F0 supplies bounded C++ codecs, while F3a–F3c provide source-level forwarding, discovery, controller-installed versioned routes, controller-installed backups, local failover, and C's bounded serial outage/replay boundary. Full Phase 0 still requires both owners to start from fresh checkouts. Phases 1–5b, **9 (simulation only)**, the backend part of **10**, and laptop-side 6-prep are complete on the backend side. **What remains is the later dashboard increment and joint hardware phases (6, 7, 8).** The agreed project uses four ESP8266 NodeMCU boards. No physical radio, USB, sensor, callback, heap, or end-to-end recovery test has been performed; the laptop serial link has been exercised only against a fake C.
+**The backend is complete in simulation.** D0, D1 and D2 now exist and are locally verified on macOS. F0 supplies bounded C++ codecs, while F3a–F3c provide source-level forwarding, discovery, controller-installed versioned routes, controller-installed backups, local failover, and C's bounded serial outage/replay boundary. Full Phase 0 still requires both owners to start from fresh checkouts. Phases 1–5b, **9 (simulation only)**, the backend part of **10**, and laptop-side 6-prep are complete on the backend side. **What remains is the later dashboard increment and joint hardware phases (6, 7, 8).** The project now uses four **ESP32-S** NodeMCU-style boards (ported from ESP8266 on 2026-10-21; the port is compiled and host-tested only). No physical radio, USB, sensor, callback, heap, or end-to-end recovery test has been performed; the laptop serial link has been exercised only against a fake C.
 
 **Plan amendment, 2026-10-19:** Dev approved a software-ready-before-lab workflow. The remaining node firmware, host-side tests, role builds, visual assembly reference and lab runbook will be completed before the first hardware session. The hardware session verifies and measures the prepared work and may produce focused compatibility fixes; it is not a substitute for software development. `plan.md` now gives every firmware increment separate software-ready and hardware-validation checkpoints. The laptop simulator remains evidence for simulated behaviour only; a visual circuit diagram is not a substitute for ESP-NOW radio validation. The exact sensor still needs selection before its final wiring and firmware can be completed.
 
@@ -13,7 +13,7 @@ Last updated: 2026-10-19
 | Owner | Area |
 | --- | --- |
 | Harshal | `backend/` (protocol, simulator, controller, transports, api, storage) and backend tests |
-| Dev | `dashboard/` (React, TypeScript, Vite, Cytoscape) and `firmware/` (ESP8266) |
+| Dev | `dashboard/` (React, TypeScript, Vite, Cytoscape) and `firmware/` (ESP32-S) |
 
 The two sides meet only through written contracts. The first is [docs/DASHBOARD_API.md](DASHBOARD_API.md), currently **Draft — pending Dev's review**.
 
@@ -21,7 +21,7 @@ The two sides meet only through written contracts. The first is [docs/DASHBOARD_
 
 - 2026-10-19: **Sensor decision deferred to lab availability by the owner**:
   do not purchase or design around a named module yet. Phase 8 will use a
-  sensor confirmed available in the lab and compatible with ESP8266 3.3 V
+  sensor confirmed available in the lab and compatible with ESP32 3.3 V
   logic. Before firmware/wiring work, record its exact model, power and signal
   requirements, pinout, measurement unit and expected unplug/failure behaviour.
   Generated readings remain the labelled source mode until that work is done.
@@ -189,6 +189,12 @@ The two sides meet only through written contracts. The first is [docs/DASHBOARD_
   - Docs: [docs/HANDOFF_FOR_DEV.md](HANDOFF_FOR_DEV.md) (what the backend does, the contracts and what each requires of Dev, the consolidated review list with recommended answers, every demo, known limitations, the hardware test plan for Phases 6 to 8) and [docs/VIVA_NOTES.md](VIVA_NOTES.md); PROTOCOL.md, DASHBOARD_API.md, ARCHITECTURE.md and backend/README.md updated.
   - Found and fixed on the way: with hysteresis, the controller held an intact route when a local failover report arrived (the failed link had not yet left the graph), delaying its confirmation by about 1.5 s; the failover report now forces the decision (found by a test comparing against the Phase 4b timing).
 
+- 2026-10-21: **ESP8266 to ESP32-S firmware port** (authorized by Harshal, branch `harshal-dev`, first fast-forwarded to `origin/dev-work` `bf9b850`; software only, **no board used**):
+  - `firmware/platformio.ini`: every image now `platform = espressif32@6.9.0`, `board = esp32dev` via a shared `[esp32_common]` section; a plain `esp32dev` codec env replaces `nodemcuv2`. No port or MAC committed.
+  - `firmware/src/main.cpp`: ESP8266 `espnow.h`/`ESP8266WiFi.h`/`os_random` replaced by `WiFi.h`, `esp_now.h`, `esp_wifi.h`, `esp_random()`; peers are added with `esp_now_add_peer(esp_now_peer_info_t)`; all boards pinned to channel 1; no `set_self_role`. **Behavioural change:** ESP32 callbacks run in the Wi-Fi task concurrently with `loop()`, so the receive rings are now guarded by a spinlock, and send-callback results are queued and applied by `loop()` (previously the callback called the engine directly, which is not thread-safe on ESP32). `summary` also prints `min_free_heap`; F3 summary prints `send_result_drops`. Protocol, node engine, bridge and codecs are unchanged (no ESP8266-specific code was in them).
+  - Pre-existing defects on `dev-work` fixed on the way: (1) `main.cpp` had an unbalanced `#if/#else/#else` in the F3 banner, so `pio test -e native` (which compiles `src/`) did not build at all; (2) two native tests failed once it built: the lost-ACK test dropped only one of the two flooded ACK copies, and the F3c install test jumped 90 ms past the 30 ms neighbor timeout so A correctly saw B as one-way. Both were test bugs; the engine was right.
+  - Docs: README, `firmware/README.md`, both lab runbooks (Windows PowerShell commands, power layout, no wires between boards, DHT11 on A noted but **not implemented**), `plan.md`, `ARCHITECTURE.md`, `AGENTS.md` (hardware rule), `CONTRIBUTING.md`, CI workflow (now builds every ESP32 image). Historical entries below still say ESP8266 where they describe past results.
+
 ## Current authorization and next step
 
 Harshal authorized **Phase 0 (backend half), its follow-ups, Phases 1, 2, 3, 4a, 4b, 5a and 5b (backend side), Phase 6-prep (laptop side), Phase 9 (simulation only) and the backend parts of Phase 10**. On 2026-10-19 Dev authorized proceeding through the 12 increments in `plan.md`, one at a time, with an explanation before starting and a verified handoff after each. **D0, D1, D2 and F0 are implemented; the next increment is F1.** F1 requires two physical ESP8266 boards for its completion evidence. Hardware-dependent decisions require measurements; no backend/scenario/shared-test edits or purchases are implied.
@@ -245,7 +251,9 @@ Harshal authorized **Phase 0 (backend half), its follow-ups, Phases 1, 2, 3, 4a,
 - Phase 0 is complete only when Dev's shell connects to the backend from a fresh checkout on both operating systems.
 - Local macOS verification of the backend is recorded below (2026-10-19). This does not establish a CI run, Windows re-verification, or physical USB/radio behavior.
 
-**Next step:** Explain and implement F3a's software-ready part: the four node roles' data forwarding, TTL, permitted-neighbor filtering, bounded queues/retries and duplicate handling against a deterministic mock radio. F1–F3c will be physically validated together in the lab. Dev's explain-before-starting workflow is recorded in AGENTS.md, and `plan.md` gives each firmware increment separate software-ready and hardware-validation checkpoints. Owners' manual fresh-checkout verification remains open; contract discrepancies above remain recorded for Harshal.
+**Next step (lab, single step):** with the four ESP32-S boards on the Windows laptop, run `pio device list`, then upload and run the F1 pair (`f1_receiver` to C, `f1_sender` to A) per [firmware/F1_LAB_RUNBOOK.md](../firmware/F1_LAB_RUNBOOK.md) and record whether 100 matched ACKs arrive, the send-callback counts and the free/min free heap. Nothing else depends on a board until that passes. Software side, afterwards: DHT11 reading code on A (GPIO4) is not written and needs its own authorization.
+
+**Previous next step (superseded):** Explain and implement F3a's software-ready part: the four node roles' data forwarding, TTL, permitted-neighbor filtering, bounded queues/retries and duplicate handling against a deterministic mock radio. F1–F3c will be physically validated together in the lab. Dev's explain-before-starting workflow is recorded in AGENTS.md, and `plan.md` gives each firmware increment separate software-ready and hardware-validation checkpoints. Owners' manual fresh-checkout verification remains open; contract discrepancies above remain recorded for Harshal.
 
 **Layout note:** `plan.md` lists a top-level `tests/` folder. Backend tests live in `backend/tests/` so the backend can be tested on its own; the top-level `tests/protocol-examples/` holds the shared protocol examples that both Python and firmware check.
 
@@ -258,11 +266,11 @@ Harshal authorized **Phase 0 (backend half), its follow-ups, Phases 1, 2, 3, 4a,
 | Complete shopping cost | Need exact seller, delivery/tax, available cables/power, and whether accessories are included in the stated budget |
 | Sensor and wiring | Choose from sensors actually available in the lab; then record its exact model, 3.3 V compatibility, wiring and hardware validation |
 | Physical hardware sharing | Need to arrange access to all four boards for integration; simulation is planned for independent software work |
-| Firmware/toolchain versions | Must validate ESP8266 ESP-NOW and serial behavior on actual boards |
-| Peer RSSI | Reliable measurement method on the chosen ESP8266 framework is unverified |
+| Firmware/toolchain versions | Pinned: `espressif32@6.9.0` (Arduino-ESP32 2.x), PlatformIO Core 6.1.18. Must validate ESP32 ESP-NOW and serial behavior on actual boards |
+| Peer RSSI | Reliable measurement method on the chosen ESP32 framework is unverified (ESP-IDF offers a promiscuous-mode receive RSSI; not investigated) |
 | Wire protocol and control transport | Frame header, DATA, DELIVERY_ACK, HELLO, TOPOLOGY_REPORT, PROBE, PROBE_REPLY, ROUTE_UPDATE, ROUTE_INSTALL_ACK and LOCAL_FAILOVER_REPORT are specified (draft, pending Dev's review). No code is reserved. The laptop ↔ C messages (including the controller heartbeat, C's status and the replay markers) are defined as typed messages (Phase 5b) and, since Phase 6-prep, as serial lines in [SERIAL_PROTOCOL.md](SERIAL_PROTOCOL.md) (draft, pending Dev's review; not yet implemented in firmware) |
 | Phase 3 detection limits | Detection is simulated; the reference is the scripted stop time and delays are configured values, so hardware numbers will differ (collisions, radio timing, ESP-NOW retries). Reports are flooded without their own retry; a lost one is replaced by the next periodic report. If C itself stops the controller can only show *stale*. A node is declared lost only when every neighbor with a fresh report agrees, so a node whose only observing neighbor is itself unreachable is not declared lost until that neighbor's report expires |
-| ESP8266 RAM for discovery | Estimated about 0.7 KB per node (neighbor table, 64-entry flood cache, frame buffers); not measured. Check against free heap in Phase 6 |
+| RAM for discovery (ESP-NOW nodes) | Estimated about 0.7 KB per node (neighbor table, 64-entry flood cache, frame buffers); not measured. Check against free heap in Phase 6 |
 | Phase 2 simulator limits | In manual-route mode a failure is detected but not routed around, so a stopped relay still means lost readings (`b-stopped-no-route-change.json`, `b-loss-detected.json`); controller mode (Phase 4a) reroutes. A reading reported *lost* may have been delivered when only its ACKs failed. Late ACKs are ignored. The duplicate window (64 numbers, 8 sessions) is bounded: a very late retry is refused, and a long-forgotten session could be counted again |
 | Simulated timing | Link delay (20 ms), service time (5 ms), queue size (16), ACK timeout (1 s) and attempts (3) are configured defaults, not measurements; hardware must set them |
 | Phase 4a limits | One flow (A to C), primary next hops only. While a replacement route is being installed, readings sent toward a failed relay are lost (bounded: 3 attempts each). If both relays are dead A cannot be told "no route" (nothing leaves C), so the announcement ends `unconfirmed` and A's readings are lost after their attempts instead of being dropped `no_route`; closing that gap is node-side local logic (Phase 4b). Entries on relays no longer on the route are not removed (harmless, bounded). The controller's `initial_settle` (1 s) and `no_route_grace` (5 s) are simulation choices. Recovery timings are quantised by the 2 s reading interval and 1 s retry timer |
@@ -282,6 +290,13 @@ Harshal authorized **Phase 0 (backend half), its follow-ups, Phases 1, 2, 3, 4a,
 | Test-client warning | Starlette's test client warns that `httpx` is deprecated in favor of `httpx2`; harmless, revisit when dependencies are updated |
 
 ## Verification record
+
+- 2026-10-21, **Windows 11 Home Single Language 10.0.26300, Python 3.11.0, PlatformIO Core 6.1.18** (platform `espressif32@6.9.0`; framework-arduinoespressif32 3.20017.241212 = Arduino-ESP32 2.0.17; toolchain-xtensa-esp32 8.4.0; esptool.py 4.5.1), run from `firmware/` in PowerShell with the repo-local `.platformio-venv`. **Compilation and host tests only; no board, radio, USB serial device, callback, heap or Windows-driver test was done.**
+  - `python -m venv .platformio-venv`, activate, `python -m pip install -r requirements.txt`: OK (installed PlatformIO 6.1.18).
+  - `pio test -e native`: **before** the changes, ERROR (`src/main.cpp:537: '#else' after '#else'`, a pre-existing defect); **after** fixing it, 14 passed / 2 failed (two stale tests, see Completed); **after** correcting those tests, **16 of 16 passed** (79 radio vectors, 48 serial vectors, CRC, bounds, F1 ACK matching, F2 fake-C, F3a/F3b/F3c mock-radio tests).
+  - `pio run -e f1_sender -e f1_receiver -e f2_c`: SUCCESS (3/3). `pio run -e f3c_a -e f3c_b -e f3c_c -e f3c_d`: SUCCESS (4/4). Also built SUCCESS: `esp32dev`, `f3a_a..d`, `f3b_a..d` (16 images in total, no compiler warnings). Static RAM 8.3 % to 18.5 % of 320 KB (f3c_c, the largest, 60 696 bytes) and flash about 57 % of 1.25 MB are link-time figures, **not** run-time free heap.
+  - Not run: macOS, CI (nothing pushed to `main`; the workflow now builds all images), any upload.
+  - **Unresolved / unverified:** ESP-NOW send-callback semantics and timing on ESP32; behaviour of the spinlock-guarded queues under real load; whether opening C's port resets the board via DTR/RTS (CP210x/CH340) on Windows; whether upload needs the BOOT button; USB driver need; serial throughput; free heap and C's buffer fit; all-boards-on-channel-1 assumption; peer RSSI; the Arduino-ESP32 3.x API (the code targets the pinned 2.x; a core upgrade changes the callback signatures). `tests/serial-examples/noise-up-esp8266-boot.json` (Harshal's shared data) still describes ESP8266 boot noise at 74880 baud and was not edited; ESP32 boot text is at 115200.
 
 - 2026-10-19, **D0 GitHub Actions, commit `658dace`**: [Dashboard run 39222929185](https://github.com/DevMehta13/adaptive-self-healing-network/actions/runs/39222929185) completed successfully. Both `test (macos-latest)` and `test (windows-latest)` passed locked npm installation, TypeScript/production build, and connection tests with Node 24. This is automated runner verification, not Harshal's manual Windows/browser or hardware test. Work is pushed on `dev-work` with [draft PR #2](https://github.com/DevMehta13/adaptive-self-healing-network/pull/2) targeting `main`; it is not merged. The PR includes Harshal's existing unmerged backend history as a dependency; new work remains isolated from those backend/scenario/shared-fixture trees.
 

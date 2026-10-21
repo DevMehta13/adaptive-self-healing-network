@@ -4,11 +4,11 @@
 
 **Amendment, 2026-10-11:** Both owners approved two resilience additions: controller-computed backup next hops with local fast-failover, and fail-static forwarding with bounded buffering at C while the controller is unreachable. They are folded into Phases 4, 5, 6, 7 and 9, the interfaces, and the test scenarios below. This amendment changes the plan only; it does not authorize implementation.
 
-**Amendment, 2026-10-19 — software-ready before lab:** The owners approved completing the remaining firmware, host-side tests, node configurations, visual build reference, and lab runbook before the first hardware session. The lab session is for assembly, flashing, measurement and targeted compatibility fixes—not for designing the system. This changes the sequencing of validation, not the ESP8266 target, ESP-NOW protocol, topology, or requirement for real-board evidence. A laptop simulator may demonstrate intended logic and a circuit diagram may show physical assembly; neither proves ESP-NOW delivery, callback behaviour, radio range, USB-reset behaviour, or free heap on a NodeMCU.
+**Amendment, 2026-10-19 — software-ready before lab:** The owners approved completing the remaining firmware, host-side tests, node configurations, visual build reference, and lab runbook before the first hardware session. The lab session is for assembly, flashing, measurement and targeted compatibility fixes—not for designing the system. This changes the sequencing of validation, not the ESP-NOW protocol (the target board was later changed from ESP8266 to ESP32-S; see the 2026-10-21 note in Section 5), topology, or requirement for real-board evidence. A laptop simulator may demonstrate intended logic and a circuit diagram may show physical assembly; neither proves ESP-NOW delivery, callback behaviour, radio range, USB-reset behaviour, or free heap on an ESP32-S board.
 
 ## 1. What we will finish
 
-Build the full simulated system and the complete pre-lab firmware package first. Then use one planned hardware-validation session with four ESP8266 NodeMCU boards to assemble, flash, measure and correct any board-specific compatibility issues. Add the selected sensor and complete the presentation handoff after the core network works on hardware.
+Build the full simulated system and the complete pre-lab firmware package first. Then use one planned hardware-validation session with four ESP32-S NodeMCU-style boards to assemble, flash, measure and correct any board-specific compatibility issues. Add the selected sensor and complete the presentation handoff after the core network works on hardware.
 
 The finished project will demonstrate:
 
@@ -35,7 +35,7 @@ backend/
   storage/        Experiment history
 
 dashboard/        Browser interface
-firmware/         ESP8266 node software
+firmware/         ESP32-S node software
 scenarios/        Repeatable simulated experiments
 tests/           Automated checks and shared protocol examples
 docs/            Explanations, setup, decisions, and progress
@@ -55,7 +55,7 @@ Create folders only when their phase introduces working content. This tree is a 
 | Testing | pytest, frontend tests, and firmware protocol checks |
 | Supported computers | macOS and Windows |
 
-PlatformIO provides an ESP8266 NodeMCU target, and Cytoscape.js provides network graph visualization. See [PlatformIO documentation](https://docs.platformio.org/en/latest/boards/espressif8266/nodemcuv2.html) and [Cytoscape.js documentation](https://js.cytoscape.org/index.html).
+PlatformIO provides the ESP32 `esp32dev` target, and Cytoscape.js provides network graph visualization. See [PlatformIO documentation](https://docs.platformio.org/en/latest/boards/espressif32/esp32dev.html) and [Cytoscape.js documentation](https://js.cytoscape.org/index.html).
 
 The controller must receive information through a gateway interface in both modes. It must not inspect the simulator's private state to learn that a node failed.
 
@@ -182,7 +182,7 @@ Animations must come from packet events. Clicking “Stop B” changes the simul
 
 ### Phase 6 — Pre-lab firmware completion and two-board validation
 
-**Build:** Complete the ESP8266 node roles and C's serial bridge with host-side tests and target builds, then validate the first sender/receiver and C/laptop links on two real boards.
+**Build:** Complete the ESP32-S node roles and C's serial bridge with host-side tests and target builds, then validate the first sender/receiver and C/laptop links on two real boards.
 
 Verify programming, node identity, ESP-NOW delivery, acknowledgements, and USB serial. Use one firmware codebase with per-node configuration.
 
@@ -278,7 +278,7 @@ Use automated macOS/Windows checks for software and real manual checks for USB, 
 
 ## 5. Assumptions and working rules
 
-- Four ESP8266 NodeMCU boards remain the hardware choice.
+- Four ESP32-S NodeMCU-style boards are the hardware choice (changed from ESP8266 on 2026-10-21 at the owner's direction; the sensor is a three-pin DHT11 on A's GPIO4).
 - The preferred ₹800 budget and below-₹1,000 target remain constraints; verify the complete purchase total before ordering.
 - Simulation validates protocol behavior, not radio range, RSSI, power quality, or hardware recovery time.
 - A short delivery interruption and some loss are acceptable; there is no zero-loss promise.
