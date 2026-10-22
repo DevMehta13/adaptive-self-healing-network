@@ -218,6 +218,27 @@ The two sides meet only through written contracts. The first is [docs/DASHBOARD_
   - **Delivery:** 83 readings sent, 80 acknowledged at A and 0 lost by A's telemetry at the last report, 83 delivered at C (1 duplicate counted once); the largest gap between consecutive readings at C was 3.3 s against the normal 1.5 s. Paths seen at C: A>D>C before, A>B>C after.
   - **Not done:** the exact unplug instant was not timestamped by the logger (it watched only B's port), so no failure-to-recovery time is claimed; D's return was not observed (A-D still down when the run ended); the plan's 10 repeated trials, B-removal case, controller-loss and replay test, partition, restart and soak checks. The first events endpoint call returns the oldest 200 events, so the failover was read from the snapshot's recent events.
 
+- 2026-10-22: **Ten unplug-the-active-relay trials on four ESP32-S boards, controller in hardware mode** (A and C on laptop USB, B and D on laptop USB sockets; the harness spoke each instruction; the person pulled the USB cable of whichever relay the controller currently used, waited about 25 s and replugged it; A sent a generated reading every 1.5 s with `send VALUE`; policy `immediate_rtt`). Raw per-trial data: [docs/results/2026-10-22-unplug-trials.json](results/2026-10-22-unplug-trials.json). **Hardware measurements of this setup, 10 trials, one session; not guarantees.**
+  - Times are from the controller's own event record (sim clock), measured from the moment Windows removed the relay's COM port; Windows' detach latency was not measured, so these may be slightly **understated**. Eight trials removed B and two removed D (the relay in use each time: after B returned, the controller moved back to B in later trials).
+
+    | Trial | Relay removed | Local failover at A (ms) | Controller route confirmed (ms) | First delivery on new path (ms) | Largest gap between readings at C (ms) |
+    | --- | --- | --- | --- | --- | --- |
+    | 1 | B | 287 | 537 | 943 | 1579 |
+    | 2 | D | 254 | 474 | 1208 | 2579 |
+    | 3 | B | 668 | 1247 | 1122 | 2531 |
+    | 4 | D | 349 | 599 | 1020 | 2579 |
+    | 5 | B | 369 | 509 | 1290 | 2531 |
+    | 6 | B | 962 | 1164 | 1493 | 1562 |
+    | 7 | B | 1095 | 1376 | 1266 | 1625 |
+    | 8 | B | 956 | 10127 | 11362 | 12235 |
+    | 9 | B | 274 | 587 | 1056 | 1517 |
+    | 10 | B | 692 | 1019 | 1644 | 2531 |
+
+  - Summary (ms): **local failover** min 253, median 518, mean 590, max 1094 (every trial, trigger `send_failures` = 3 consecutive ESP-NOW send-callback failures; none relied on the 3 s HELLO timeout); **controller route confirmed** median 809, max 10 127; **gap between consecutive readings at C** median 2531, max 12 235 (normal spacing 1.5 s). Without trial 8: controller confirmation median 599 / max 1375, gap median 2531 / max 2579. After every failure the readings arrived by the other relay (A>B>C or A>D>C), never directly.
+  - **Trial 8 outlier (12 s gap), explained from the event record:** the A-D and C-D links had just recovered (`one_way` to `up` within the preceding second), so A's backup was not usable when B was cut; the local failover outcome was `no_route` (no switch possible), A dropped readings, and the controller needed 9.8 s (its hold-down for returning links) to compute and install A>D>C. This is the documented worst case: a second failure soon after a link returned. It was one in ten trials; the cause is evidenced, the rate is not established.
+  - **Loss over the whole run (about 11 min, 10 failures):** A's last telemetry reported created 411, acknowledged 410, lost 1, no_route 11; C recorded 412 reading events kept in the harness. The 11 `no_route` drops are readings A refused with no route; they are most plausibly trial 8 (a 12 s gap is about 8 readings) but were **not attributed per trial**. The per-trial "lost" estimate in the harness was wrong (negative) and is not reported.
+  - **Not done:** B-first by configured cost, the same test with the DHT11, partition (both relays removed), A or C removal, controller loss with replay on the real boards, restart of A, a long soak, RSSI, and a second machine/OS. Left running before the run: stale backend processes had held C's port (found and stopped); the harness now kills its own backend and children.
+
 ## Current authorization and next step
 
 Harshal authorized **Phase 0 (backend half), its follow-ups, Phases 1, 2, 3, 4a, 4b, 5a and 5b (backend side), Phase 6-prep (laptop side), Phase 9 (simulation only) and the backend parts of Phase 10**. On 2026-10-19 Dev authorized proceeding through the 12 increments in `plan.md`, one at a time, with an explanation before starting and a verified handoff after each. **D0, D1, D2 and F0 are implemented; the next increment is F1.** F1 requires two physical ESP8266 boards for its completion evidence. Hardware-dependent decisions require measurements; no backend/scenario/shared-test edits or purchases are implied.
