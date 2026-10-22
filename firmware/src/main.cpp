@@ -764,6 +764,10 @@ void setup() {
     Serial.println("\n# F3_SETUP_FAILED");
     return;
   }
+#if defined(A_DHT11) && defined(F3A_ROLE_A)
+  g_dht.begin();
+  g_sensor_next_ms = millis() + 2000;  // the DHT11 needs ~1 s after power-up
+#endif
   const uint8_t restored_peers = f3_load_peers();
   uint8_t local_mac[6] = {};
   WiFi.macAddress(local_mac);
