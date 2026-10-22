@@ -267,6 +267,7 @@ class LaptopGateway:
                     held=message.held,
                     dropped_overflow=message.dropped_overflow,
                     dropped_readings=message.dropped_readings,
+                    evicted_readings=message.evicted_readings,
                     coalesced=message.coalesced,
                     outage_ms=message.outage_ms,
                 )
@@ -279,6 +280,7 @@ class LaptopGateway:
                     replayed=message.replayed,
                     dropped_overflow=message.dropped_overflow,
                     dropped_readings=message.dropped_readings,
+                    evicted_readings=message.evicted_readings,
                     coalesced=message.coalesced,
                 )
             )
@@ -366,6 +368,7 @@ class LaptopGateway:
                 capacity=status.capacity,
                 dropped_overflow=status.dropped_overflow,
                 dropped_readings=status.dropped_readings,
+                evicted_readings=status.evicted_readings,
                 coalesced=status.coalesced,
                 replayed=status.replayed,
                 outages=status.outages,

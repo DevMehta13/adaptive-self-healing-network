@@ -242,6 +242,7 @@
       "capacity": 50,
       "dropped_overflow": 0,
       "dropped_readings": 0,
+      "evicted_readings": 0,
       "coalesced": 0,
       "replayed": 0,
       "outages": 0
@@ -442,8 +443,9 @@
     },
     "lost_at_c": {
       "value": 0,
-      "known_by": "C's status (waiting readings it gave up) and the controller (sent, never acknowledged)",
+      "known_by": "C's status (waiting readings it gave up) and the controller (readings sent once and never acknowledged)",
       "dropped_waiting": 0,
+      "given_up_unacknowledged": 0,
       "gone_after_sending": 0,
       "possibly_readings": 0,
       "as_of_ms": 20000

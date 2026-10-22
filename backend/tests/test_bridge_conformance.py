@@ -194,3 +194,8 @@ def test_a_gone_answer_names_the_evicted_readings():
     bridge.receive(ResendDown(bridge.boot, 1))
     gone = [m for m in out if isinstance(m, GoneUp)]
     assert gone and gone[0].kinds == "RRRR" and (gone[0].first, gone[0].last) == (1, 4)
+    # C counts them itself too, so a laptop that never asks (a restarted controller never learns
+    # the numbers) is still told that four readings were handed up and then given up unacknowledged
+    assert bridge.counters.evicted_readings == 4
+    status = next(m for m in out if hasattr(m, "evicted_readings") and hasattr(m, "capacity"))
+    assert status.evicted_readings == 4

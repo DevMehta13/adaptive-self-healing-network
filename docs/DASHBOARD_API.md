@@ -204,7 +204,7 @@ A node that failed over locally is using its backup even though `route.path` sti
 
 #### `counts`
 
-**Readings lost at C.** C acknowledges a reading to A the moment it arrives, so a reading C later gives up in its buffer is still "acknowledged" at A and in A's `lost`. `lost_at_c` is how the dashboard learns of it: C's own `dropped_readings` (readings it gave up while they waited) plus readings it had sent once, never saw acknowledged and then gave up (the laptop counts these when it asks for them: `gone_after_sending`). `possibly_readings` is losses whose kind C could not name or that a C restart caused; they may include readings and are reported beside the value, never added to it. `lost_total` is A's `lost` plus `lost_at_c`. A dashboard must show `lost_at_c` as lost; showing only A's `lost` would present data loss as zero.
+**Readings lost at C.** C acknowledges a reading to A the moment it arrives, so a reading C later gives up in its buffer is still "acknowledged" at A and in A's `lost`. `lost_at_c` is how the dashboard learns of it: C's own `dropped_readings` (readings it gave up while they waited) plus readings it had sent once, never saw acknowledged and then gave up (the laptop counts these when it asks for them: `gone_after_sending`). `given_up_unacknowledged` is C's own count of readings it handed up once, never saw acknowledged and then gave up: lost unless the laptop already had them, which a controller that restarted cannot know, so it is shown beside the value and not added to it. `possibly_readings` is losses whose kind C could not name or that a C restart caused; they may include readings and are likewise reported beside the value, never added to it. `lost_total` is A's `lost` plus `lost_at_c`. A dashboard must show `lost_at_c` as lost; showing only A's `lost` would present data loss as zero.
 
 Each entry is `{ "value", "known_by", "as_of_ms", "age_ms" }` or `null` before the first telemetry message:
 
@@ -216,7 +216,8 @@ Each entry is `{ "value", "known_by", "as_of_ms", "age_ms" }` or `null` before t
   "created": { "value": 9, "known_by": "A (telemetry)", "as_of_ms": 19198, "age_ms": 802 },
   "acknowledged": { "...": "..." }, "lost": { "...": "..." }, "no_route": { "...": "..." },
   "lost_at_c": { "value": 3, "known_by": "C's status (waiting readings it gave up) and the controller (readings sent once and never acknowledged)",
-                 "dropped_waiting": 3, "gone_after_sending": 0, "possibly_readings": 0, "as_of_ms": 98000 },
+                 "dropped_waiting": 3, "given_up_unacknowledged": 2, "gone_after_sending": 0,
+                 "possibly_readings": 0, "as_of_ms": 98000 },
   "lost_total": { "value": 3, "known_by": "A (telemetry) plus C and the controller", "as_of_ms": 98000, "age_ms": 600 },
   "pending": { "value": 0, "known_by": "A (telemetry, derived)", "as_of_ms": 19198, "age_ms": 802 }
 }
@@ -238,7 +239,7 @@ The controller's knowledge of its own link to node C. It comes from the heartbea
   "c_status_as_of_ms": 12000,
   "c_reports_controller_reachable": true,
   "c_buffer": { "held": 0, "capacity": 50, "dropped_overflow": 0, "dropped_readings": 0,
-                "coalesced": 0, "replayed": 0, "outages": 0 },
+                "evicted_readings": 0, "coalesced": 0, "replayed": 0, "outages": 0 },
   "last_replay": null,
   "network_view": "stale: nothing has arrived from C since the link was lost"
 }
@@ -250,8 +251,8 @@ The controller's knowledge of its own link to node C. It comes from the heartbea
 | `since_ms` | When the state began. For `lost` it is the last time anything was heard from C, not the moment the timeout fired. |
 | `last_heard_ms` | The last time anything arrived from C. |
 | `c_status_as_of_ms` | When C's last status message arrived. `c_reports_controller_reachable` and `c_buffer` are **C's own figures as of that time**: during an outage they are old news (C cannot tell the laptop anything until the link is back), so show this time next to them. `null` before the first status. |
-| `c_buffer` | `held`: entries C was holding; `capacity`; `dropped_overflow`: held entries C gave up because the buffer was full, of any kind (cumulative); `dropped_readings`: **of those, readings** (cumulative; data lost at C); `coalesced`: held entries replaced by a newer one from the same node (cumulative); `replayed`: entries handed up in replays (cumulative); `outages`: how many times C decided the controller was unreachable. |
-| `last_replay` | The most recent replay: `state` (`replaying` or `finished`), `started_ms`, `finished_ms`, `entries` (announced at the start), `held` (of those, entries held during the outage), `replayed`, `dropped_overflow`, `dropped_readings`, `coalesced` (for that outage), `outage_ms` (C's estimate of how long the controller was away). `null` before the first. |
+| `c_buffer` | `held`: entries C was holding; `capacity`; `dropped_overflow`: held entries C gave up because the buffer was full, of any kind (cumulative); `dropped_readings`: **of those, readings** (cumulative; data lost at C); `evicted_readings`: readings C handed up once, never saw acknowledged and then gave up (cumulative; lost unless the laptop already had them); `coalesced`: held entries replaced by a newer one from the same node (cumulative); `replayed`: entries handed up in replays (cumulative); `outages`: how many times C decided the controller was unreachable. |
+| `last_replay` | The most recent replay: `state` (`replaying` or `finished`), `started_ms`, `finished_ms`, `entries` (announced at the start), `held` (of those, entries held during the outage), `replayed`, `dropped_overflow`, `dropped_readings`, `evicted_readings`, `coalesced` (for that outage), `outage_ms` (C's estimate of how long the controller was away). `null` before the first. |
 | `network_view` | Ready-made text: `live`, `waiting: ...` before C is heard, or `stale: ...` while the link is lost. |
 | `uplink` | The laptop's own view of the numbered stream from C (Phase 6-prep; see [SERIAL_PROTOCOL.md](SERIAL_PROTOCOL.md) *Reliable uplink*): `c_boot` (C's current boot, or `null`), `acknowledged_up_to`, `highest_known`, `missing_now` (numbers known to exist and not yet received), `frames` (received, each once), `duplicates_dropped`, `resend_requests`, `resend_repeats`, `lost` (`gone_at_c`, `of_which_readings`, `of_unknown_kind`, `c_restarted_at_least`), `superseded` (not a loss), `c_restarts`, `out_of_window`. Cumulative since the backend started. |
 | `serial` | Hardware mode (and the serial simulation): `port`, `state` (`open`, `closed`, `waiting` while it cannot be opened, `no_port` if none is configured), `lines` (`messages`, `logs`, `noise`, and `rejected` by reason), `c_log` (C's last 50 log and noise lines, each `{at_ms, text}`, for people to read), and in hardware mode `opens`, `closes`, `writes_dropped`, and `available_ports` (`device`, `description`, `chip`) whenever the port is not open, so the UI can say which ports exist. |
@@ -442,8 +443,8 @@ How to label recoveries: a `local_failover` event is the node's own reaction. A 
 | --- | --- |
 | `gateway_link_lost` | `since_ms` (last time anything arrived from C), `silent_for_ms`. e.g. `{"since_ms":12000,"silent_for_ms":3500}` (sent at 15500). From here the network view is stale. |
 | `gateway_link_restored` | `lost_since_ms`, `lost_for_ms`. e.g. `{"lost_since_ms":12000,"lost_for_ms":29000}` |
-| `replay_started` | `started_ms`, `entries` (what C will hand up), `held` (of those, entries stored while the controller was unreachable; any others were waiting because C's send window was full), `dropped_overflow`, `dropped_readings` (the readings among those) and `coalesced` (during this outage), `outage_ms` (C's estimate). e.g. `{"started_ms":41000,"entries":24,"held":22,"dropped_overflow":0,"dropped_readings":0,"coalesced":33,"outage_ms":29000}` |
-| `replay_finished` | `replayed` (entries actually handed up, including any that arrived at C during the replay), `dropped_overflow`, `dropped_readings`, `coalesced` (final figures for the outage). e.g. `{"replayed":25,"dropped_overflow":0,"dropped_readings":0,"coalesced":36}` (520 ms after the start) |
+| `replay_started` | `started_ms`, `entries` (what C will hand up), `held` (of those, entries stored while the controller was unreachable; any others were waiting because C's send window was full), `dropped_overflow`, `dropped_readings` (the readings among those), `evicted_readings` (readings handed up and never acknowledged, then given up) and `coalesced` (during this outage), `outage_ms` (C's estimate). e.g. `{"started_ms":41000,"entries":24,"held":22,"dropped_overflow":0,"dropped_readings":0,"evicted_readings":0,"coalesced":33,"outage_ms":29000}` |
+| `replay_finished` | `replayed` (entries actually handed up, including any that arrived at C during the replay), `dropped_overflow`, `dropped_readings`, `evicted_readings`, `coalesced` (final figures for the outage). e.g. `{"replayed":25,"dropped_overflow":0,"dropped_readings":0,"evicted_readings":0,"coalesced":36}` (520 ms after the start) |
 
 Between `replay_started` and `replay_finished` expect `reading_received` events with `replayed: true`, and topology, failover and telemetry events produced by replayed reports. Information that is older than what the controller already holds is ignored by it, so a replayed report never makes a link look fresher than it is or undoes a newer state. `dropped_overflow` readings are **lost**, not late: show the count, because those readings will never arrive.
 

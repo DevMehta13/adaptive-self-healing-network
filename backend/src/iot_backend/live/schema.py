@@ -134,6 +134,7 @@ EVENT_SCHEMAS: dict[str, dict[str, Any]] = {
         "held": Int,
         "dropped_overflow": Int,
         "dropped_readings": Int,
+        "evicted_readings": Int,
         "coalesced": Int,
         "outage_ms": Int,
     },
@@ -141,6 +142,7 @@ EVENT_SCHEMAS: dict[str, dict[str, Any]] = {
         "replayed": Int,
         "dropped_overflow": Int,
         "dropped_readings": Int,
+        "evicted_readings": Int,
         "coalesced": Int,
     },
     # --- the reliable uplink and the serial port (Phase 6-prep) ---

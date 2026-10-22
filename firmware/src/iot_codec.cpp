@@ -206,7 +206,7 @@ bool parse_json(SerialMessage *out, const char *json, size_t len,
       }
       ++cursor;
     }
-    if (cursor >= len - 1 || cursor == key_start || out->field_count >= 16) {
+    if (cursor >= len - 1 || cursor == key_start || out->field_count >= kMaxSerialFields) {
       *reason = "bad_json";
       return false;
     }
@@ -415,31 +415,31 @@ const char *validate_message(SerialMessage &m, SerialDirection direction) {
   } else if (same(*type, "st")) {
     const char *const fields[] = {"v",     "t",    "b",       "last", "low",
                                   "reach", "held", "unacked", "cap",  "win",
-                                  "drop",  "rdrop", "coal",   "rep",  "rtx",
-                                  "out"};
-    const char *error = check_fields(m, fields, 16);
+                                  "drop",  "rdrop", "rev",    "coal", "rep",
+                                  "rtx",   "out"};
+    const char *error = check_fields(m, fields, 17);
     if (error)
       return error;
-    if (!all_numbers(m, fields + 2, 14))
+    if (!all_numbers(m, fields + 2, 15))
       return "bad_value";
     const uint32_t last = *serial_number(m, "last");
     if (!nonzero(m, "b") || !flag(m, "reach") ||
         (last != UINT32_MAX && *serial_number(m, "low") > last + 1u))
       return "bad_value";
   } else if (same(*type, "rps")) {
-    const char *const fields[] = {"v",    "t",     "b",    "ent",
-                                  "held", "drop",  "rdrop", "coal", "out_ms"};
-    const char *error = check_fields(m, fields, 9);
+    const char *const fields[] = {"v",    "t",     "b",    "ent",   "held",
+                                  "drop", "rdrop", "rev",  "coal",  "out_ms"};
+    const char *error = check_fields(m, fields, 10);
     if (error)
       return error;
-    if (!all_numbers(m, fields + 2, 7) || !nonzero(m, "b"))
+    if (!all_numbers(m, fields + 2, 8) || !nonzero(m, "b"))
       return "bad_value";
   } else if (same(*type, "rpe")) {
-    const char *const fields[] = {"v", "t", "b", "rep", "drop", "rdrop", "coal"};
-    const char *error = check_fields(m, fields, 7);
+    const char *const fields[] = {"v", "t", "b", "rep", "drop", "rdrop", "rev", "coal"};
+    const char *error = check_fields(m, fields, 8);
     if (error)
       return error;
-    if (!all_numbers(m, fields + 2, 5) || !nonzero(m, "b"))
+    if (!all_numbers(m, fields + 2, 6) || !nonzero(m, "b"))
       return "bad_value";
   } else if (same(*type, "gone")) {
     const char *const fields[] = {"v", "t", "b", "from", "to", "kinds"};

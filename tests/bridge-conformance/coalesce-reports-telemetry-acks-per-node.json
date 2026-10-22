@@ -737,11 +737,11 @@
   "end_ms": 40000,
   "expect": {
     "emitted": [
-      "st last=0 low=1 held=0 unacked=0 cap=50 win=16 drop=0 rdrop=0 coal=0 rep=0 rtx=0 out=0",
-      "st last=0 low=1 held=0 unacked=0 cap=50 win=16 drop=0 rdrop=0 coal=0 rep=0 rtx=0 out=0",
-      "st last=0 low=1 held=0 unacked=0 cap=50 win=16 drop=0 rdrop=0 coal=0 rep=0 rtx=0 out=0",
-      "st last=0 low=1 held=7 unacked=0 cap=50 win=16 drop=0 rdrop=0 coal=73 rep=0 rtx=0 out=1",
-      "rps ent=7 held=7 drop=0 rdrop=0 coal=73 out_ms=22000",
+      "st last=0 low=1 held=0 unacked=0 cap=50 win=16 drop=0 rdrop=0 rev=0 coal=0 rep=0 rtx=0 out=0",
+      "st last=0 low=1 held=0 unacked=0 cap=50 win=16 drop=0 rdrop=0 rev=0 coal=0 rep=0 rtx=0 out=0",
+      "st last=0 low=1 held=0 unacked=0 cap=50 win=16 drop=0 rdrop=0 rev=0 coal=0 rep=0 rtx=0 out=0",
+      "st last=0 low=1 held=7 unacked=0 cap=50 win=16 drop=0 rdrop=0 rev=0 coal=73 rep=0 rtx=0 out=1",
+      "rps ent=7 held=7 drop=0 rdrop=0 rev=0 coal=73 out_ms=22000",
       "fr n=1 rp=1 via=4 type=TOPOLOGY_REPORT src=1 seq=8",
       "fr n=2 rp=1 via=4 type=TOPOLOGY_REPORT src=2 seq=8",
       "fr n=3 rp=1 via=2 type=TOPOLOGY_REPORT src=4 seq=8",
@@ -749,21 +749,21 @@
       "fr n=5 rp=1 via=4 type=TELEMETRY src=2 seq=57",
       "fr n=6 rp=1 via=2 type=TELEMETRY src=4 seq=57",
       "fr n=7 rp=1 via=4 type=ROUTE_INSTALL_ACK src=2 seq=8",
-      "rpe rep=7 drop=0 rdrop=0 coal=73",
-      "st last=7 low=8 held=0 unacked=0 cap=50 win=16 drop=0 rdrop=0 coal=73 rep=7 rtx=0 out=1",
-      "st last=7 low=8 held=0 unacked=0 cap=50 win=16 drop=0 rdrop=0 coal=73 rep=7 rtx=0 out=1",
-      "st last=7 low=8 held=0 unacked=0 cap=50 win=16 drop=0 rdrop=0 coal=73 rep=7 rtx=0 out=1",
-      "st last=7 low=8 held=0 unacked=0 cap=50 win=16 drop=0 rdrop=0 coal=73 rep=7 rtx=0 out=1",
-      "st last=7 low=8 held=0 unacked=0 cap=50 win=16 drop=0 rdrop=0 coal=73 rep=7 rtx=0 out=1",
-      "st last=7 low=8 held=0 unacked=0 cap=50 win=16 drop=0 rdrop=0 coal=73 rep=7 rtx=0 out=1",
-      "st last=7 low=8 held=0 unacked=0 cap=50 win=16 drop=0 rdrop=0 coal=73 rep=7 rtx=0 out=1",
-      "st last=7 low=8 held=0 unacked=0 cap=50 win=16 drop=0 rdrop=0 coal=73 rep=7 rtx=0 out=1",
-      "st last=7 low=8 held=0 unacked=0 cap=50 win=16 drop=0 rdrop=0 coal=73 rep=7 rtx=0 out=1",
-      "st last=7 low=8 held=0 unacked=0 cap=50 win=16 drop=0 rdrop=0 coal=73 rep=7 rtx=0 out=1",
-      "st last=7 low=8 held=0 unacked=0 cap=50 win=16 drop=0 rdrop=0 coal=73 rep=7 rtx=0 out=1",
-      "st last=7 low=8 held=0 unacked=0 cap=50 win=16 drop=0 rdrop=0 coal=73 rep=7 rtx=0 out=1",
-      "st last=7 low=8 held=0 unacked=0 cap=50 win=16 drop=0 rdrop=0 coal=73 rep=7 rtx=0 out=1"
+      "rpe rep=7 drop=0 rdrop=0 rev=0 coal=73",
+      "st last=7 low=8 held=0 unacked=0 cap=50 win=16 drop=0 rdrop=0 rev=0 coal=73 rep=7 rtx=0 out=1",
+      "st last=7 low=8 held=0 unacked=0 cap=50 win=16 drop=0 rdrop=0 rev=0 coal=73 rep=7 rtx=0 out=1",
+      "st last=7 low=8 held=0 unacked=0 cap=50 win=16 drop=0 rdrop=0 rev=0 coal=73 rep=7 rtx=0 out=1",
+      "st last=7 low=8 held=0 unacked=0 cap=50 win=16 drop=0 rdrop=0 rev=0 coal=73 rep=7 rtx=0 out=1",
+      "st last=7 low=8 held=0 unacked=0 cap=50 win=16 drop=0 rdrop=0 rev=0 coal=73 rep=7 rtx=0 out=1",
+      "st last=7 low=8 held=0 unacked=0 cap=50 win=16 drop=0 rdrop=0 rev=0 coal=73 rep=7 rtx=0 out=1",
+      "st last=7 low=8 held=0 unacked=0 cap=50 win=16 drop=0 rdrop=0 rev=0 coal=73 rep=7 rtx=0 out=1",
+      "st last=7 low=8 held=0 unacked=0 cap=50 win=16 drop=0 rdrop=0 rev=0 coal=73 rep=7 rtx=0 out=1",
+      "st last=7 low=8 held=0 unacked=0 cap=50 win=16 drop=0 rdrop=0 rev=0 coal=73 rep=7 rtx=0 out=1",
+      "st last=7 low=8 held=0 unacked=0 cap=50 win=16 drop=0 rdrop=0 rev=0 coal=73 rep=7 rtx=0 out=1",
+      "st last=7 low=8 held=0 unacked=0 cap=50 win=16 drop=0 rdrop=0 rev=0 coal=73 rep=7 rtx=0 out=1",
+      "st last=7 low=8 held=0 unacked=0 cap=50 win=16 drop=0 rdrop=0 rev=0 coal=73 rep=7 rtx=0 out=1",
+      "st last=7 low=8 held=0 unacked=0 cap=50 win=16 drop=0 rdrop=0 rev=0 coal=73 rep=7 rtx=0 out=1"
     ],
-    "final": "final size=0 held=0 unacked=0 drop=0 rdrop=0 coal=73 rep=7 rtx=0 out=2 gone=0 evicted_sent=0 buffered=80"
+    "final": "final size=0 held=0 unacked=0 drop=0 rdrop=0 rev=0 coal=73 rep=7 rtx=0 out=2 gone=0 evicted_sent=0 buffered=80"
   }
 }

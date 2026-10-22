@@ -93,18 +93,21 @@ def canonical(message: Any) -> str | None:
             f"st last={message.last} low={message.low} held={message.held} "
             f"unacked={message.unacked} cap={message.capacity} win={message.window} "
             f"drop={message.dropped_overflow} rdrop={message.dropped_readings} "
+            f"rev={message.evicted_readings} "
             f"coal={message.coalesced} rep={message.replayed} rtx={message.retransmitted} "
             f"out={message.outages}"
         )
     if isinstance(message, ReplayStartUp):
         return (
             f"rps ent={message.entries} held={message.held} drop={message.dropped_overflow} "
-            f"rdrop={message.dropped_readings} coal={message.coalesced} out_ms={message.outage_ms}"
+            f"rdrop={message.dropped_readings} rev={message.evicted_readings} "
+            f"coal={message.coalesced} out_ms={message.outage_ms}"
         )
     if isinstance(message, ReplayEndUp):
         return (
             f"rpe rep={message.replayed} drop={message.dropped_overflow} "
-            f"rdrop={message.dropped_readings} coal={message.coalesced}"
+            f"rdrop={message.dropped_readings} rev={message.evicted_readings} "
+            f"coal={message.coalesced}"
         )
     if isinstance(message, GoneUp):
         return f"gone from={message.first} to={message.last} kinds={message.kinds}"
@@ -117,7 +120,8 @@ def final_line(bridge: CBridge) -> str:
     c = bridge.counters
     return (
         f"final size={bridge.size} held={bridge.held} unacked={bridge.unacked} "
-        f"drop={c.dropped_overflow} rdrop={c.dropped_readings} coal={c.coalesced} "
+        f"drop={c.dropped_overflow} rdrop={c.dropped_readings} rev={c.evicted_readings} "
+        f"coal={c.coalesced} "
         f"rep={c.replayed} rtx={c.retransmitted} out={c.outages} gone={c.gone} "
         f"evicted_sent={c.evicted_sent} buffered={c.buffered}"
     )

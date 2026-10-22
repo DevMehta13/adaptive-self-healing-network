@@ -109,13 +109,15 @@ def describe(envelope: dict[str, Any]) -> str:
         body = (
             f"REPLAY START: {data['entries']} entries ({data['held']} held during the outage), "
             f"{data['dropped_overflow']} dropped by overflow "
-            f"({data['dropped_readings']} readings), {data['coalesced']} coalesced, "
+            f"({data['dropped_readings']} readings, {data['evicted_readings']} more handed up "
+            f"and never acknowledged), {data['coalesced']} coalesced, "
             f"outage {data['outage_ms'] / 1000:.1f} s"
         )
     elif kind == "replay_finished":
         body = (
             f"REPLAY END: {data['replayed']} replayed, {data['dropped_overflow']} dropped by "
-            f"overflow ({data['dropped_readings']} readings), {data['coalesced']} coalesced"
+            f"overflow ({data['dropped_readings']} readings, {data['evicted_readings']} more "
+            f"handed up and never acknowledged), {data['coalesced']} coalesced"
         )
     elif kind == "uplink_loss":
         if data["reason"] == "c_restarted" and data["count"] == 0:

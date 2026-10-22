@@ -63,7 +63,7 @@ CSerialBridge::CSerialBridge(uint32_t boot, WriteLine write, void *write_context
       transmit_context_(transmit_context), capacity_(capacity), window_(window),
       evicted_count_(0), resend_count_(0), counters_(), last_number_(0), last_ack_(0),
       last_heartbeat_ms_(0), outage_started_ms_(0), outage_dropped_(0),
-      outage_dropped_readings_(0), outage_coalesced_(0), replayed_this_time_(0),
+      outage_dropped_readings_(0), outage_evicted_readings_(0), outage_coalesced_(0), replayed_this_time_(0),
       next_stamp_(0), have_heartbeat_(false), outage_started_valid_(false),
       reachable_(false), replaying_(false) {
   if (capacity_ > kMaxCapacity) capacity_ = kMaxCapacity;
@@ -119,11 +119,12 @@ void CSerialBridge::send_status() {
   char json[300] = {};
   const int n = snprintf(
       json, sizeof(json),
-      "{\"v\":1,\"t\":\"st\",\"b\":%lu,\"last\":%lu,\"low\":%lu,\"reach\":1,\"held\":%u,\"unacked\":%u,\"cap\":%u,\"win\":%u,\"drop\":%lu,\"rdrop\":%lu,\"coal\":%lu,\"rep\":%lu,\"rtx\":%lu,\"out\":%lu}",
+      "{\"v\":1,\"t\":\"st\",\"b\":%lu,\"last\":%lu,\"low\":%lu,\"reach\":1,\"held\":%u,\"unacked\":%u,\"cap\":%u,\"win\":%u,\"drop\":%lu,\"rdrop\":%lu,\"rev\":%lu,\"coal\":%lu,\"rep\":%lu,\"rtx\":%lu,\"out\":%lu}",
       static_cast<unsigned long>(boot_), static_cast<unsigned long>(last_number_),
       static_cast<unsigned long>(low), held(), unacknowledged(), capacity_, window_,
       static_cast<unsigned long>(counters_.dropped_overflow),
       static_cast<unsigned long>(counters_.dropped_readings),
+      static_cast<unsigned long>(counters_.evicted_readings),
       static_cast<unsigned long>(counters_.coalesced),
       static_cast<unsigned long>(counters_.replayed),
       static_cast<unsigned long>(counters_.retransmitted),
@@ -138,10 +139,11 @@ void CSerialBridge::send_replay_start(uint32_t now_ms) {
   const uint32_t out_ms = outage_started_valid_ ? now_ms - outage_started_ms_ : 0;
   char json[220] = {};
   const int n = snprintf(json, sizeof(json),
-                         "{\"v\":1,\"t\":\"rps\",\"b\":%lu,\"ent\":%u,\"held\":%u,\"drop\":%lu,\"rdrop\":%lu,\"coal\":%lu,\"out_ms\":%lu}",
+                         "{\"v\":1,\"t\":\"rps\",\"b\":%lu,\"ent\":%u,\"held\":%u,\"drop\":%lu,\"rdrop\":%lu,\"rev\":%lu,\"coal\":%lu,\"out_ms\":%lu}",
                          static_cast<unsigned long>(boot_), held(), in_outage,
                          static_cast<unsigned long>(outage_dropped_),
                          static_cast<unsigned long>(outage_dropped_readings_),
+                         static_cast<unsigned long>(outage_evicted_readings_),
                          static_cast<unsigned long>(outage_coalesced_),
                          static_cast<unsigned long>(out_ms));
   if (n > 0 && static_cast<size_t>(n) < sizeof(json)) write_json(json, n);
@@ -150,11 +152,12 @@ void CSerialBridge::send_replay_start(uint32_t now_ms) {
 void CSerialBridge::send_replay_end() {
   char json[180] = {};
   const int n = snprintf(json, sizeof(json),
-                         "{\"v\":1,\"t\":\"rpe\",\"b\":%lu,\"rep\":%lu,\"drop\":%lu,\"rdrop\":%lu,\"coal\":%lu}",
+                         "{\"v\":1,\"t\":\"rpe\",\"b\":%lu,\"rep\":%lu,\"drop\":%lu,\"rdrop\":%lu,\"rev\":%lu,\"coal\":%lu}",
                          static_cast<unsigned long>(boot_),
                          static_cast<unsigned long>(replayed_this_time_),
                          static_cast<unsigned long>(outage_dropped_),
                          static_cast<unsigned long>(outage_dropped_readings_),
+                         static_cast<unsigned long>(outage_evicted_readings_),
                          static_cast<unsigned long>(outage_coalesced_));
   if (n > 0 && static_cast<size_t>(n) < sizeof(json)) write_json(json, n);
 }
@@ -291,6 +294,13 @@ bool CSerialBridge::store(Entry &incoming) {
       count_dropped(*victim);
     } else {
       ++counters_.evicted_sent;
+      if (victim->kind == kReading) {
+        // Handed up once and never acknowledged, now gone from C.  The laptop may have it
+        // (then it is not lost) or may not (a controller that died or restarted never learns
+        // these numbers).  C cannot tell, so it counts them.
+        ++counters_.evicted_readings;
+        ++outage_evicted_readings_;
+      }
       remember_evicted(victim->number, victim->kind == kReading ? 'R' : 'M');
     }
   }
@@ -517,6 +527,7 @@ void CSerialBridge::tick(uint32_t now_ms) {
     outage_started_valid_ = true;
     outage_dropped_ = 0;
     outage_dropped_readings_ = 0;
+    outage_evicted_readings_ = 0;
     outage_coalesced_ = 0;
   }
   pump(now_ms);

@@ -9,6 +9,8 @@ namespace iot {
 static const size_t kMaxRadioFrame = 250;
 static const size_t kRadioHeaderSize = 14;
 static const size_t kMaxSerialJson = 634;
+// Most fields one serial line may carry (the longest, C's status `st`, has 17).
+static const size_t kMaxSerialFields = 24;
 
 enum class DecodeError : uint8_t {
   kNone,
@@ -54,10 +56,10 @@ struct SerialMessage {
   const char *reason;
   TextView type;
   TextView json;
-  uint32_t numbers[16];
-  TextView strings[16];
-  TextView keys[16];
-  uint8_t value_kinds[16]; // 1 = unsigned integer, 2 = string, 3 = other JSON
+  uint32_t numbers[kMaxSerialFields];
+  TextView strings[kMaxSerialFields];
+  TextView keys[kMaxSerialFields];
+  uint8_t value_kinds[kMaxSerialFields]; // 1 = unsigned integer, 2 = string, 3 = other JSON
                            // value.
   size_t field_count;
 };

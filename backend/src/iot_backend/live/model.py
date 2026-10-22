@@ -334,6 +334,7 @@ class DashboardModel:
         gateway = self._laptop_gateway()
         uplink = gateway.describe()["lost"] if gateway is not None else None
         dropped_waiting = 0 if status is None else status.dropped_readings
+        given_up = 0 if status is None else status.evicted_readings
         gone_readings = 0 if uplink is None else uplink["of_which_readings"]
         possible = (
             0 if uplink is None else uplink["of_unknown_kind"] + uplink["c_restarted_at_least"]
@@ -345,6 +346,9 @@ class DashboardModel:
                 "(readings sent once and never acknowledged)"
             ),
             "dropped_waiting": dropped_waiting,
+            # readings C handed up once, never saw acknowledged, then gave up: lost unless the
+            # laptop already had them (a controller that died or restarted never learns them)
+            "given_up_unacknowledged": given_up,
             "gone_after_sending": gone_readings,
             "possibly_readings": possible,
             "as_of_ms": None if status is None else status.received_ms,

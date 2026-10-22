@@ -63,19 +63,21 @@ void collect_line(void *context, const char *line, size_t len) {
     if (num(m, "n") > out->max_n) out->max_n = num(m, "n");
   } else if (iot::text_equals(m.type, "st")) {
     snprintf(text, sizeof(text),
-             "st last=%lu low=%lu held=%lu unacked=%lu cap=%lu win=%lu drop=%lu rdrop=%lu coal=%lu rep=%lu rtx=%lu out=%lu",
+             "st last=%lu low=%lu held=%lu unacked=%lu cap=%lu win=%lu drop=%lu rdrop=%lu rev=%lu coal=%lu rep=%lu rtx=%lu out=%lu",
              (unsigned long)num(m, "last"), (unsigned long)num(m, "low"), (unsigned long)num(m, "held"),
              (unsigned long)num(m, "unacked"), (unsigned long)num(m, "cap"), (unsigned long)num(m, "win"),
-             (unsigned long)num(m, "drop"), (unsigned long)num(m, "rdrop"), (unsigned long)num(m, "coal"),
-             (unsigned long)num(m, "rep"), (unsigned long)num(m, "rtx"), (unsigned long)num(m, "out"));
+             (unsigned long)num(m, "drop"), (unsigned long)num(m, "rdrop"), (unsigned long)num(m, "rev"),
+             (unsigned long)num(m, "coal"), (unsigned long)num(m, "rep"), (unsigned long)num(m, "rtx"),
+             (unsigned long)num(m, "out"));
   } else if (iot::text_equals(m.type, "rps")) {
-    snprintf(text, sizeof(text), "rps ent=%lu held=%lu drop=%lu rdrop=%lu coal=%lu out_ms=%lu",
+    snprintf(text, sizeof(text), "rps ent=%lu held=%lu drop=%lu rdrop=%lu rev=%lu coal=%lu out_ms=%lu",
              (unsigned long)num(m, "ent"), (unsigned long)num(m, "held"), (unsigned long)num(m, "drop"),
-             (unsigned long)num(m, "rdrop"), (unsigned long)num(m, "coal"), (unsigned long)num(m, "out_ms"));
+             (unsigned long)num(m, "rdrop"), (unsigned long)num(m, "rev"), (unsigned long)num(m, "coal"),
+             (unsigned long)num(m, "out_ms"));
   } else if (iot::text_equals(m.type, "rpe")) {
-    snprintf(text, sizeof(text), "rpe rep=%lu drop=%lu rdrop=%lu coal=%lu",
+    snprintf(text, sizeof(text), "rpe rep=%lu drop=%lu rdrop=%lu rev=%lu coal=%lu",
              (unsigned long)num(m, "rep"), (unsigned long)num(m, "drop"),
-             (unsigned long)num(m, "rdrop"), (unsigned long)num(m, "coal"));
+             (unsigned long)num(m, "rdrop"), (unsigned long)num(m, "rev"), (unsigned long)num(m, "coal"));
   } else if (iot::text_equals(m.type, "gone")) {
     const iot::TextView *kinds = iot::serial_string(m, "kinds");
     char kinds_text[72] = {};
@@ -140,9 +142,10 @@ void run_bridge_case(const BridgeCase &c) {
   const cbridge::Counters &k = bridge.counters();
   char final_text[200] = {};
   snprintf(final_text, sizeof(final_text),
-           "final size=%u held=%u unacked=%u drop=%lu rdrop=%lu coal=%lu rep=%lu rtx=%lu out=%lu gone=%lu evicted_sent=%lu buffered=%lu",
+           "final size=%u held=%u unacked=%u drop=%lu rdrop=%lu rev=%lu coal=%lu rep=%lu rtx=%lu out=%lu gone=%lu evicted_sent=%lu buffered=%lu",
            bridge.size(), bridge.held(), bridge.unacknowledged(), (unsigned long)k.dropped_overflow,
-           (unsigned long)k.dropped_readings, (unsigned long)k.coalesced, (unsigned long)k.replayed,
+           (unsigned long)k.dropped_readings, (unsigned long)k.evicted_readings,
+           (unsigned long)k.coalesced, (unsigned long)k.replayed,
            (unsigned long)k.retransmitted, (unsigned long)k.outages, (unsigned long)k.gone,
            (unsigned long)k.evicted_sent, (unsigned long)k.buffered);
   snprintf(message, sizeof(message), "%s: final counters", c.name);
@@ -273,6 +276,8 @@ void test_bridge_names_evicted_numbered_readings_in_a_gone_answer() {
   while (now < 4200) { now += 20; bridge.tick(now); }
   for (uint8_t i = 5; i <= 11; ++i) bridge.receive_radio(f, Frames::data(i, f), 2, false, now += 20);
   TEST_ASSERT_EQUAL_UINT32(4, bridge.counters().evicted_sent);
+  // C counts the readings it handed up and then gave up unacknowledged, whether or not anyone asks.
+  TEST_ASSERT_EQUAL_UINT32(4, bridge.counters().evicted_readings);
   down(bridge, "{\"v\":1,\"t\":\"hb\",\"b\":0,\"ack\":0}", now);
   down(bridge, "{\"v\":1,\"t\":\"rs\",\"b\":55,\"from\":1}", now + 20);
   bool found = false;

@@ -96,7 +96,7 @@ def test_the_longest_lines_fit_the_limits():
     big = bytes([1, MessageType.DATA]) + bytes(248)  # a 250-byte frame (ESP-NOW maximum)
     longest_up = encode(FrameUp(U32, U32, U32, True, 254, big, True))
     assert len(longest_up) <= MAX_UP_LINE
-    longest_status = encode(StatusUp(U32, U32, U32, True, *([U32] * 10)))
+    longest_status = encode(StatusUp(U32, U32, U32, True, *([U32] * 11)))
     assert len(longest_status) <= MAX_UP_LINE
     for message in (
         HeartbeatDown(U32, U32),
@@ -111,9 +111,9 @@ def test_the_longest_lines_fit_the_limits():
 def test_every_message_survives_a_round_trip():
     messages = [
         FrameUp(5, 1, 0, False, 2, bytes.fromhex("01010103457c32632d0000000704dd070000"), True),
-        StatusUp(5, 3, 2, True, 1, 2, 50, 16, 0, 0, 4, 1, 0, 0),
-        ReplayStartUp(5, 2, 2, 0, 0, 1, 900),
-        ReplayEndUp(5, 2, 0, 0, 1),
+        StatusUp(5, 3, 2, True, 1, 2, 50, 16, 0, 0, 0, 4, 1, 0, 0),
+        ReplayStartUp(5, 2, 2, 0, 0, 0, 1, 900),
+        ReplayEndUp(5, 2, 0, 0, 0, 1),
         GoneUp(5, 1, 3, "RS?"),
         HelloUp(5, 3, 50, 16, "0.1.0"),
     ]
@@ -136,7 +136,7 @@ def test_a_log_line_is_never_parsed_even_if_it_contains_a_valid_data_line():
 
 
 def test_the_splitter_gives_the_same_lines_however_the_bytes_are_chunked():
-    stream = b"".join(encode(ReplayEndUp(5, n, 0, 0, 0)) for n in range(1, 30)) + b"# a log\n"
+    stream = b"".join(encode(ReplayEndUp(5, n, 0, 0, 0, 0)) for n in range(1, 30)) + b"# a log\n"
     expected = LineSplitter(MAX_UP_LINE).feed(stream)
     rng = random.Random(3)
     for _ in range(50):

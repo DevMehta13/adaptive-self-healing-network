@@ -2,7 +2,7 @@
   "name": "invalid-up-duplicate-key",
   "description": "The same key twice.",
   "direction": "up",
-  "line": "{\"v\":1,\"v\":1,\"t\":\"rpe\",\"b\":1,\"rep\":1,\"drop\":0,\"rdrop\":0,\"coal\":0}*5E71",
+  "line": "{\"v\":1,\"v\":1,\"t\":\"rpe\",\"b\":1,\"rep\":1,\"drop\":0,\"rdrop\":0,\"rev\":0,\"coal\":0}*AF15",
   "result": "rejected",
   "reason": "duplicate_key"
 }

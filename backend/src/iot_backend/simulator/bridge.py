@@ -120,6 +120,7 @@ class BridgeCounters:
     buffered: int = 0  # entries stored while unreachable
     dropped_overflow: int = 0  # waiting entries lost because the buffer was full (any kind)
     dropped_readings: int = 0  # of those, readings: data the project exists to deliver
+    evicted_readings: int = 0  # readings handed up once, never acknowledged, then given up
     coalesced: int = 0  # waiting entries superseded by a newer one
     replayed: int = 0  # entries handed up late (after waiting)
     retransmitted: int = 0  # numbered entries sent again on request
@@ -203,6 +204,7 @@ class CBridge:
         self._outage_started: int | None = None  # None: no controller heard since boot yet
         self._outage_dropped = 0
         self._outage_dropped_readings = 0
+        self._outage_evicted_readings = 0
         self._outage_coalesced = 0
         self._replaying = False
         self._replayed_this_time = 0
@@ -322,6 +324,12 @@ class CBridge:
                 # asks for it C can say exactly what is gone (bounded: at most a window's worth
                 # of numbers are ever unacknowledged).
                 self.counters.evicted_sent += 1
+                if victim.kind == READING:
+                    # Handed up once and never acknowledged, now gone from C. The laptop may
+                    # have it (then it is not lost) or may not (a controller that died or
+                    # restarted never learns these numbers): C cannot tell, so it counts them.
+                    self.counters.evicted_readings += 1
+                    self._outage_evicted_readings += 1
                 self._evicted[victim.n] = "R" if victim.kind == READING else "M"
         self._buffer.append(entry)
 
@@ -400,6 +408,7 @@ class CBridge:
             window=self.config.window if self._watching else 0,
             dropped_overflow=self.counters.dropped_overflow,
             dropped_readings=self.counters.dropped_readings,
+            evicted_readings=self.counters.evicted_readings,
             coalesced=self.counters.coalesced,
             replayed=self.counters.replayed,
             retransmitted=self.counters.retransmitted,
@@ -434,6 +443,7 @@ class CBridge:
                     held=sum(1 for e in self._buffer if e.n is None and e.in_outage),
                     dropped_overflow=self._outage_dropped,
                     dropped_readings=self._outage_dropped_readings,
+                    evicted_readings=self._outage_evicted_readings,
                     coalesced=self._outage_coalesced,
                     outage_ms=max(0, now - started),
                 )
@@ -453,6 +463,7 @@ class CBridge:
         self._outage_started = self._engine.now_ms - self.config.controller_timeout_ms
         self._outage_dropped = 0
         self._outage_dropped_readings = 0
+        self._outage_evicted_readings = 0
         self._outage_coalesced = 0
         self._log("no heartbeat: controller unreachable, holding what goes up")
 
@@ -515,6 +526,7 @@ class CBridge:
                     replayed=self._replayed_this_time,
                     dropped_overflow=self._outage_dropped,
                     dropped_readings=self._outage_dropped_readings,
+                    evicted_readings=self._outage_evicted_readings,
                     coalesced=self._outage_coalesced,
                 )
             )

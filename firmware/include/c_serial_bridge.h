@@ -30,6 +30,7 @@ typedef bool (*Transmit)(void *context, uint8_t dst, const uint8_t *payload,
 struct Counters {
   uint32_t dropped_overflow;   // waiting entries given up because the buffer was full (any kind)
   uint32_t dropped_readings;   // of those, readings: the only kind whose loss is data loss
+  uint32_t evicted_readings;   // readings handed up once, never acknowledged, then given up
   uint32_t coalesced;          // entries superseded by a newer one, or repeated copies discarded
   uint32_t replayed;           // waiting entries handed up late
   uint32_t retransmitted;      // numbered entries sent again on request
@@ -139,6 +140,7 @@ private:
   uint32_t outage_started_ms_;
   uint32_t outage_dropped_;
   uint32_t outage_dropped_readings_;
+  uint32_t outage_evicted_readings_;
   uint32_t outage_coalesced_;
   uint32_t replayed_this_time_;
   uint32_t next_stamp_;
