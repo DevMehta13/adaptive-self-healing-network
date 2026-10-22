@@ -181,7 +181,8 @@ class GatewayStatusEvent:
     controller_reachable: bool
     held: int  # entries in the buffer waiting for (re)delivery right now
     capacity: int
-    dropped_overflow: int  # held entries lost because the buffer was full
+    dropped_overflow: int  # held entries lost because the buffer was full (any kind)
+    dropped_readings: int  # of those, readings (cumulative since C booted): data lost at C
     coalesced: int  # entries superseded by a newer one from the same origin
     replayed: int  # entries handed up in replays
     outages: int  # times C declared the controller unreachable
@@ -194,7 +195,8 @@ class ReplayStartEvent:
     received_ms: int
     entries: int  # how many entries follow (between this marker and the end marker)
     held: int  # of those, made while the controller was unreachable
-    dropped_overflow: int  # lost to overflow during this outage
+    dropped_overflow: int  # lost to overflow during this outage (any kind)
+    dropped_readings: int  # of those, readings
     coalesced: int  # superseded during this outage
     outage_ms: int  # C's own measure of how long the controller was unreachable
 
@@ -206,6 +208,7 @@ class ReplayEndEvent:
     received_ms: int
     replayed: int
     dropped_overflow: int
+    dropped_readings: int
     coalesced: int
 
 

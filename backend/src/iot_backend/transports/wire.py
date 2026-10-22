@@ -49,7 +49,8 @@ class StatusUp:
     unacked: int  # numbered entries sent but not yet acknowledged
     capacity: int
     window: int  # most numbered entries C keeps unacknowledged
-    dropped_overflow: int  # cumulative since C booted
+    dropped_overflow: int  # cumulative since C booted: waiting entries given up, any kind
+    dropped_readings: int  # of those, readings (cumulative): data lost at C
     coalesced: int
     replayed: int  # entries sent late (held first)
     retransmitted: int  # entries sent again because the laptop asked
@@ -61,7 +62,8 @@ class ReplayStartUp:
     boot: int
     entries: int  # entries waiting to be sent when the controller came back
     held: int  # of those, stored while the controller was unreachable
-    dropped_overflow: int  # this outage
+    dropped_overflow: int  # this outage, any kind
+    dropped_readings: int  # this outage, of those the readings
     coalesced: int  # this outage
     outage_ms: int  # C's own measure of how long the controller was away
 
@@ -71,6 +73,7 @@ class ReplayEndUp:
     boot: int
     replayed: int
     dropped_overflow: int
+    dropped_readings: int
     coalesced: int
 
 

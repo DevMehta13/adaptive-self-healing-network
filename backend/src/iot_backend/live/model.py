@@ -299,6 +299,16 @@ class DashboardModel:
                     "age_ms": now - source["received_ms"],
                 }
             )
+        counts["lost_at_c"] = self._lost_at_c()
+        if source is not None:
+            counts["lost_total"] = {
+                "value": source["counters"]["lost"] + counts["lost_at_c"]["value"],
+                "known_by": "A (telemetry) plus C and the controller",
+                "as_of_ms": source["received_ms"],
+                "age_ms": now - source["received_ms"],
+            }
+        else:
+            counts["lost_total"] = None
         if source is not None:
             c = source["counters"]
             counts["pending"] = {
@@ -310,6 +320,35 @@ class DashboardModel:
         else:
             counts["pending"] = None
         return counts
+
+    def _lost_at_c(self) -> dict[str, Any]:
+        """Readings that reached C (and were acknowledged to A) but never reached the controller.
+
+        A counts them as acknowledged, so only C and the laptop can say so. Two disjoint parts:
+        readings C gave up while they waited in its buffer (its own `dropped_readings`), and
+        numbered readings it had sent once, never saw acknowledged and later gave up (the laptop
+        learns of those when it asks for them: `gone`). Losses whose kind C could not name, and
+        losses from a C restart, may include readings and are reported separately, never added.
+        """
+        status = None if self._session is None else self._session.last_status
+        gateway = self._laptop_gateway()
+        uplink = gateway.describe()["lost"] if gateway is not None else None
+        dropped_waiting = 0 if status is None else status.dropped_readings
+        gone_readings = 0 if uplink is None else uplink["of_which_readings"]
+        possible = (
+            0 if uplink is None else uplink["of_unknown_kind"] + uplink["c_restarted_at_least"]
+        )
+        return {
+            "value": dropped_waiting + gone_readings,
+            "known_by": (
+                "C's status (waiting readings it gave up) and the controller "
+                "(readings sent once and never acknowledged)"
+            ),
+            "dropped_waiting": dropped_waiting,
+            "gone_after_sending": gone_readings,
+            "possibly_readings": possible,
+            "as_of_ms": None if status is None else status.received_ms,
+        }
 
     def _gateway_state(self) -> dict[str, Any]:
         """The controller's knowledge of its link to C (never the simulator's flag)."""

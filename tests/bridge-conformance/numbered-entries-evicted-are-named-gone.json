@@ -1,0 +1,226 @@
+{
+  "name": "numbered-entries-evicted-are-named-gone",
+  "description": "Capacity 6, window 4. Four readings are sent live and numbered; an outage fills the buffer and evicts the numbered ones first; after the controller returns and asks for a resend, C names what is gone (readings R) and resends what it still holds.",
+  "config": {
+    "capacity": 6,
+    "window": 4,
+    "timeout_ms": 3000,
+    "boot": 12648430
+  },
+  "steps": [
+    {
+      "t": 0,
+      "op": "hb",
+      "ack": "none"
+    },
+    {
+      "t": 1020,
+      "op": "radio",
+      "hex": "0101010364000000010000000704d1070000",
+      "via": 2,
+      "dup": 0,
+      "note": "reading 1/100/1"
+    },
+    {
+      "t": 1040,
+      "op": "radio",
+      "hex": "0101010364000000020000000704d2070000",
+      "via": 2,
+      "dup": 0,
+      "note": "reading 1/100/2"
+    },
+    {
+      "t": 1060,
+      "op": "radio",
+      "hex": "0101010364000000030000000704d3070000",
+      "via": 2,
+      "dup": 0,
+      "note": "reading 1/100/3"
+    },
+    {
+      "t": 1080,
+      "op": "radio",
+      "hex": "0101010364000000040000000704d4070000",
+      "via": 2,
+      "dup": 0,
+      "note": "reading 1/100/4"
+    },
+    {
+      "t": 1100,
+      "op": "hb",
+      "ack": "none"
+    },
+    {
+      "t": 5100,
+      "op": "radio",
+      "hex": "0101010364000000050000000704d5070000",
+      "via": 2,
+      "dup": 0,
+      "note": "reading 1/100/5"
+    },
+    {
+      "t": 5120,
+      "op": "radio",
+      "hex": "0101010364000000060000000704d6070000",
+      "via": 2,
+      "dup": 0,
+      "note": "reading 1/100/6"
+    },
+    {
+      "t": 5140,
+      "op": "radio",
+      "hex": "0101010364000000070000000704d7070000",
+      "via": 2,
+      "dup": 0,
+      "note": "reading 1/100/7"
+    },
+    {
+      "t": 5160,
+      "op": "radio",
+      "hex": "0101010364000000080000000704d8070000",
+      "via": 2,
+      "dup": 0,
+      "note": "reading 1/100/8"
+    },
+    {
+      "t": 5180,
+      "op": "radio",
+      "hex": "0101010364000000090000000704d9070000",
+      "via": 2,
+      "dup": 0,
+      "note": "reading 1/100/9"
+    },
+    {
+      "t": 5200,
+      "op": "radio",
+      "hex": "01010103640000000a0000000704da070000",
+      "via": 2,
+      "dup": 0,
+      "note": "reading 1/100/10"
+    },
+    {
+      "t": 5220,
+      "op": "radio",
+      "hex": "01010103640000000b0000000704db070000",
+      "via": 2,
+      "dup": 0,
+      "note": "reading 1/100/11"
+    },
+    {
+      "t": 5400,
+      "op": "radio",
+      "hex": "01110103f5010000010000000809010202010000006400",
+      "via": 2,
+      "dup": 0,
+      "note": "topology report 1 #1"
+    },
+    {
+      "t": 20000,
+      "op": "hb",
+      "ack": "none"
+    },
+    {
+      "t": 21000,
+      "op": "hb",
+      "ack": "none"
+    },
+    {
+      "t": 21500,
+      "op": "rs",
+      "from": 1
+    },
+    {
+      "t": 22000,
+      "op": "hb",
+      "ack": "none"
+    },
+    {
+      "t": 23000,
+      "op": "hb",
+      "ack": "all"
+    },
+    {
+      "t": 24000,
+      "op": "hb",
+      "ack": "all"
+    },
+    {
+      "t": 25000,
+      "op": "hb",
+      "ack": "all"
+    },
+    {
+      "t": 26000,
+      "op": "hb",
+      "ack": "all"
+    },
+    {
+      "t": 27000,
+      "op": "hb",
+      "ack": "all"
+    },
+    {
+      "t": 28000,
+      "op": "hb",
+      "ack": "all"
+    },
+    {
+      "t": 29000,
+      "op": "hb",
+      "ack": "all"
+    },
+    {
+      "t": 30000,
+      "op": "hb",
+      "ack": "all"
+    },
+    {
+      "t": 31000,
+      "op": "hb",
+      "ack": "all"
+    },
+    {
+      "t": 32000,
+      "op": "hb",
+      "ack": "all"
+    }
+  ],
+  "end_ms": 30000,
+  "expect": {
+    "emitted": [
+      "st last=0 low=1 held=0 unacked=0 cap=6 win=4 drop=0 rdrop=0 coal=0 rep=0 rtx=0 out=0",
+      "fr n=1 rp=0 via=2 type=DATA src=1 seq=1 dup=0",
+      "fr n=2 rp=0 via=2 type=DATA src=1 seq=2 dup=0",
+      "fr n=3 rp=0 via=2 type=DATA src=1 seq=3 dup=0",
+      "fr n=4 rp=0 via=2 type=DATA src=1 seq=4 dup=0",
+      "st last=4 low=1 held=0 unacked=4 cap=6 win=4 drop=0 rdrop=0 coal=0 rep=0 rtx=0 out=0",
+      "st last=4 low=5 held=6 unacked=0 cap=6 win=4 drop=2 rdrop=1 coal=0 rep=0 rtx=0 out=1",
+      "rps ent=6 held=6 drop=2 rdrop=1 coal=0 out_ms=18900",
+      "fr n=5 rp=1 via=2 type=DATA src=1 seq=6 dup=0",
+      "fr n=6 rp=1 via=2 type=DATA src=1 seq=7 dup=0",
+      "fr n=7 rp=1 via=2 type=DATA src=1 seq=8 dup=0",
+      "fr n=8 rp=1 via=2 type=DATA src=1 seq=9 dup=0",
+      "st last=8 low=5 held=2 unacked=4 cap=6 win=4 drop=2 rdrop=1 coal=0 rep=4 rtx=0 out=1",
+      "gone from=1 to=4 kinds=RRRR",
+      "fr n=5 rp=1 via=2 type=DATA src=1 seq=6 dup=0",
+      "fr n=6 rp=1 via=2 type=DATA src=1 seq=7 dup=0",
+      "fr n=7 rp=1 via=2 type=DATA src=1 seq=8 dup=0",
+      "fr n=8 rp=1 via=2 type=DATA src=1 seq=9 dup=0",
+      "st last=8 low=5 held=2 unacked=4 cap=6 win=4 drop=2 rdrop=1 coal=0 rep=4 rtx=4 out=1",
+      "st last=8 low=9 held=2 unacked=0 cap=6 win=4 drop=2 rdrop=1 coal=0 rep=4 rtx=4 out=1",
+      "fr n=9 rp=1 via=2 type=DATA src=1 seq=10 dup=0",
+      "fr n=10 rp=1 via=2 type=DATA src=1 seq=11 dup=0",
+      "rpe rep=6 drop=2 rdrop=1 coal=0",
+      "st last=10 low=11 held=0 unacked=0 cap=6 win=4 drop=2 rdrop=1 coal=0 rep=6 rtx=4 out=1",
+      "st last=10 low=11 held=0 unacked=0 cap=6 win=4 drop=2 rdrop=1 coal=0 rep=6 rtx=4 out=1",
+      "st last=10 low=11 held=0 unacked=0 cap=6 win=4 drop=2 rdrop=1 coal=0 rep=6 rtx=4 out=1",
+      "st last=10 low=11 held=0 unacked=0 cap=6 win=4 drop=2 rdrop=1 coal=0 rep=6 rtx=4 out=1",
+      "st last=10 low=11 held=0 unacked=0 cap=6 win=4 drop=2 rdrop=1 coal=0 rep=6 rtx=4 out=1",
+      "st last=10 low=11 held=0 unacked=0 cap=6 win=4 drop=2 rdrop=1 coal=0 rep=6 rtx=4 out=1",
+      "st last=10 low=11 held=0 unacked=0 cap=6 win=4 drop=2 rdrop=1 coal=0 rep=6 rtx=4 out=1",
+      "st last=10 low=11 held=0 unacked=0 cap=6 win=4 drop=2 rdrop=1 coal=0 rep=6 rtx=4 out=1",
+      "st last=10 low=11 held=0 unacked=0 cap=6 win=4 drop=2 rdrop=1 coal=0 rep=6 rtx=4 out=1"
+    ],
+    "final": "final size=0 held=0 unacked=0 drop=2 rdrop=1 coal=0 rep=6 rtx=4 out=1 gone=4 evicted_sent=4 buffered=8"
+  }
+}

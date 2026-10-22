@@ -2,6 +2,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 
 #include "c_serial_bridge.h"
 #include "f3_node.h"
@@ -247,13 +248,16 @@ void test_f2_fake_c_heartbeat_ack_and_resend() {
   TEST_ASSERT_TRUE(bridge.receive_radio(frame, len, 2, false, 10));
   TEST_ASSERT_EQUAL_UINT(1, bridge.held());  // C has not heard the laptop yet.
   down(bridge, "{\"v\":1,\"t\":\"hb\",\"b\":0,\"ack\":0}", 10);
-  TEST_ASSERT_EQUAL_UINT(1, count_type(serial, "fr", false));
+  bridge.tick(30);  // one buffered message per tick
+  // It waited for the laptop, so it is a replayed (late) entry, as in the simulator.
+  TEST_ASSERT_EQUAL_UINT(1, count_type(serial, "fr", true));
   TEST_ASSERT_EQUAL_UINT(1, bridge.unacknowledged());
 
-  down(bridge, "{\"v\":1,\"t\":\"rs\",\"b\":77,\"from\":1}", 20);
-  TEST_ASSERT_EQUAL_UINT(1, count_type(serial, "fr", true));
+  down(bridge, "{\"v\":1,\"t\":\"rs\",\"b\":77,\"from\":1}", 40);
+  bridge.tick(60);
+  TEST_ASSERT_EQUAL_UINT(2, count_type(serial, "fr", true));
   TEST_ASSERT_EQUAL_UINT(1, bridge.counters().retransmitted);
-  down(bridge, "{\"v\":1,\"t\":\"ack\",\"b\":77,\"ack\":1}", 21);
+  down(bridge, "{\"v\":1,\"t\":\"ack\",\"b\":77,\"ack\":1}", 61);
   TEST_ASSERT_EQUAL_UINT(0, bridge.unacknowledged());
 }
 
@@ -270,6 +274,8 @@ void test_f2_fake_c_timeout_buffers_and_replays() {
   TEST_ASSERT_EQUAL_UINT(1, bridge.held());
   down(bridge, "{\"v\":1,\"t\":\"hb\",\"b\":88,\"ack\":0}", 4010);
   TEST_ASSERT_TRUE(bridge.controller_reachable());
+  bridge.tick(4030);  // the held reading
+  bridge.tick(4050);  // nothing left: the replay is closed
   TEST_ASSERT_EQUAL_UINT(1, count_type(serial, "rps", false));
   TEST_ASSERT_EQUAL_UINT(1, count_type(serial, "rpe", false));
   TEST_ASSERT_EQUAL_UINT(1, count_type(serial, "fr", true));
@@ -277,17 +283,30 @@ void test_f2_fake_c_timeout_buffers_and_replays() {
 }
 
 void test_f2_fake_c_buffer_is_bounded() {
+  // The documented 50 entries. Distinct readings (a repeat of the same identity is coalesced).
   FakeSerial serial = {};
   cbridge::CSerialBridge bridge(99, capture_line, &serial);
   bridge.start(0);
+  const uint8_t payload[] = {0xD0, 0x07, 0x00, 0x00};
   uint8_t frame[iot::kMaxRadioFrame] = {};
-  const size_t len = reading(frame);
-  for (uint8_t i = 0; i < cbridge::kCapacity; ++i)
+  for (uint8_t i = 0; i < cbridge::kDefaultCapacity; ++i) {
+    const iot::FrameView view = {1, 0x01, 1, 3, 7, 100u + i, 8, sizeof(payload), payload};
+    size_t len = 0;
+    TEST_ASSERT_TRUE(iot::encode_frame(view, frame, sizeof(frame), &len));
     TEST_ASSERT_TRUE(bridge.receive_radio(frame, len, 2, false, i));
-  TEST_ASSERT_FALSE(bridge.receive_radio(frame, len, 2, false, 30));
-  TEST_ASSERT_EQUAL_UINT(cbridge::kCapacity, bridge.held());
+  }
+  TEST_ASSERT_EQUAL_UINT(cbridge::kDefaultCapacity, bridge.held());
+  const iot::FrameView extra = {1, 0x01, 1, 3, 7, 999, 8, sizeof(payload), payload};
+  size_t len = 0;
+  TEST_ASSERT_TRUE(iot::encode_frame(extra, frame, sizeof(frame), &len));
+  // Full of readings: the newest reading is kept and the OLDEST is given up, and counted.
+  TEST_ASSERT_TRUE(bridge.receive_radio(frame, len, 2, false, 60));
+  TEST_ASSERT_EQUAL_UINT(cbridge::kDefaultCapacity, bridge.held());
   TEST_ASSERT_EQUAL_UINT(1, bridge.counters().dropped_overflow);
+  TEST_ASSERT_EQUAL_UINT(1, bridge.counters().dropped_readings);
 }
+
+#include "bridge_tests.inc"
 
 struct RouteCommandCapture {
   uint8_t destination;
@@ -632,6 +651,13 @@ int main(int, char **) {
   RUN_TEST(test_f2_fake_c_timeout_buffers_and_replays);
   RUN_TEST(test_f2_fake_c_buffer_is_bounded);
   RUN_TEST(test_f3c_c_accepts_only_route_update_serial_commands);
+  RUN_TEST(test_bridge_conforms_to_every_shared_case);
+  RUN_TEST(test_bridge_counts_a_dropped_reading_as_a_reading_and_a_dropped_report_as_not);
+  RUN_TEST(test_bridge_evicts_management_before_readings_and_never_a_failover_report);
+  RUN_TEST(test_bridge_keeps_only_the_newest_report_and_telemetry_per_node);
+  RUN_TEST(test_bridge_status_and_replay_markers_report_readings_lost);
+  RUN_TEST(test_bridge_names_evicted_numbered_readings_in_a_gone_answer);
+  RUN_TEST(test_bridge_default_capacity_is_the_documented_50_and_fits_the_board);
   RUN_TEST(test_f3c_bridge_accepts_the_laptops_lowercase_route_update_payload);
   RUN_TEST(test_f3a_forwards_only_over_permitted_neighbors);
   RUN_TEST(test_f3a_ttl_stops_a_misconfigured_route_loop);

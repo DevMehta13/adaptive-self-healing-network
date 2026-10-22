@@ -42,7 +42,7 @@ def frame(n, boot=BOOT, seq=None, age=0):
 
 
 def status(last, low=None, boot=BOOT):
-    return StatusUp(boot, last, low or last + 1, True, 0, 0, 50, 16, 0, 0, 0, 0, 0)
+    return StatusUp(boot, last, low or last + 1, True, 0, 0, 50, 16, 0, 0, 0, 0, 0, 0)
 
 
 def readings(events):

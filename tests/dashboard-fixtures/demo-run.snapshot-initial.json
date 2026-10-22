@@ -125,6 +125,15 @@
     "acknowledged": null,
     "lost": null,
     "no_route": null,
+    "lost_at_c": {
+      "value": 0,
+      "known_by": "C's status (waiting readings it gave up) and the controller (sent, never acknowledged)",
+      "dropped_waiting": 0,
+      "gone_after_sending": 0,
+      "possibly_readings": 0,
+      "as_of_ms": null
+    },
+    "lost_total": null,
     "pending": null
   },
   "presenter": {

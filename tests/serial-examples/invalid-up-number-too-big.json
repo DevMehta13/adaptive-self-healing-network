@@ -2,7 +2,7 @@
   "name": "invalid-up-number-too-big",
   "description": "Above 2^32 - 1.",
   "direction": "up",
-  "line": "{\"v\":1,\"t\":\"rpe\",\"b\":1,\"rep\":4294967296,\"drop\":0,\"coal\":0}*9537",
+  "line": "{\"v\":1,\"t\":\"rpe\",\"b\":1,\"rep\":4294967296,\"drop\":0,\"rdrop\":0,\"coal\":0}*26E6",
   "result": "rejected",
   "reason": "bad_value"
 }

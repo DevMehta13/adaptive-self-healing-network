@@ -2,7 +2,7 @@
   "name": "valid-up-replay-start",
   "description": "C starts replaying 22 entries after a 29 s outage.",
   "direction": "up",
-  "line": "{\"v\":1,\"t\":\"rps\",\"b\":2766734100,\"ent\":22,\"held\":22,\"drop\":0,\"coal\":33,\"out_ms\":29000}*8BE0",
+  "line": "{\"v\":1,\"t\":\"rps\",\"b\":2766734100,\"ent\":22,\"held\":22,\"drop\":0,\"rdrop\":0,\"coal\":33,\"out_ms\":29000}*5947",
   "result": "message",
   "fields": {
     "v": 1,
@@ -11,6 +11,7 @@
     "ent": 22,
     "held": 22,
     "drop": 0,
+    "rdrop": 0,
     "coal": 33,
     "out_ms": 29000
   }

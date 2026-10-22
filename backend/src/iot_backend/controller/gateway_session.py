@@ -92,6 +92,7 @@ class GatewaySession:
                 "held": status.held,
                 "capacity": status.capacity,
                 "dropped_overflow": status.dropped_overflow,
+                "dropped_readings": status.dropped_readings,
                 "coalesced": status.coalesced,
                 "replayed": status.replayed,
                 "outages": status.outages,
@@ -146,6 +147,7 @@ class GatewaySession:
                 "entries": event.entries,
                 "held": event.held,
                 "dropped_overflow": event.dropped_overflow,
+                "dropped_readings": event.dropped_readings,
                 "coalesced": event.coalesced,
                 "outage_ms": event.outage_ms,
             }
@@ -161,11 +163,13 @@ class GatewaySession:
                     "finished_ms": now,
                     "replayed": event.replayed,
                     "dropped_overflow": event.dropped_overflow,
+                    "dropped_readings": event.dropped_readings,
                     "coalesced": event.coalesced,
                 }
             self._emit(
                 "replay_finished",
                 replayed=event.replayed,
                 dropped_overflow=event.dropped_overflow,
+                dropped_readings=event.dropped_readings,
                 coalesced=event.coalesced,
             )

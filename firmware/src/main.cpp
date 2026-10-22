@@ -19,6 +19,13 @@
 //     all boards are pinned to the same Wi-Fi channel.
 // Nothing here has been run on a board; see docs/STATUS.md.
 
+// How many entries C's bridge may hold while the controller is away.  The documented default
+// is 50; the ESP32 has the memory for more (each slot is about 290 bytes of static RAM, so 100
+// slots are about 29 KB).  Override with -DC_BUFFER_CAPACITY=N (at most cbridge::kMaxCapacity).
+#ifndef C_BUFFER_CAPACITY
+#define C_BUFFER_CAPACITY 100
+#endif
+
 #if defined(F1_ROLE_SENDER) || defined(F1_ROLE_RECEIVER) || defined(F2_ROLE_C) || \
     defined(F3A_ROLE_A) || defined(F3A_ROLE_B) || defined(F3A_ROLE_C) || defined(F3A_ROLE_D)
 namespace {
@@ -670,7 +677,8 @@ void setup() {
   Serial.begin(115200);
   delay(100);
 #if defined(F2_ROLE_C)
-  static cbridge::CSerialBridge bridge(random_nonzero(), f2_write, nullptr);
+  static cbridge::CSerialBridge bridge(random_nonzero(), f2_write, nullptr, nullptr, nullptr,
+                                       C_BUFFER_CAPACITY);
   g_f2_bridge = &bridge;
   bridge.start(millis());
   Serial.println("# F2 C serial bridge; radio ingress is connected in F3");
@@ -692,7 +700,7 @@ void setup() {
   g_f3_engine = &engine;
 #if defined(F3C_GATEWAY)
   static cbridge::CSerialBridge bridge(random_nonzero(), f3_write, nullptr,
-                                       f3_transmit_route, nullptr);
+                                       f3_transmit_route, nullptr, C_BUFFER_CAPACITY);
   g_f3_bridge = &bridge;
   bridge.start(millis());
 #endif

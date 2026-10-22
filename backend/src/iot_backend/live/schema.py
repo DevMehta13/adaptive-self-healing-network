@@ -133,10 +133,16 @@ EVENT_SCHEMAS: dict[str, dict[str, Any]] = {
         "entries": Int,
         "held": Int,
         "dropped_overflow": Int,
+        "dropped_readings": Int,
         "coalesced": Int,
         "outage_ms": Int,
     },
-    "replay_finished": {"replayed": Int, "dropped_overflow": Int, "coalesced": Int},
+    "replay_finished": {
+        "replayed": Int,
+        "dropped_overflow": Int,
+        "dropped_readings": Int,
+        "coalesced": Int,
+    },
     # --- the reliable uplink and the serial port (Phase 6-prep) ---
     "uplink_loss": {
         "reason": Str,

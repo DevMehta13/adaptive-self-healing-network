@@ -1,0 +1,192 @@
+{
+  "name": "management-newcomer-dropped-when-full-of-readings",
+  "description": "Capacity 6 full of readings: a topology report and telemetry arrive and are themselves dropped (counted in `drop`, not in `rdrop`). No reading is lost.",
+  "config": {
+    "capacity": 6,
+    "window": 4,
+    "timeout_ms": 3000,
+    "boot": 12648430
+  },
+  "steps": [
+    {
+      "t": 0,
+      "op": "hb",
+      "ack": "all"
+    },
+    {
+      "t": 1000,
+      "op": "hb",
+      "ack": "all"
+    },
+    {
+      "t": 2000,
+      "op": "hb",
+      "ack": "all"
+    },
+    {
+      "t": 5220,
+      "op": "radio",
+      "hex": "0101010364000000010000000704d1070000",
+      "via": 2,
+      "dup": 0,
+      "note": "reading 1/100/1"
+    },
+    {
+      "t": 5240,
+      "op": "radio",
+      "hex": "0101010364000000020000000704d2070000",
+      "via": 2,
+      "dup": 0,
+      "note": "reading 1/100/2"
+    },
+    {
+      "t": 5260,
+      "op": "radio",
+      "hex": "0101010364000000030000000704d3070000",
+      "via": 2,
+      "dup": 0,
+      "note": "reading 1/100/3"
+    },
+    {
+      "t": 5280,
+      "op": "radio",
+      "hex": "0101010364000000040000000704d4070000",
+      "via": 2,
+      "dup": 0,
+      "note": "reading 1/100/4"
+    },
+    {
+      "t": 5300,
+      "op": "radio",
+      "hex": "0101010364000000050000000704d5070000",
+      "via": 2,
+      "dup": 0,
+      "note": "reading 1/100/5"
+    },
+    {
+      "t": 5320,
+      "op": "radio",
+      "hex": "0101010364000000060000000704d6070000",
+      "via": 2,
+      "dup": 0,
+      "note": "reading 1/100/6"
+    },
+    {
+      "t": 5400,
+      "op": "radio",
+      "hex": "01110103f5010000010000000809010202010000006400",
+      "via": 2,
+      "dup": 0,
+      "note": "topology report 1 #1"
+    },
+    {
+      "t": 5420,
+      "op": "radio",
+      "hex": "01170103f50100000100000008200000000000000000000000000000000000000000000000000000000000000000",
+      "via": 2,
+      "dup": 0,
+      "note": "telemetry 1 #1"
+    },
+    {
+      "t": 12000,
+      "op": "hb",
+      "ack": "all"
+    },
+    {
+      "t": 13000,
+      "op": "hb",
+      "ack": "all"
+    },
+    {
+      "t": 14000,
+      "op": "hb",
+      "ack": "all"
+    },
+    {
+      "t": 15000,
+      "op": "hb",
+      "ack": "all"
+    },
+    {
+      "t": 16000,
+      "op": "hb",
+      "ack": "all"
+    },
+    {
+      "t": 17000,
+      "op": "hb",
+      "ack": "all"
+    },
+    {
+      "t": 18000,
+      "op": "hb",
+      "ack": "all"
+    },
+    {
+      "t": 19000,
+      "op": "hb",
+      "ack": "all"
+    },
+    {
+      "t": 20000,
+      "op": "hb",
+      "ack": "all"
+    },
+    {
+      "t": 21000,
+      "op": "hb",
+      "ack": "all"
+    },
+    {
+      "t": 22000,
+      "op": "hb",
+      "ack": "all"
+    },
+    {
+      "t": 23000,
+      "op": "hb",
+      "ack": "all"
+    },
+    {
+      "t": 24000,
+      "op": "hb",
+      "ack": "all"
+    },
+    {
+      "t": 25000,
+      "op": "hb",
+      "ack": "all"
+    }
+  ],
+  "end_ms": 30000,
+  "expect": {
+    "emitted": [
+      "st last=0 low=1 held=0 unacked=0 cap=6 win=4 drop=0 rdrop=0 coal=0 rep=0 rtx=0 out=0",
+      "st last=0 low=1 held=0 unacked=0 cap=6 win=4 drop=0 rdrop=0 coal=0 rep=0 rtx=0 out=0",
+      "st last=0 low=1 held=0 unacked=0 cap=6 win=4 drop=0 rdrop=0 coal=0 rep=0 rtx=0 out=0",
+      "st last=0 low=1 held=6 unacked=0 cap=6 win=4 drop=2 rdrop=0 coal=0 rep=0 rtx=0 out=1",
+      "rps ent=6 held=6 drop=2 rdrop=0 coal=0 out_ms=10000",
+      "fr n=1 rp=1 via=2 type=DATA src=1 seq=1 dup=0",
+      "fr n=2 rp=1 via=2 type=DATA src=1 seq=2 dup=0",
+      "fr n=3 rp=1 via=2 type=DATA src=1 seq=3 dup=0",
+      "fr n=4 rp=1 via=2 type=DATA src=1 seq=4 dup=0",
+      "st last=4 low=5 held=2 unacked=0 cap=6 win=4 drop=2 rdrop=0 coal=0 rep=4 rtx=0 out=1",
+      "fr n=5 rp=1 via=2 type=DATA src=1 seq=5 dup=0",
+      "fr n=6 rp=1 via=2 type=DATA src=1 seq=6 dup=0",
+      "rpe rep=6 drop=2 rdrop=0 coal=0",
+      "st last=6 low=7 held=0 unacked=0 cap=6 win=4 drop=2 rdrop=0 coal=0 rep=6 rtx=0 out=1",
+      "st last=6 low=7 held=0 unacked=0 cap=6 win=4 drop=2 rdrop=0 coal=0 rep=6 rtx=0 out=1",
+      "st last=6 low=7 held=0 unacked=0 cap=6 win=4 drop=2 rdrop=0 coal=0 rep=6 rtx=0 out=1",
+      "st last=6 low=7 held=0 unacked=0 cap=6 win=4 drop=2 rdrop=0 coal=0 rep=6 rtx=0 out=1",
+      "st last=6 low=7 held=0 unacked=0 cap=6 win=4 drop=2 rdrop=0 coal=0 rep=6 rtx=0 out=1",
+      "st last=6 low=7 held=0 unacked=0 cap=6 win=4 drop=2 rdrop=0 coal=0 rep=6 rtx=0 out=1",
+      "st last=6 low=7 held=0 unacked=0 cap=6 win=4 drop=2 rdrop=0 coal=0 rep=6 rtx=0 out=1",
+      "st last=6 low=7 held=0 unacked=0 cap=6 win=4 drop=2 rdrop=0 coal=0 rep=6 rtx=0 out=1",
+      "st last=6 low=7 held=0 unacked=0 cap=6 win=4 drop=2 rdrop=0 coal=0 rep=6 rtx=0 out=1",
+      "st last=6 low=7 held=0 unacked=0 cap=6 win=4 drop=2 rdrop=0 coal=0 rep=6 rtx=0 out=1",
+      "st last=6 low=7 held=0 unacked=0 cap=6 win=4 drop=2 rdrop=0 coal=0 rep=6 rtx=0 out=1",
+      "st last=6 low=7 held=0 unacked=0 cap=6 win=4 drop=2 rdrop=0 coal=0 rep=6 rtx=0 out=1"
+    ],
+    "final": "final size=0 held=0 unacked=0 drop=2 rdrop=0 coal=0 rep=6 rtx=0 out=2 gone=0 evicted_sent=0 buffered=8"
+  }
+}

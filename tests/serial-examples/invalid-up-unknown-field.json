@@ -2,7 +2,7 @@
   "name": "invalid-up-unknown-field",
   "description": "An extra key (typos must not pass silently).",
   "direction": "up",
-  "line": "{\"v\":1,\"t\":\"rpe\",\"b\":1,\"rep\":1,\"drop\":0,\"coal\":0,\"x\":1}*892D",
+  "line": "{\"v\":1,\"t\":\"rpe\",\"b\":1,\"rep\":1,\"drop\":0,\"rdrop\":0,\"coal\":0,\"x\":1}*D94A",
   "result": "rejected",
   "reason": "unknown_field"
 }

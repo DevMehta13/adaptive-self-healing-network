@@ -188,7 +188,7 @@ def outage_study(
             missing = len(truth) - len(got)
             # Counted losses: what C dropped before sending it, plus readings C had sent once
             # and later gave up, which the laptop counts when C names them as gone.
-            counted = sim.c_bridge.counters.dropped_overflow + sim.gateway.stats.lost_readings
+            counted = sim.c_bridge.counters.dropped_readings + sim.gateway.stats.lost_readings
             lost += missing
             dropped += counted
             unexplained += max(0, missing - counted)

@@ -1,0 +1,173 @@
+{
+  "name": "repeats-keep-the-first-copy",
+  "description": "A failover report repeated three times and a reading retried once: only the first copy of each is replayed (a repeat is counted as coalesced, not as lost).",
+  "config": {
+    "capacity": 12,
+    "window": 4,
+    "timeout_ms": 3000,
+    "boot": 12648430
+  },
+  "steps": [
+    {
+      "t": 0,
+      "op": "hb",
+      "ack": "all"
+    },
+    {
+      "t": 1000,
+      "op": "hb",
+      "ack": "all"
+    },
+    {
+      "t": 2000,
+      "op": "hb",
+      "ack": "all"
+    },
+    {
+      "t": 5200,
+      "op": "radio",
+      "hex": "011601036400000028000000080ce80300000100000003020402",
+      "via": 2,
+      "dup": 0,
+      "note": "failover report 1 #40"
+    },
+    {
+      "t": 5220,
+      "op": "radio",
+      "hex": "011601036400000029000000080ce80300000100000003020402",
+      "via": 4,
+      "dup": 0,
+      "note": "failover report 1 #41"
+    },
+    {
+      "t": 5240,
+      "op": "radio",
+      "hex": "01160103640000002a000000080ce80300000100000003020402",
+      "via": 2,
+      "dup": 0,
+      "note": "failover report 1 #42"
+    },
+    {
+      "t": 5300,
+      "op": "radio",
+      "hex": "0101010364000000070000000704d7070000",
+      "via": 2,
+      "dup": 0,
+      "note": "reading 1/100/7"
+    },
+    {
+      "t": 5320,
+      "op": "radio",
+      "hex": "0101010364000000070000000704d7070000",
+      "via": 4,
+      "dup": 1,
+      "note": "reading 1/100/7"
+    },
+    {
+      "t": 5340,
+      "op": "radio",
+      "hex": "0101010364000000080000000704d8070000",
+      "via": 2,
+      "dup": 0,
+      "note": "reading 1/100/8"
+    },
+    {
+      "t": 12000,
+      "op": "hb",
+      "ack": "all"
+    },
+    {
+      "t": 13000,
+      "op": "hb",
+      "ack": "all"
+    },
+    {
+      "t": 14000,
+      "op": "hb",
+      "ack": "all"
+    },
+    {
+      "t": 15000,
+      "op": "hb",
+      "ack": "all"
+    },
+    {
+      "t": 16000,
+      "op": "hb",
+      "ack": "all"
+    },
+    {
+      "t": 17000,
+      "op": "hb",
+      "ack": "all"
+    },
+    {
+      "t": 18000,
+      "op": "hb",
+      "ack": "all"
+    },
+    {
+      "t": 19000,
+      "op": "hb",
+      "ack": "all"
+    },
+    {
+      "t": 20000,
+      "op": "hb",
+      "ack": "all"
+    },
+    {
+      "t": 21000,
+      "op": "hb",
+      "ack": "all"
+    },
+    {
+      "t": 22000,
+      "op": "hb",
+      "ack": "all"
+    },
+    {
+      "t": 23000,
+      "op": "hb",
+      "ack": "all"
+    },
+    {
+      "t": 24000,
+      "op": "hb",
+      "ack": "all"
+    },
+    {
+      "t": 25000,
+      "op": "hb",
+      "ack": "all"
+    }
+  ],
+  "end_ms": 30000,
+  "expect": {
+    "emitted": [
+      "st last=0 low=1 held=0 unacked=0 cap=12 win=4 drop=0 rdrop=0 coal=0 rep=0 rtx=0 out=0",
+      "st last=0 low=1 held=0 unacked=0 cap=12 win=4 drop=0 rdrop=0 coal=0 rep=0 rtx=0 out=0",
+      "st last=0 low=1 held=0 unacked=0 cap=12 win=4 drop=0 rdrop=0 coal=0 rep=0 rtx=0 out=0",
+      "st last=0 low=1 held=3 unacked=0 cap=12 win=4 drop=0 rdrop=0 coal=3 rep=0 rtx=0 out=1",
+      "rps ent=3 held=3 drop=0 rdrop=0 coal=3 out_ms=10000",
+      "fr n=1 rp=1 via=2 type=LOCAL_FAILOVER_REPORT src=1 seq=40",
+      "fr n=2 rp=1 via=2 type=DATA src=1 seq=7 dup=0",
+      "fr n=3 rp=1 via=2 type=DATA src=1 seq=8 dup=0",
+      "rpe rep=3 drop=0 rdrop=0 coal=3",
+      "st last=3 low=4 held=0 unacked=0 cap=12 win=4 drop=0 rdrop=0 coal=3 rep=3 rtx=0 out=1",
+      "st last=3 low=4 held=0 unacked=0 cap=12 win=4 drop=0 rdrop=0 coal=3 rep=3 rtx=0 out=1",
+      "st last=3 low=4 held=0 unacked=0 cap=12 win=4 drop=0 rdrop=0 coal=3 rep=3 rtx=0 out=1",
+      "st last=3 low=4 held=0 unacked=0 cap=12 win=4 drop=0 rdrop=0 coal=3 rep=3 rtx=0 out=1",
+      "st last=3 low=4 held=0 unacked=0 cap=12 win=4 drop=0 rdrop=0 coal=3 rep=3 rtx=0 out=1",
+      "st last=3 low=4 held=0 unacked=0 cap=12 win=4 drop=0 rdrop=0 coal=3 rep=3 rtx=0 out=1",
+      "st last=3 low=4 held=0 unacked=0 cap=12 win=4 drop=0 rdrop=0 coal=3 rep=3 rtx=0 out=1",
+      "st last=3 low=4 held=0 unacked=0 cap=12 win=4 drop=0 rdrop=0 coal=3 rep=3 rtx=0 out=1",
+      "st last=3 low=4 held=0 unacked=0 cap=12 win=4 drop=0 rdrop=0 coal=3 rep=3 rtx=0 out=1",
+      "st last=3 low=4 held=0 unacked=0 cap=12 win=4 drop=0 rdrop=0 coal=3 rep=3 rtx=0 out=1",
+      "st last=3 low=4 held=0 unacked=0 cap=12 win=4 drop=0 rdrop=0 coal=3 rep=3 rtx=0 out=1",
+      "st last=3 low=4 held=0 unacked=0 cap=12 win=4 drop=0 rdrop=0 coal=3 rep=3 rtx=0 out=1",
+      "st last=3 low=4 held=0 unacked=0 cap=12 win=4 drop=0 rdrop=0 coal=3 rep=3 rtx=0 out=1"
+    ],
+    "final": "final size=0 held=0 unacked=0 drop=0 rdrop=0 coal=3 rep=3 rtx=0 out=2 gone=0 evicted_sent=0 buffered=6"
+  }
+}

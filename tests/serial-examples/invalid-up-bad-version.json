@@ -2,7 +2,7 @@
   "name": "invalid-up-bad-version",
   "description": "A version this laptop does not speak.",
   "direction": "up",
-  "line": "{\"v\":2,\"t\":\"rpe\",\"b\":1,\"rep\":1,\"drop\":0,\"coal\":0}*7900",
+  "line": "{\"v\":2,\"t\":\"rpe\",\"b\":1,\"rep\":1,\"drop\":0,\"rdrop\":0,\"coal\":0}*2B12",
   "result": "rejected",
   "reason": "bad_version"
 }

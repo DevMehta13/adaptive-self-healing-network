@@ -1103,6 +1103,7 @@
         "entries": 22,
         "held": 22,
         "dropped_overflow": 0,
+        "dropped_readings": 0,
         "coalesced": 36,
         "outage_ms": 29000
       },
@@ -1821,6 +1822,7 @@
         "sim_ms": 41520,
         "replayed": 23,
         "dropped_overflow": 0,
+        "dropped_readings": 0,
         "coalesced": 39
       },
       "event_id": 76

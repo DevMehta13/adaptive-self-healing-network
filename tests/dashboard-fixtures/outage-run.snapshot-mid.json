@@ -238,6 +238,7 @@
       "held": 0,
       "capacity": 50,
       "dropped_overflow": 0,
+      "dropped_readings": 0,
       "coalesced": 0,
       "replayed": 0,
       "outages": 0
@@ -361,6 +362,20 @@
     "no_route": {
       "value": 2,
       "known_by": "A (telemetry)",
+      "as_of_ms": 8990,
+      "age_ms": 21010
+    },
+    "lost_at_c": {
+      "value": 0,
+      "known_by": "C's status (waiting readings it gave up) and the controller (sent, never acknowledged)",
+      "dropped_waiting": 0,
+      "gone_after_sending": 0,
+      "possibly_readings": 0,
+      "as_of_ms": 12000
+    },
+    "lost_total": {
+      "value": 0,
+      "known_by": "A (telemetry) plus C and the controller",
       "as_of_ms": 8990,
       "age_ms": 21010
     },

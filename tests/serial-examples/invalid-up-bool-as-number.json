@@ -2,7 +2,7 @@
   "name": "invalid-up-bool-as-number",
   "description": "true is not a number.",
   "direction": "up",
-  "line": "{\"v\":1,\"t\":\"rpe\",\"b\":1,\"rep\":true,\"drop\":0,\"coal\":0}*7EA8",
+  "line": "{\"v\":1,\"t\":\"rpe\",\"b\":1,\"rep\":true,\"drop\":0,\"rdrop\":0,\"coal\":0}*0659",
   "result": "rejected",
   "reason": "bad_value"
 }

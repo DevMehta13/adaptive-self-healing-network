@@ -88,3 +88,31 @@ def test_the_snapshot_without_a_heartbeat_says_it_cannot_tell():
         api.post("reset", {"scenario": "normal-via-b"})  # a manual scenario: no controller
         gateway = api.snapshot()["gateway"]
         assert gateway["state"] == "unmonitored"
+
+
+def test_readings_dropped_at_c_are_shown_as_lost_even_though_a_counts_them_acknowledged():
+    """C acknowledges a reading to A the moment it arrives, so A's counters never see a loss that
+    happens later, in C's buffer. The snapshot must still say so: `lost_at_c`, taken from C's own
+    status and the laptop's uplink accounting, and `lost_total`."""
+    with make_client() as client:
+        api = Api(client)
+        assert api.post("reset", {"scenario": "buffer-overflow"}).status_code == 200
+        with client.websocket_connect("/ws") as ws:
+            ws.receive_json()
+            api.step(100_000)  # 15 s up, a 60 s outage into a 20-entry buffer, then the replay
+            messages = settle(ws)
+            finished = events_of(messages, "replay_finished")
+            assert finished, "the replay never finished"
+            lost_readings = finished[0]["data"]["dropped_readings"]
+            assert lost_readings > 0  # the buffer could not hold 60 s of readings
+            assert finished[0]["data"]["dropped_overflow"] >= lost_readings
+            for message in messages:
+                assert schema.validate_envelope(message) == [], message
+        snapshot = api.snapshot()
+        counts = snapshot["counts"]
+        # A believes every one of these was acknowledged; only C and the laptop know they are gone
+        assert counts["lost_at_c"]["value"] >= lost_readings
+        assert counts["lost_at_c"]["dropped_waiting"] >= lost_readings
+        assert counts["lost_total"]["value"] >= counts["lost_at_c"]["value"] > 0
+        assert snapshot["gateway"]["c_buffer"]["dropped_readings"] >= lost_readings
+        assert schema.validate_snapshot(snapshot) == []

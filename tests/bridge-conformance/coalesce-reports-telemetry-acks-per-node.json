@@ -1,0 +1,769 @@
+{
+  "name": "coalesce-reports-telemetry-acks-per-node",
+  "description": "A 12 s outage with flooded reports, telemetry and route acks arriving by both relays: only the newest per node and kind is replayed; every superseded copy is counted as coalesced and nothing is counted as lost.",
+  "config": {
+    "capacity": 50,
+    "window": 16,
+    "timeout_ms": 3000,
+    "boot": 12648430
+  },
+  "steps": [
+    {
+      "t": 0,
+      "op": "hb",
+      "ack": "all"
+    },
+    {
+      "t": 1000,
+      "op": "hb",
+      "ack": "all"
+    },
+    {
+      "t": 2000,
+      "op": "hb",
+      "ack": "all"
+    },
+    {
+      "t": 5200,
+      "op": "radio",
+      "hex": "01110103f5010000010000000809010202010000006400",
+      "via": 2,
+      "dup": 0,
+      "note": "topology report 1 #1"
+    },
+    {
+      "t": 5200,
+      "op": "radio",
+      "hex": "01110203f6010000010000000809010202010000006400",
+      "via": 4,
+      "dup": 0,
+      "note": "topology report 2 #1"
+    },
+    {
+      "t": 5200,
+      "op": "radio",
+      "hex": "01110403f8010000010000000809010202010000006400",
+      "via": 2,
+      "dup": 0,
+      "note": "topology report 4 #1"
+    },
+    {
+      "t": 5220,
+      "op": "radio",
+      "hex": "01110103f5010000010000000809010202010000006400",
+      "via": 4,
+      "dup": 0,
+      "note": "topology report 1 #1"
+    },
+    {
+      "t": 5220,
+      "op": "radio",
+      "hex": "01110203f6010000010000000809010202010000006400",
+      "via": 4,
+      "dup": 0,
+      "note": "topology report 2 #1"
+    },
+    {
+      "t": 5220,
+      "op": "radio",
+      "hex": "01110403f8010000010000000809010202010000006400",
+      "via": 2,
+      "dup": 0,
+      "note": "topology report 4 #1"
+    },
+    {
+      "t": 5240,
+      "op": "radio",
+      "hex": "01170103f50100003200000008200000000000000000000000000000000000000000000000000000000000000000",
+      "via": 2,
+      "dup": 0,
+      "note": "telemetry 1 #50"
+    },
+    {
+      "t": 5240,
+      "op": "radio",
+      "hex": "01170203f60100003200000008200000000000000000000000000000000000000000000000000000000000000000",
+      "via": 4,
+      "dup": 0,
+      "note": "telemetry 2 #50"
+    },
+    {
+      "t": 5240,
+      "op": "radio",
+      "hex": "01170403f80100003200000008200000000000000000000000000000000000000000000000000000000000000000",
+      "via": 2,
+      "dup": 0,
+      "note": "telemetry 4 #50"
+    },
+    {
+      "t": 5260,
+      "op": "radio",
+      "hex": "01130203f601000001000000080ae8030000010000000301",
+      "via": 4,
+      "dup": 0,
+      "note": "route ack 2 #1"
+    },
+    {
+      "t": 6700,
+      "op": "radio",
+      "hex": "01110103f5010000020000000809010202010000006400",
+      "via": 2,
+      "dup": 0,
+      "note": "topology report 1 #2"
+    },
+    {
+      "t": 6700,
+      "op": "radio",
+      "hex": "01110203f6010000020000000809010202010000006400",
+      "via": 4,
+      "dup": 0,
+      "note": "topology report 2 #2"
+    },
+    {
+      "t": 6700,
+      "op": "radio",
+      "hex": "01110403f8010000020000000809010202010000006400",
+      "via": 2,
+      "dup": 0,
+      "note": "topology report 4 #2"
+    },
+    {
+      "t": 6720,
+      "op": "radio",
+      "hex": "01110103f5010000020000000809010202010000006400",
+      "via": 4,
+      "dup": 0,
+      "note": "topology report 1 #2"
+    },
+    {
+      "t": 6720,
+      "op": "radio",
+      "hex": "01110203f6010000020000000809010202010000006400",
+      "via": 4,
+      "dup": 0,
+      "note": "topology report 2 #2"
+    },
+    {
+      "t": 6720,
+      "op": "radio",
+      "hex": "01110403f8010000020000000809010202010000006400",
+      "via": 2,
+      "dup": 0,
+      "note": "topology report 4 #2"
+    },
+    {
+      "t": 6740,
+      "op": "radio",
+      "hex": "01170103f50100003300000008200000000000000000000000000000000000000000000000000000000000000000",
+      "via": 2,
+      "dup": 0,
+      "note": "telemetry 1 #51"
+    },
+    {
+      "t": 6740,
+      "op": "radio",
+      "hex": "01170203f60100003300000008200000000000000000000000000000000000000000000000000000000000000000",
+      "via": 4,
+      "dup": 0,
+      "note": "telemetry 2 #51"
+    },
+    {
+      "t": 6740,
+      "op": "radio",
+      "hex": "01170403f80100003300000008200000000000000000000000000000000000000000000000000000000000000000",
+      "via": 2,
+      "dup": 0,
+      "note": "telemetry 4 #51"
+    },
+    {
+      "t": 6760,
+      "op": "radio",
+      "hex": "01130203f601000002000000080ae8030000020000000301",
+      "via": 4,
+      "dup": 0,
+      "note": "route ack 2 #2"
+    },
+    {
+      "t": 8200,
+      "op": "radio",
+      "hex": "01110103f5010000030000000809010202010000006400",
+      "via": 2,
+      "dup": 0,
+      "note": "topology report 1 #3"
+    },
+    {
+      "t": 8200,
+      "op": "radio",
+      "hex": "01110203f6010000030000000809010202010000006400",
+      "via": 4,
+      "dup": 0,
+      "note": "topology report 2 #3"
+    },
+    {
+      "t": 8200,
+      "op": "radio",
+      "hex": "01110403f8010000030000000809010202010000006400",
+      "via": 2,
+      "dup": 0,
+      "note": "topology report 4 #3"
+    },
+    {
+      "t": 8220,
+      "op": "radio",
+      "hex": "01110103f5010000030000000809010202010000006400",
+      "via": 4,
+      "dup": 0,
+      "note": "topology report 1 #3"
+    },
+    {
+      "t": 8220,
+      "op": "radio",
+      "hex": "01110203f6010000030000000809010202010000006400",
+      "via": 4,
+      "dup": 0,
+      "note": "topology report 2 #3"
+    },
+    {
+      "t": 8220,
+      "op": "radio",
+      "hex": "01110403f8010000030000000809010202010000006400",
+      "via": 2,
+      "dup": 0,
+      "note": "topology report 4 #3"
+    },
+    {
+      "t": 8240,
+      "op": "radio",
+      "hex": "01170103f50100003400000008200000000000000000000000000000000000000000000000000000000000000000",
+      "via": 2,
+      "dup": 0,
+      "note": "telemetry 1 #52"
+    },
+    {
+      "t": 8240,
+      "op": "radio",
+      "hex": "01170203f60100003400000008200000000000000000000000000000000000000000000000000000000000000000",
+      "via": 4,
+      "dup": 0,
+      "note": "telemetry 2 #52"
+    },
+    {
+      "t": 8240,
+      "op": "radio",
+      "hex": "01170403f80100003400000008200000000000000000000000000000000000000000000000000000000000000000",
+      "via": 2,
+      "dup": 0,
+      "note": "telemetry 4 #52"
+    },
+    {
+      "t": 8260,
+      "op": "radio",
+      "hex": "01130203f601000003000000080ae8030000030000000301",
+      "via": 4,
+      "dup": 0,
+      "note": "route ack 2 #3"
+    },
+    {
+      "t": 9700,
+      "op": "radio",
+      "hex": "01110103f5010000040000000809010202010000006400",
+      "via": 2,
+      "dup": 0,
+      "note": "topology report 1 #4"
+    },
+    {
+      "t": 9700,
+      "op": "radio",
+      "hex": "01110203f6010000040000000809010202010000006400",
+      "via": 4,
+      "dup": 0,
+      "note": "topology report 2 #4"
+    },
+    {
+      "t": 9700,
+      "op": "radio",
+      "hex": "01110403f8010000040000000809010202010000006400",
+      "via": 2,
+      "dup": 0,
+      "note": "topology report 4 #4"
+    },
+    {
+      "t": 9720,
+      "op": "radio",
+      "hex": "01110103f5010000040000000809010202010000006400",
+      "via": 4,
+      "dup": 0,
+      "note": "topology report 1 #4"
+    },
+    {
+      "t": 9720,
+      "op": "radio",
+      "hex": "01110203f6010000040000000809010202010000006400",
+      "via": 4,
+      "dup": 0,
+      "note": "topology report 2 #4"
+    },
+    {
+      "t": 9720,
+      "op": "radio",
+      "hex": "01110403f8010000040000000809010202010000006400",
+      "via": 2,
+      "dup": 0,
+      "note": "topology report 4 #4"
+    },
+    {
+      "t": 9740,
+      "op": "radio",
+      "hex": "01170103f50100003500000008200000000000000000000000000000000000000000000000000000000000000000",
+      "via": 2,
+      "dup": 0,
+      "note": "telemetry 1 #53"
+    },
+    {
+      "t": 9740,
+      "op": "radio",
+      "hex": "01170203f60100003500000008200000000000000000000000000000000000000000000000000000000000000000",
+      "via": 4,
+      "dup": 0,
+      "note": "telemetry 2 #53"
+    },
+    {
+      "t": 9740,
+      "op": "radio",
+      "hex": "01170403f80100003500000008200000000000000000000000000000000000000000000000000000000000000000",
+      "via": 2,
+      "dup": 0,
+      "note": "telemetry 4 #53"
+    },
+    {
+      "t": 9760,
+      "op": "radio",
+      "hex": "01130203f601000004000000080ae8030000040000000301",
+      "via": 4,
+      "dup": 0,
+      "note": "route ack 2 #4"
+    },
+    {
+      "t": 11200,
+      "op": "radio",
+      "hex": "01110103f5010000050000000809010202010000006400",
+      "via": 2,
+      "dup": 0,
+      "note": "topology report 1 #5"
+    },
+    {
+      "t": 11200,
+      "op": "radio",
+      "hex": "01110203f6010000050000000809010202010000006400",
+      "via": 4,
+      "dup": 0,
+      "note": "topology report 2 #5"
+    },
+    {
+      "t": 11200,
+      "op": "radio",
+      "hex": "01110403f8010000050000000809010202010000006400",
+      "via": 2,
+      "dup": 0,
+      "note": "topology report 4 #5"
+    },
+    {
+      "t": 11220,
+      "op": "radio",
+      "hex": "01110103f5010000050000000809010202010000006400",
+      "via": 4,
+      "dup": 0,
+      "note": "topology report 1 #5"
+    },
+    {
+      "t": 11220,
+      "op": "radio",
+      "hex": "01110203f6010000050000000809010202010000006400",
+      "via": 4,
+      "dup": 0,
+      "note": "topology report 2 #5"
+    },
+    {
+      "t": 11220,
+      "op": "radio",
+      "hex": "01110403f8010000050000000809010202010000006400",
+      "via": 2,
+      "dup": 0,
+      "note": "topology report 4 #5"
+    },
+    {
+      "t": 11240,
+      "op": "radio",
+      "hex": "01170103f50100003600000008200000000000000000000000000000000000000000000000000000000000000000",
+      "via": 2,
+      "dup": 0,
+      "note": "telemetry 1 #54"
+    },
+    {
+      "t": 11240,
+      "op": "radio",
+      "hex": "01170203f60100003600000008200000000000000000000000000000000000000000000000000000000000000000",
+      "via": 4,
+      "dup": 0,
+      "note": "telemetry 2 #54"
+    },
+    {
+      "t": 11240,
+      "op": "radio",
+      "hex": "01170403f80100003600000008200000000000000000000000000000000000000000000000000000000000000000",
+      "via": 2,
+      "dup": 0,
+      "note": "telemetry 4 #54"
+    },
+    {
+      "t": 11260,
+      "op": "radio",
+      "hex": "01130203f601000005000000080ae8030000050000000301",
+      "via": 4,
+      "dup": 0,
+      "note": "route ack 2 #5"
+    },
+    {
+      "t": 12700,
+      "op": "radio",
+      "hex": "01110103f5010000060000000809010202010000006400",
+      "via": 2,
+      "dup": 0,
+      "note": "topology report 1 #6"
+    },
+    {
+      "t": 12700,
+      "op": "radio",
+      "hex": "01110203f6010000060000000809010202010000006400",
+      "via": 4,
+      "dup": 0,
+      "note": "topology report 2 #6"
+    },
+    {
+      "t": 12700,
+      "op": "radio",
+      "hex": "01110403f8010000060000000809010202010000006400",
+      "via": 2,
+      "dup": 0,
+      "note": "topology report 4 #6"
+    },
+    {
+      "t": 12720,
+      "op": "radio",
+      "hex": "01110103f5010000060000000809010202010000006400",
+      "via": 4,
+      "dup": 0,
+      "note": "topology report 1 #6"
+    },
+    {
+      "t": 12720,
+      "op": "radio",
+      "hex": "01110203f6010000060000000809010202010000006400",
+      "via": 4,
+      "dup": 0,
+      "note": "topology report 2 #6"
+    },
+    {
+      "t": 12720,
+      "op": "radio",
+      "hex": "01110403f8010000060000000809010202010000006400",
+      "via": 2,
+      "dup": 0,
+      "note": "topology report 4 #6"
+    },
+    {
+      "t": 12740,
+      "op": "radio",
+      "hex": "01170103f50100003700000008200000000000000000000000000000000000000000000000000000000000000000",
+      "via": 2,
+      "dup": 0,
+      "note": "telemetry 1 #55"
+    },
+    {
+      "t": 12740,
+      "op": "radio",
+      "hex": "01170203f60100003700000008200000000000000000000000000000000000000000000000000000000000000000",
+      "via": 4,
+      "dup": 0,
+      "note": "telemetry 2 #55"
+    },
+    {
+      "t": 12740,
+      "op": "radio",
+      "hex": "01170403f80100003700000008200000000000000000000000000000000000000000000000000000000000000000",
+      "via": 2,
+      "dup": 0,
+      "note": "telemetry 4 #55"
+    },
+    {
+      "t": 12760,
+      "op": "radio",
+      "hex": "01130203f601000006000000080ae8030000060000000301",
+      "via": 4,
+      "dup": 0,
+      "note": "route ack 2 #6"
+    },
+    {
+      "t": 14200,
+      "op": "radio",
+      "hex": "01110103f5010000070000000809010202010000006400",
+      "via": 2,
+      "dup": 0,
+      "note": "topology report 1 #7"
+    },
+    {
+      "t": 14200,
+      "op": "radio",
+      "hex": "01110203f6010000070000000809010202010000006400",
+      "via": 4,
+      "dup": 0,
+      "note": "topology report 2 #7"
+    },
+    {
+      "t": 14200,
+      "op": "radio",
+      "hex": "01110403f8010000070000000809010202010000006400",
+      "via": 2,
+      "dup": 0,
+      "note": "topology report 4 #7"
+    },
+    {
+      "t": 14220,
+      "op": "radio",
+      "hex": "01110103f5010000070000000809010202010000006400",
+      "via": 4,
+      "dup": 0,
+      "note": "topology report 1 #7"
+    },
+    {
+      "t": 14220,
+      "op": "radio",
+      "hex": "01110203f6010000070000000809010202010000006400",
+      "via": 4,
+      "dup": 0,
+      "note": "topology report 2 #7"
+    },
+    {
+      "t": 14220,
+      "op": "radio",
+      "hex": "01110403f8010000070000000809010202010000006400",
+      "via": 2,
+      "dup": 0,
+      "note": "topology report 4 #7"
+    },
+    {
+      "t": 14240,
+      "op": "radio",
+      "hex": "01170103f50100003800000008200000000000000000000000000000000000000000000000000000000000000000",
+      "via": 2,
+      "dup": 0,
+      "note": "telemetry 1 #56"
+    },
+    {
+      "t": 14240,
+      "op": "radio",
+      "hex": "01170203f60100003800000008200000000000000000000000000000000000000000000000000000000000000000",
+      "via": 4,
+      "dup": 0,
+      "note": "telemetry 2 #56"
+    },
+    {
+      "t": 14240,
+      "op": "radio",
+      "hex": "01170403f80100003800000008200000000000000000000000000000000000000000000000000000000000000000",
+      "via": 2,
+      "dup": 0,
+      "note": "telemetry 4 #56"
+    },
+    {
+      "t": 14260,
+      "op": "radio",
+      "hex": "01130203f601000007000000080ae8030000070000000301",
+      "via": 4,
+      "dup": 0,
+      "note": "route ack 2 #7"
+    },
+    {
+      "t": 15700,
+      "op": "radio",
+      "hex": "01110103f5010000080000000809010202010000006400",
+      "via": 2,
+      "dup": 0,
+      "note": "topology report 1 #8"
+    },
+    {
+      "t": 15700,
+      "op": "radio",
+      "hex": "01110203f6010000080000000809010202010000006400",
+      "via": 4,
+      "dup": 0,
+      "note": "topology report 2 #8"
+    },
+    {
+      "t": 15700,
+      "op": "radio",
+      "hex": "01110403f8010000080000000809010202010000006400",
+      "via": 2,
+      "dup": 0,
+      "note": "topology report 4 #8"
+    },
+    {
+      "t": 15720,
+      "op": "radio",
+      "hex": "01110103f5010000080000000809010202010000006400",
+      "via": 4,
+      "dup": 0,
+      "note": "topology report 1 #8"
+    },
+    {
+      "t": 15720,
+      "op": "radio",
+      "hex": "01110203f6010000080000000809010202010000006400",
+      "via": 4,
+      "dup": 0,
+      "note": "topology report 2 #8"
+    },
+    {
+      "t": 15720,
+      "op": "radio",
+      "hex": "01110403f8010000080000000809010202010000006400",
+      "via": 2,
+      "dup": 0,
+      "note": "topology report 4 #8"
+    },
+    {
+      "t": 15740,
+      "op": "radio",
+      "hex": "01170103f50100003900000008200000000000000000000000000000000000000000000000000000000000000000",
+      "via": 2,
+      "dup": 0,
+      "note": "telemetry 1 #57"
+    },
+    {
+      "t": 15740,
+      "op": "radio",
+      "hex": "01170203f60100003900000008200000000000000000000000000000000000000000000000000000000000000000",
+      "via": 4,
+      "dup": 0,
+      "note": "telemetry 2 #57"
+    },
+    {
+      "t": 15740,
+      "op": "radio",
+      "hex": "01170403f80100003900000008200000000000000000000000000000000000000000000000000000000000000000",
+      "via": 2,
+      "dup": 0,
+      "note": "telemetry 4 #57"
+    },
+    {
+      "t": 15760,
+      "op": "radio",
+      "hex": "01130203f601000008000000080ae8030000080000000301",
+      "via": 4,
+      "dup": 0,
+      "note": "route ack 2 #8"
+    },
+    {
+      "t": 24000,
+      "op": "hb",
+      "ack": "all"
+    },
+    {
+      "t": 25000,
+      "op": "hb",
+      "ack": "all"
+    },
+    {
+      "t": 26000,
+      "op": "hb",
+      "ack": "all"
+    },
+    {
+      "t": 27000,
+      "op": "hb",
+      "ack": "all"
+    },
+    {
+      "t": 28000,
+      "op": "hb",
+      "ack": "all"
+    },
+    {
+      "t": 29000,
+      "op": "hb",
+      "ack": "all"
+    },
+    {
+      "t": 30000,
+      "op": "hb",
+      "ack": "all"
+    },
+    {
+      "t": 31000,
+      "op": "hb",
+      "ack": "all"
+    },
+    {
+      "t": 32000,
+      "op": "hb",
+      "ack": "all"
+    },
+    {
+      "t": 33000,
+      "op": "hb",
+      "ack": "all"
+    },
+    {
+      "t": 34000,
+      "op": "hb",
+      "ack": "all"
+    },
+    {
+      "t": 35000,
+      "op": "hb",
+      "ack": "all"
+    },
+    {
+      "t": 36000,
+      "op": "hb",
+      "ack": "all"
+    },
+    {
+      "t": 37000,
+      "op": "hb",
+      "ack": "all"
+    }
+  ],
+  "end_ms": 40000,
+  "expect": {
+    "emitted": [
+      "st last=0 low=1 held=0 unacked=0 cap=50 win=16 drop=0 rdrop=0 coal=0 rep=0 rtx=0 out=0",
+      "st last=0 low=1 held=0 unacked=0 cap=50 win=16 drop=0 rdrop=0 coal=0 rep=0 rtx=0 out=0",
+      "st last=0 low=1 held=0 unacked=0 cap=50 win=16 drop=0 rdrop=0 coal=0 rep=0 rtx=0 out=0",
+      "st last=0 low=1 held=7 unacked=0 cap=50 win=16 drop=0 rdrop=0 coal=73 rep=0 rtx=0 out=1",
+      "rps ent=7 held=7 drop=0 rdrop=0 coal=73 out_ms=22000",
+      "fr n=1 rp=1 via=4 type=TOPOLOGY_REPORT src=1 seq=8",
+      "fr n=2 rp=1 via=4 type=TOPOLOGY_REPORT src=2 seq=8",
+      "fr n=3 rp=1 via=2 type=TOPOLOGY_REPORT src=4 seq=8",
+      "fr n=4 rp=1 via=2 type=TELEMETRY src=1 seq=57",
+      "fr n=5 rp=1 via=4 type=TELEMETRY src=2 seq=57",
+      "fr n=6 rp=1 via=2 type=TELEMETRY src=4 seq=57",
+      "fr n=7 rp=1 via=4 type=ROUTE_INSTALL_ACK src=2 seq=8",
+      "rpe rep=7 drop=0 rdrop=0 coal=73",
+      "st last=7 low=8 held=0 unacked=0 cap=50 win=16 drop=0 rdrop=0 coal=73 rep=7 rtx=0 out=1",
+      "st last=7 low=8 held=0 unacked=0 cap=50 win=16 drop=0 rdrop=0 coal=73 rep=7 rtx=0 out=1",
+      "st last=7 low=8 held=0 unacked=0 cap=50 win=16 drop=0 rdrop=0 coal=73 rep=7 rtx=0 out=1",
+      "st last=7 low=8 held=0 unacked=0 cap=50 win=16 drop=0 rdrop=0 coal=73 rep=7 rtx=0 out=1",
+      "st last=7 low=8 held=0 unacked=0 cap=50 win=16 drop=0 rdrop=0 coal=73 rep=7 rtx=0 out=1",
+      "st last=7 low=8 held=0 unacked=0 cap=50 win=16 drop=0 rdrop=0 coal=73 rep=7 rtx=0 out=1",
+      "st last=7 low=8 held=0 unacked=0 cap=50 win=16 drop=0 rdrop=0 coal=73 rep=7 rtx=0 out=1",
+      "st last=7 low=8 held=0 unacked=0 cap=50 win=16 drop=0 rdrop=0 coal=73 rep=7 rtx=0 out=1",
+      "st last=7 low=8 held=0 unacked=0 cap=50 win=16 drop=0 rdrop=0 coal=73 rep=7 rtx=0 out=1",
+      "st last=7 low=8 held=0 unacked=0 cap=50 win=16 drop=0 rdrop=0 coal=73 rep=7 rtx=0 out=1",
+      "st last=7 low=8 held=0 unacked=0 cap=50 win=16 drop=0 rdrop=0 coal=73 rep=7 rtx=0 out=1",
+      "st last=7 low=8 held=0 unacked=0 cap=50 win=16 drop=0 rdrop=0 coal=73 rep=7 rtx=0 out=1",
+      "st last=7 low=8 held=0 unacked=0 cap=50 win=16 drop=0 rdrop=0 coal=73 rep=7 rtx=0 out=1"
+    ],
+    "final": "final size=0 held=0 unacked=0 drop=0 rdrop=0 coal=73 rep=7 rtx=0 out=2 gone=0 evicted_sent=0 buffered=80"
+  }
+}
