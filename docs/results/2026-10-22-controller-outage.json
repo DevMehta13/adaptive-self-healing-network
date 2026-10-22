@@ -1,0 +1,130 @@
+[
+ {
+  "outage_s": 8,
+  "readings_sent_during_outage": 3,
+  "delivered_after_restart": 2,
+  "labelled_replayed": 2,
+  "lost": [
+   16
+  ],
+  "max_delay_ms": 7937,
+  "replay_started": [
+   {
+    "sim_ms": 1125,
+    "started_ms": 1125,
+    "entries": 6,
+    "held": 6,
+    "dropped_overflow": 0,
+    "coalesced": 0,
+    "outage_ms": 7030
+   }
+  ],
+  "replay_finished": [
+   {
+    "sim_ms": 1422,
+    "replayed": 21,
+    "dropped_overflow": 0,
+    "coalesced": 0
+   }
+  ],
+  "uplink_loss": [],
+  "gateway_link": [],
+  "all_window_delivered": 8,
+  "all_window_sent": 11,
+  "duplicates_at_end": 0,
+  "recovered_ok": true
+ },
+ {
+  "outage_s": 20,
+  "readings_sent_during_outage": 9,
+  "delivered_after_restart": 3,
+  "labelled_replayed": 3,
+  "lost": [
+   39,
+   40,
+   41,
+   42,
+   43,
+   44
+  ],
+  "max_delay_ms": 20497,
+  "replay_started": [
+   {
+    "sim_ms": 1125,
+    "started_ms": 1125,
+    "entries": 13,
+    "held": 13,
+    "dropped_overflow": 0,
+    "coalesced": 0,
+    "outage_ms": 19643
+   }
+  ],
+  "replay_finished": [
+   {
+    "sim_ms": 1421,
+    "replayed": 21,
+    "dropped_overflow": 0,
+    "coalesced": 0
+   }
+  ],
+  "uplink_loss": [],
+  "gateway_link": [],
+  "all_window_delivered": 11,
+  "all_window_sent": 19,
+  "duplicates_at_end": 0,
+  "recovered_ok": true
+ },
+ {
+  "outage_s": 45,
+  "readings_sent_during_outage": 21,
+  "delivered_after_restart": 2,
+  "labelled_replayed": 2,
+  "lost": [
+   68,
+   69,
+   70,
+   71,
+   72,
+   73,
+   74,
+   75,
+   76,
+   77,
+   78,
+   79,
+   80,
+   81,
+   82,
+   83,
+   84,
+   85,
+   86
+  ],
+  "max_delay_ms": 45688,
+  "replay_started": [
+   {
+    "sim_ms": 1125,
+    "started_ms": 1125,
+    "entries": 9,
+    "held": 9,
+    "dropped_overflow": 0,
+    "coalesced": 0,
+    "outage_ms": 45447
+   }
+  ],
+  "replay_finished": [
+   {
+    "sim_ms": 1438,
+    "replayed": 21,
+    "dropped_overflow": 0,
+    "coalesced": 0
+   }
+  ],
+  "uplink_loss": [],
+  "gateway_link": [],
+  "all_window_delivered": 10,
+  "all_window_sent": 31,
+  "duplicates_at_end": 0,
+  "recovered_ok": true
+ }
+]
