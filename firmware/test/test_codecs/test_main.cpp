@@ -8,6 +8,7 @@
 #include "f3_node.h"
 #include "iot_codec.h"
 #include "f1_ack.h"
+#include "sensor_value.h"
 #include "test_vectors.h"
 
 extern "C" void setUp() {}
@@ -638,6 +639,28 @@ void test_f3a_new_session_after_restart_is_not_a_duplicate() {
   TEST_ASSERT_EQUAL_UINT32(2, destination.c.counters().delivered);
 }
 
+void test_sensor_celsius_converts_to_hundredths_and_rejects_failed_reads() {
+  int32_t value = 12345;
+  TEST_ASSERT_TRUE(sensor::celsius_to_hundredths(23.4f, &value));
+  TEST_ASSERT_EQUAL_INT32(2340, value);
+  TEST_ASSERT_TRUE(sensor::celsius_to_hundredths(0.0f, &value));
+  TEST_ASSERT_EQUAL_INT32(0, value);
+  TEST_ASSERT_TRUE(sensor::celsius_to_hundredths(-5.5f, &value));
+  TEST_ASSERT_EQUAL_INT32(-550, value);
+  TEST_ASSERT_TRUE(sensor::celsius_to_hundredths(-0.01f, &value));
+  TEST_ASSERT_EQUAL_INT32(-1, value);
+  TEST_ASSERT_TRUE(sensor::celsius_to_hundredths(27.0f, &value));  // DHT11: whole degrees
+  TEST_ASSERT_EQUAL_INT32(2700, value);
+
+  value = 777;  // a failed read must not produce, or overwrite with, any value
+  TEST_ASSERT_FALSE(sensor::celsius_to_hundredths(NAN, &value));
+  TEST_ASSERT_EQUAL_INT32(777, value);
+  TEST_ASSERT_FALSE(sensor::celsius_to_hundredths(INFINITY, &value));
+  TEST_ASSERT_FALSE(sensor::celsius_to_hundredths(-INFINITY, &value));
+  TEST_ASSERT_FALSE(sensor::celsius_to_hundredths(5000.0f, &value));
+  TEST_ASSERT_EQUAL_INT32(777, value);
+}
+
 } // namespace
 
 int main(int, char **) {
@@ -666,5 +689,6 @@ int main(int, char **) {
   RUN_TEST(test_f3b_hello_reports_one_way_and_stale_evidence_to_c);
   RUN_TEST(test_f3b_flooding_probes_and_telemetry_are_bounded_and_reach_c);
   RUN_TEST(test_f3c_installs_versioned_routes_and_fails_over_to_confirmed_backup);
+  RUN_TEST(test_sensor_celsius_converts_to_hundredths_and_rejects_failed_reads);
   return UNITY_END();
 }

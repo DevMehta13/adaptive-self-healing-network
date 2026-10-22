@@ -9,6 +9,10 @@
 #include <esp_system.h>
 #include <esp_wifi.h>
 #include <Preferences.h>
+#if defined(A_DHT11)
+#include "sensor_value.h"
+#include <DHT.h>
+#endif
 
 // ESP32-S (Arduino-ESP32 2.x) port.  Two differences from the ESP8266 SDK shape
 // every callback below:
@@ -393,6 +397,34 @@ bool g_f3_serial_discard = false;
 const f3::DiscoverySettings kF3bSettings = {1000, 3000, 5000, 50, 1000, 5000};
 #endif
 
+#if defined(A_DHT11) && defined(F3A_ROLE_A)
+// Real temperature source: DHT11 module (built-in pull-up) on GPIO4, powered from 3.3 V.
+// Only the temperature is sent, as the existing DATA value in hundredths of a degree C.
+// A failed read sends nothing and is only counted; it never touches forwarding or
+// heartbeats, which run in f3::NodeEngine::tick() regardless.
+const uint8_t kDhtPin = 4;
+const uint32_t kSensorIntervalMs = 2000;  // DHT11 needs >= 1 s between reads
+DHT g_dht(kDhtPin, DHT11);
+uint32_t g_sensor_next_ms = 0;
+uint32_t g_sensor_reads = 0;
+uint32_t g_sensor_errors = 0;
+uint32_t g_sensor_queue_full = 0;
+
+void sensor_tick() {
+  const uint32_t now = millis();
+  if (static_cast<int32_t>(now - g_sensor_next_ms) < 0) return;
+  g_sensor_next_ms = now + kSensorIntervalMs;
+  int32_t hundredths = 0;
+  if (!sensor::celsius_to_hundredths(g_dht.readTemperature(), &hundredths)) {
+    ++g_sensor_errors;
+    Serial.println("\n# sensor_read_failed (nothing sent)");
+    return;
+  }
+  ++g_sensor_reads;
+  if (!g_f3_engine->create_data(3, hundredths, now)) ++g_sensor_queue_full;
+}
+#endif
+
 // Called from the callbacks only.
 uint8_t f3_peer_id(const uint8_t *mac) {
   uint8_t found = 0;
@@ -595,6 +627,9 @@ void f3_command() {
 #if defined(F3A_ROLE_A)
   if (strncmp(line, "send ", 5) == 0) {
     const int32_t value = static_cast<int32_t>(strtol(line + 5, nullptr, 10));
+    Serial.print("# TEST_READING value=");
+    Serial.print(value);
+    Serial.println(" is typed by hand, NOT a sensor reading");
     Serial.println(g_f3_engine->create_data(3, value, millis()) ? "queued" : "dropped");
     return;
   }
@@ -608,6 +643,14 @@ void f3_command() {
     Serial.print("A");
 #endif
     Serial.print(" role="); Serial.println(kF3Id);
+#if defined(A_DHT11) && defined(F3A_ROLE_A)
+    Serial.println("source=dht11");
+    Serial.print("sensor_reads="); Serial.println(g_sensor_reads);
+    Serial.print("sensor_errors="); Serial.println(g_sensor_errors);
+    Serial.print("sensor_queue_full="); Serial.println(g_sensor_queue_full);
+#elif defined(F3A_ROLE_A)
+    Serial.println("source=manual_send (test values, NOT a sensor)");
+#endif
     Serial.print("delivered="); Serial.println(c.delivered);
     Serial.print("forwarded="); Serial.println(c.forwarded);
     Serial.print("acknowledged="); Serial.println(c.acknowledged);
@@ -782,6 +825,9 @@ void loop() {
 #endif
   }
   if (g_f3_engine) g_f3_engine->tick(millis());
+#if defined(A_DHT11) && defined(F3A_ROLE_A)
+  if (g_f3_engine) sensor_tick();
+#endif
 #if defined(F3C_GATEWAY)
   if (g_f3_bridge) g_f3_bridge->tick(millis());
 #endif
