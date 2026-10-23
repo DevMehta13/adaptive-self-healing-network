@@ -2,7 +2,7 @@
 
 A college project about keeping sensor data moving when a wireless relay fails, using four inexpensive ESP32-S NodeMCU-style boards and a laptop.
 
-**Status: design plus the Phase 0 backend foundation (a status-only HTTP/WebSocket server), a protocol contract, and a four-node simulator with forwarding, retries, duplicate detection, neighbor discovery, failure *detection*, link probes, and controller-calculated routes. F0 provides bounded native C++ radio and serial codecs that match all shared reference vectors; F3a–F3c provide a fixed-memory ESP32-S implementation for forwarding, discovery, versioned controller route installation, controller-installed backup selection, local failover, and C's bounded controller-outage replay boundary. The backend is complete in simulation; what remains is the later dashboard increment and joint hardware phases. No physical board, radio or USB-serial behavior has been tested; the laptop side of the USB serial link has been tested only against a fake node C.** Dev: start with [docs/HANDOFF_FOR_DEV.md](docs/HANDOFF_FOR_DEV.md); for the viva see [docs/VIVA_NOTES.md](docs/VIVA_NOTES.md). The software-first phased plan is approved in [plan.md](plan.md); see [docs/STATUS.md](docs/STATUS.md) for what exists.
+**Status: the system has run on four real ESP32-S boards (Windows, controller in hardware mode over C's USB serial): ESP-NOW forwarding, controller-installed routes with backups, a real DHT11 reading source, local failover when the active relay is unplugged, and controller-loss replay were each exercised on hardware, one session each (see [docs/STATUS.md](docs/STATUS.md) and [docs/results/](docs/results/)). Not measured: true failure-detection time, removal of A, C or D, long runs, and a re-run after the latest changes. The simulation backend and dashboard remain the offline fallback.** Dev: start with [docs/HANDOFF_FOR_DEV.md](docs/HANDOFF_FOR_DEV.md); for the viva see [docs/VIVA_NOTES.md](docs/VIVA_NOTES.md). The software-first phased plan is approved in [plan.md](plan.md); see [docs/STATUS.md](docs/STATUS.md) for what exists.
 
 ## What we are building
 
@@ -31,14 +31,13 @@ The lines between boards represent wireless links. Each board also needs electri
 
 ## Hardware and cost
 
-- Four **ESP32-S NodeMCU-style development boards** are the selected hardware (the project began on ESP8266 NodeMCU and was ported to ESP32-S on 2026-10-21; the port is software-only so far and untested on boards). A, B and C take power from the Windows laptop's USB ports, D from a 5 V USB wall adapter; only C needs an active USB data connection during the network run. The boards talk over ESP-NOW, so no wires connect them to each other. The planned DHT11 module (three-pin) attaches to A only: `S`/`OUT` to `P4`/GPIO4, `+`/`VCC` to `3V3`, `-` to `GND`; no pull-up resistor, and never `VIN`, `5V`, `RX` or `TX`. No DHT11 code exists yet.
+- Four **ESP32-S NodeMCU-style development boards** are the selected hardware (the project began on ESP8266 NodeMCU and was ported to ESP32-S on 2026-10-21). A, B and C take power from the Windows laptop's USB ports, D from a 5 V USB wall adapter; only C needs an active USB data connection during the network run. The boards talk over ESP-NOW, so no wires connect them to each other. The DHT11 module (three-pin) attaches to A only: `S`/`OUT` to `P4`/GPIO4, `+`/`VCC` to `3V3`, `-` to `GND`; no pull-up resistor, and never `VIN`, `5V`, `RX` or `TX`.
 - The sensor will be selected from parts actually available in the lab before
   Phase 8. It must be compatible with the ESP32's 3.3 V logic; its
   exact model, wiring and firmware will be recorded only after availability is
   confirmed.
 - Suitable USB cables and power sources are required; use existing equipment where possible. Programming and C's laptop connection require a data-capable cable.
 - Preferred hardware spend is **₹800**, with a target below **₹1,000**. This is a budget constraint, not a verified shopping total. Delivery, tax, cables, and available power supplies still need checking.
-- No hardware has been purchased or tested as of the initial documentation handoff.
 
 ## Intended finished features
 
@@ -84,4 +83,4 @@ Healing requires a surviving path. Failure of C or of both relay paths is outsid
 | [AGENTS.md](AGENTS.md) | Shared working instructions for coding agents |
 | [CLAUDE.md](CLAUDE.md) | Claude entry point to the same shared context |
 
-Read the status before starting work. Run the backend using the [Backend README](backend/README.md), the dashboard using the [Dashboard README](dashboard/README.md), and the native firmware checks using the [Firmware README](firmware/README.md). Board setup and hardware testing remain pending.
+Read the status before starting work. Run the backend using the [Backend README](backend/README.md), the dashboard using the [Dashboard README](dashboard/README.md), and the native firmware checks using the [Firmware README](firmware/README.md). Board setup is in [firmware/FOUR_BOARD_LAB_PACKAGE.md](firmware/FOUR_BOARD_LAB_PACKAGE.md); the demo procedure is in [docs/DEMO_RUNBOOK.md](docs/DEMO_RUNBOOK.md).
