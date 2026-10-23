@@ -266,3 +266,12 @@ def test_dry_run_changes_nothing_and_exits_zero(capsys):
 def test_unknown_role_is_rejected():
     with pytest.raises(SystemExit):
         p.main(["--dry-run", "--only", "Z"])
+
+
+def test_merge_ports_drops_a_stale_port_now_used_by_another_board():
+    saved = {"A": "COM3", "D": "COM6"}
+    assert p.merge_ports(saved, {"B": "COM6", "A": "COM3"}) == {"B": "COM6", "A": "COM3"}
+
+
+def test_merge_ports_keeps_saved_ports_for_unseen_boards():
+    assert p.merge_ports({"D": "COM7", "A": "COM3"}, {"A": "COM4"}) == {"D": "COM7", "A": "COM4"}

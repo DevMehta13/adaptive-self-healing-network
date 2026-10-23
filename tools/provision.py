@@ -195,6 +195,13 @@ def send_peer_line(ser, line, retries=1, timeout=PEER_REPLY_TIMEOUT_S, clock=tim
                          f"after {retries + 1} attempts")
 
 
+def merge_ports(saved, current):
+    """Saved ports for roles not seen this run, minus any port a located board now holds."""
+    taken = set(current.values())
+    kept = {r: p for r, p in saved.items() if r not in current and p not in taken}
+    return {**kept, **current}
+
+
 def lab_record(macs, ports, now=None):
     now = now or datetime.now(UTC)
     return {
@@ -447,7 +454,7 @@ def main(argv=None):
         print("\nVerifying (reset, F3_READY, peers_restored=2) ...")
         verify(list(plan), macs, ports)
 
-        all_ports = {**saved_ports, **ports}
+        all_ports = merge_ports(saved_ports, ports)
         record = lab_record(macs, all_ports)
         LAB_FILE.write_text(json.dumps(record, indent=1) + "\n")
         print("\n" + format_table(macs, all_ports))
