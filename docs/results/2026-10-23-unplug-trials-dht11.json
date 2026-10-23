@@ -1,0 +1,116 @@
+[
+ {
+  "trial": 1,
+  "relay_removed": "B",
+  "cue_to_port_removed_s": 6.2,
+  "last_reading_via_B_before_removal_ms": -2722,
+  "local_failover_at_A_ms": null,
+  "local_failover_trigger": null,
+  "local_failover_outcomes": [],
+  "controller_route_via_D_active_ms": null,
+  "controller_route_trigger": null,
+  "first_delivery_via_D_ms": 264,
+  "largest_gap_between_readings_at_C_ms": 1030,
+  "route_back_via_B_after_replug_ms": 21560,
+  "route_back_via_B_event_ms_after_removal": 52435,
+  "counter_deltas_over_trial": {
+   "created": 37,
+   "acknowledged": 37,
+   "lost": 0,
+   "no_route": 0,
+   "delivered": 39,
+   "duplicates": 0
+  },
+  "created_minus_delivered": -2,
+  "events_seen": 143
+ },
+ {
+  "trial": 2,
+  "relay_removed": "B",
+  "cue_to_port_removed_s": 2.7,
+  "last_reading_via_B_before_removal_ms": -2089,
+  "local_failover_at_A_ms": 6,
+  "local_failover_trigger": "send_failures",
+  "local_failover_outcomes": [
+   [
+    6,
+    "backup_in_use"
+   ]
+  ],
+  "controller_route_via_D_active_ms": 348,
+  "controller_route_trigger": "local_failover_report",
+  "first_delivery_via_D_ms": 881,
+  "largest_gap_between_readings_at_C_ms": 2970,
+  "route_back_via_B_after_replug_ms": 21623,
+  "route_back_via_B_event_ms_after_removal": 53473,
+  "counter_deltas_over_trial": {
+   "created": 37,
+   "acknowledged": 37,
+   "lost": 0,
+   "no_route": 0,
+   "delivered": 37,
+   "duplicates": 1
+  },
+  "created_minus_delivered": 0,
+  "events_seen": 135
+ },
+ {
+  "trial": 3,
+  "relay_removed": "B",
+  "cue_to_port_removed_s": 3.0,
+  "last_reading_via_B_before_removal_ms": -1974,
+  "local_failover_at_A_ms": 135,
+  "local_failover_trigger": "send_failures",
+  "local_failover_outcomes": [
+   [
+    135,
+    "backup_in_use"
+   ]
+  ],
+  "controller_route_via_D_active_ms": 339,
+  "controller_route_trigger": "local_failover_report",
+  "first_delivery_via_D_ms": 980,
+  "largest_gap_between_readings_at_C_ms": 2954,
+  "route_back_via_B_after_replug_ms": 17183,
+  "route_back_via_B_event_ms_after_removal": 51619,
+  "counter_deltas_over_trial": {
+   "created": 35,
+   "acknowledged": 35,
+   "lost": 0,
+   "no_route": 0,
+   "delivered": 35,
+   "duplicates": 0
+  },
+  "created_minus_delivered": 0,
+  "events_seen": 130
+ },
+ {
+  "trial": 4,
+  "relay_removed": "B",
+  "cue_to_port_removed_s": 2.8,
+  "last_reading_via_B_before_removal_ms": -1980,
+  "local_failover_at_A_ms": null,
+  "local_failover_trigger": null,
+  "local_failover_outcomes": [],
+  "controller_route_via_D_active_ms": -183,
+  "controller_route_trigger": "local_failover_report",
+  "first_delivery_via_D_ms": 20,
+  "largest_gap_between_readings_at_C_ms": 2016,
+  "route_back_via_B_after_replug_ms": null,
+  "route_back_via_B_event_ms_after_removal": null,
+  "counter_deltas_over_trial": {
+   "created": 90,
+   "acknowledged": 90,
+   "lost": 0,
+   "no_route": 0,
+   "delivered": 89,
+   "duplicates": 0
+  },
+  "created_minus_delivered": 1,
+  "events_seen": 330
+ },
+ {
+  "trial": 5,
+  "error": "network was not steady through B before the trial"
+ }
+]
