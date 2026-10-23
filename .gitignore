@@ -28,3 +28,6 @@ dist/
 *.sqlite3
 *.sqlite3-wal
 *.sqlite3-shm
+
+# Local lab board MACs/ports (provisioning tool)
+firmware/lab_boards.local.json

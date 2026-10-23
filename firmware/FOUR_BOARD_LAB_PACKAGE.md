@@ -78,6 +78,37 @@ Write the observed port beside each board in the result sheet (Windows shows
 them as `COM` plus a number; macOS as `/dev/cu.*`). They are local lab values,
 not source configuration, and are never typed into a file in the repository.
 
+## Provisioning new boards
+
+`tools/provision.py` automates the flashing and MAC setup below for four fresh
+boards. It is software-ready only: it has not yet been run on real boards, so
+the manual sections that follow remain the fallback if it fails. Stop the backend
+first (it holds C's port) and run from the repository root with the
+`firmware/.platformio-venv` environment and pyserial available:
+
+```powershell
+python tools/provision.py                # A, B, C, D in order, DHT11 image on A
+python tools/provision.py --only B       # replace one board, re-point its neighbours
+python tools/provision.py --no-sensor    # flash f3c_a on A instead of f3c_a_dht11
+python tools/provision.py --skip-flash   # peers + verify only, from saved MACs
+python tools/provision.py --dry-run      # print the plan, change nothing
+```
+
+For each role it asks you to plug in that board, takes the one COM port that
+newly appears (zero or several new ports stop the run), reads the MAC with
+esptool, erases the flash and uploads the role image. It then finds every
+board again by its MAC (not by remembered port), sends the peer lines from the
+table under *MAC-address setup*, resets each board and requires its `F3_READY`
+line to show the right role and `peers_restored=2`. Erasing flash wipes stored
+peers, which is why they are always resent. A board that is not on USB (for
+example D on its wall adapter) must be plugged in for any step that has to
+write to it; the tool asks.
+
+The result table (role, MAC, COM) is printed and saved to
+`firmware/lab_boards.local.json`, which is git-ignored. With `--only B`, the
+other boards' saved MACs are reused and only the peer lines that point at B are
+resent to A and C. Check the printed table against the result sheet.
+
 ## Role builds and uploads
 
 Use the F3c image set for the final four-board run. First store the ports that
