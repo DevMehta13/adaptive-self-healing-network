@@ -252,6 +252,15 @@ def run(cmd, cwd=None):
     return result.stdout + result.stderr
 
 
+def retry_once(action, *args):
+    """Run a flashing step; one retry, because serial transfers occasionally drop mid-way."""
+    try:
+        return action(*args)
+    except ProvisionError as err:
+        print(f"  step failed, retrying once: {str(err).splitlines()[-1]}")
+        return action(*args)
+
+
 def read_mac(port):
     return parse_esptool_mac(run(esptool_command() + ["--port", port, "read_mac"]))
 
@@ -334,8 +343,8 @@ def provision_board(role, args, used_ports):
     print(f"  role {role}: MAC {mac}")
     env = env_for(role, args.no_sensor)
     print(f"  role {role}: erasing flash, uploading {env} ...")
-    erase_flash(port)
-    upload(env, port)
+    retry_once(erase_flash, port)
+    retry_once(upload, env, port)
     used_ports[role] = port
     return mac
 

@@ -275,3 +275,23 @@ def test_merge_ports_drops_a_stale_port_now_used_by_another_board():
 
 def test_merge_ports_keeps_saved_ports_for_unseen_boards():
     assert p.merge_ports({"D": "COM7", "A": "COM3"}, {"A": "COM4"}) == {"D": "COM7", "A": "COM4"}
+
+
+def test_retry_once_recovers_from_one_failure():
+    calls = []
+
+    def flaky(x):
+        calls.append(x)
+        if len(calls) == 1:
+            raise p.ProvisionError("transfer stopped")
+        return "ok"
+
+    assert p.retry_once(flaky, 5) == "ok" and calls == [5, 5]
+
+
+def test_retry_once_gives_up_after_the_second_failure():
+    def broken():
+        raise p.ProvisionError("dead")
+
+    with pytest.raises(p.ProvisionError, match="dead"):
+        p.retry_once(broken)
