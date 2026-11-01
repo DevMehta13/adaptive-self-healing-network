@@ -403,7 +403,82 @@ def test_a_link_without_probe_statistics_is_not_routable_under_reliability():
     assert net.path == ["A", "D", "C"]  # the only path whose links have been rated
     net2 = Net("highest_reliability", ab=(10, None), bc=(10, None), ad=(30, None))
     net2.settle()
-    assert net2.controller.route_state()["state"] == "waiting"  # nothing rated: nothing chosen
+    assert net2.controller.route_state()["state"] == "waiting"  # nothing rated: wait for ratings
+
+
+def test_with_nothing_rated_and_no_route_yet_it_waits_one_interval_then_uses_rtt_and_says_so():
+    net = Net("highest_reliability", ab=(10, None), bc=(10, None), ad=(30, None))
+    net.settle()
+    assert net.path is None
+    net.report_all()
+    net.gw.advance(EVAL_MS)
+    net.report_all()
+    activate(net.gw)
+    assert net.path == ["A", "B", "C"]  # cheaper by measured RTT: 20 against 60
+    computed = net.events("route_computed")[-1].data
+    assert computed["rtt_fallback"] is True and computed["delivery_probability"] is None
+    assert computed["cost_ms"] == 20
+    assert {g["link"]: g["cost_ms"] for g in computed["graph"]}["A-D"] == 30
+    assert net.controller.route_state()["rtt_fallback"] is True
+    assert net.events("route_active")[-1].data["rtt_fallback"] is True
+
+
+def test_a_rated_route_is_never_labelled_as_a_fallback():
+    net = Net("highest_reliability")
+    net.settle()
+    assert "rtt_fallback" not in net.events("route_computed")[0].data
+    assert "rtt_fallback" not in net.controller.route_state()
+
+
+def test_unrated_is_not_no_route_a_broken_route_is_replaced_at_once_by_rtt():
+    # The route in use (through B) is intact, so switching the policy leaves it. B stops and no
+    # link has a delivery probability: A-D and D-C are up and RTT-measured, so there IS a route.
+    net = Net("immediate_rtt", ab=(10, None), bc=(10, None), ad=(30, None))
+    net.settle()
+    assert net.path == ["A", "B", "C"]
+    net.controller.set_policy("highest_reliability")
+    net.down.add(B)
+    net.report_all()
+    net.gw.advance(1)
+    activate(net.gw)
+    assert net.path == ["A", "D", "C"]  # at once, not after an evaluation interval
+    assert not net.events("no_available_route")
+    assert net.events("route_computed")[-1].data["rtt_fallback"] is True
+
+
+def test_when_b_returns_unrated_the_route_in_use_stays_and_nothing_announces_no_route():
+    net = Net("immediate_rtt", ab=(10, None), bc=(10, None), ad=(30, None))
+    net.settle()
+    net.controller.set_policy("highest_reliability")
+    net.down.add(B)
+    net.report_all()
+    net.gw.advance(1)
+    activate(net.gw)
+    net.down.clear()
+    for _ in range(6):
+        net.tick()
+    assert net.path == ["A", "D", "C"] and net.controller.route_state()["state"] == "active"
+    assert not net.events("no_available_route")
+
+
+def test_the_fallback_is_only_for_when_no_path_is_rated_a_rated_path_wins():
+    # A-B and B-C are unrated; A-D and D-C are rated. The rated path is used, no fallback.
+    net = Net("highest_reliability", ab=(10, None), bc=(10, None))
+    net.settle()
+    assert net.path == ["A", "D", "C"]
+    assert "rtt_fallback" not in net.events("route_computed")[0].data
+
+
+def test_with_no_path_at_all_it_still_says_no_route_explicitly():
+    net = Net("highest_reliability", ab=(10, None), bc=(10, None), ad=(30, None))
+    net.settle()
+    net.down.update({B, D})
+    net.report_all()
+    net.gw.advance(EVAL_MS + 100)
+    net.report_all()
+    activate(net.gw)
+    assert net.controller.route_state()["kind"] in ("no_route", None)
+    assert net.path in ([], None)
 
 
 # ---- changing the policy while running ----

@@ -38,6 +38,10 @@ Rules, all of them testable from outside:
   must be strictly better for `hysteresis_evaluations` evaluations in a row before the route
   changes. A route that is *broken* (a link of it left the graph, or a node on it restarted)
   is replaced at once, as in Phase 4; local failover is never delayed by any of this.
+  Highest reliability prices only links with a known delivery probability. If no path exists
+  over those but links that are up and RTT-measured form one, the route is chosen by RTT and
+  marked `rtt_fallback` (at once when a route in use is broken; after one evaluation interval
+  when there is no route yet): "not rated yet" is not "no route".
 * **Versions.** Every update carries (epoch, version). Nodes ignore anything older than what they
   hold. The epoch identifies this controller run; a restarted controller must use a larger one.
 
@@ -286,6 +290,7 @@ class _Plan:
     confirmed: list[int] = field(default_factory=list)
     policy: str = POLICY_IMMEDIATE
     delivery: float | None = None  # estimated path delivery probability (reliability policy)
+    rtt_fallback: bool = False  # chosen by RTT because no path had known delivery probabilities
 
 
 @dataclass
@@ -330,8 +335,17 @@ class RouteController:
         self._settle_timer_at: int | None = None
         self._last_eligible: frozenset[tuple[int, int]] | None = None
         self._last_change_ms = self._started_ms
-        self._basis: tuple[frozenset[tuple[int, int]], tuple[tuple[str, int], ...]] | None = None
+        self._basis: (
+            tuple[
+                frozenset[tuple[int, int]], tuple[tuple[str, int], ...], frozenset[tuple[int, int]]
+            ]
+            | None
+        ) = None
         self._last_cost: dict[tuple[int, int], int] = {}  # last measured cost of a routable link
+        self._last_rtt_cost: dict[tuple[int, int], int] = {}  # same, in RTT (reliability fallback)
+        self._rtt_fallback: dict[tuple[int, int], int] = {}
+        self._fallback_since: int | None = None  # no route yet and only unrated links since then
+        self._fallback_timer_at: int | None = None
         self._since: dict[tuple[int, int], int] = {}
         self._eligible_at: dict[tuple[int, int], int] = {}
         self._in_service: set[tuple[int, int]] = set()  # links not known to be down
@@ -443,6 +457,7 @@ class RouteController:
             "waiting_for": [_name(n) for n in sorted(plan.outstanding)],
             "backups": {_name(n): _name(b) for n, b in sorted(plan.backups.items())},
             "backup_entries": {_name(n): _name(h) for n, h in sorted(plan.entries.items())},
+            **({"rtt_fallback": True} if plan.rtt_fallback else {}),
         }
 
     # ---- inputs ----
@@ -484,15 +499,21 @@ class RouteController:
         finally:
             self._busy = False
 
-    def _link_costs(self) -> tuple[dict[tuple[int, int], int], set[tuple[int, int]]]:
-        """(cost of each routable link under the policy, every link the view says is up)."""
+    def _link_costs(
+        self,
+    ) -> tuple[dict[tuple[int, int], int], set[tuple[int, int]], dict[tuple[int, int], int]]:
+        """(cost of each routable link under the policy, every link the view says is up, RTT costs).
+
+        The third item is the reliability policy's fallback: the measured RTT of every up link
+        both ends have measured, whether or not its delivery probability is known yet.
+        """
 
         def key(a: str, b: str) -> tuple[int, int]:
             return min(NODE_IDS[a], NODE_IDS[b]), max(NODE_IDS[a], NODE_IDS[b])
 
         if self._policy == POLICY_IMMEDIATE:
             costs = {key(a, b): cost for a, b, cost in self._view.routable_links()}
-            return costs, set(costs)
+            return costs, set(costs), {}
         costs = {}
         up = set()
         for link in self._view.link_metrics():
@@ -501,11 +522,18 @@ class RouteController:
                 costs[key(link.a, link.b)] = link.smoothed_rtt_ms
             elif self._policy == POLICY_HIGHEST_RELIABILITY and link.delivery is not None:
                 costs[key(link.a, link.b)] = reliability_cost(link.delivery)
-        return costs, up
+        fallback: dict[tuple[int, int], int] = {}
+        if self._policy == POLICY_HIGHEST_RELIABILITY:
+            fallback = {key(a, b): cost for a, b, cost in self._view.routable_links()}
+        return costs, up, fallback
 
     def _current_graph(self, now: int) -> dict[tuple[int, int], int]:
-        """The links routes may use right now, with their costs under the active policy."""
-        routable, up = self._link_costs()
+        """The links routes may use right now, with their costs under the active policy.
+
+        Also sets `self._rtt_fallback`: the links that are eligible by RTT alone, which the
+        reliability policy uses only when its own graph has no path (see `_decide`).
+        """
+        routable, up, fallback = self._link_costs()
         # Fail-static on silence: a link whose information has merely *expired* (the controller
         # stopped hearing reports, for instance while detached) is not known to be down, so it
         # keeps its last known cost and is not treated as having left. Only a link the view
@@ -516,9 +544,19 @@ class RouteController:
             in_service.add(key)
             if key in self._since and key in self._last_cost and key not in routable:
                 routable[key] = self._last_cost[key]
+            if (
+                self._policy == POLICY_HIGHEST_RELIABILITY
+                and key in self._since
+                and key in self._last_rtt_cost
+                and key not in fallback
+            ):
+                fallback[key] = self._last_rtt_cost[key]
         self._in_service = in_service
         self._last_cost.update(routable)
-        self._update_hold_down(routable, now)
+        self._last_rtt_cost.update(fallback)
+        # One hold-down clock per link, whichever graph it is used in.
+        self._update_hold_down(routable.keys() | fallback.keys(), now)
+        self._rtt_fallback = {k: c for k, c in fallback.items() if now >= self._eligible_at[k]}
         return {key: cost for key, cost in routable.items() if now >= self._eligible_at[key]}
 
     def _reconcile_once(self) -> None:
@@ -536,16 +574,24 @@ class RouteController:
                     self._gateway.call_later(wait, self._reconcile)
                 return
         sessions = self._view.node_sessions()
-        basis = (frozenset(eligible), tuple(sorted(sessions.items())))
+        basis = (
+            frozenset(eligible),
+            tuple(sorted(sessions.items())),
+            frozenset(self._rtt_fallback),
+        )
         if basis == self._basis:
             return
-        topology_changed = self._basis is None or basis[0] != self._basis[0]
+        topology_changed = self._basis is None or (basis[0], basis[2]) != (
+            self._basis[0],
+            self._basis[2],
+        )
         self._basis = basis
         if topology_changed and self._forced_trigger is None:
             self._failed_streak = 0
         self._decide(eligible, sessions, now)
 
-    def _update_hold_down(self, routable: dict[tuple[int, int], int], now: int) -> None:
+    def _update_hold_down(self, routable: Iterable[tuple[int, int]], now: int) -> None:
+        routable = set(routable)
         for key in routable:
             if key in self._since:
                 continue
@@ -574,6 +620,16 @@ class RouteController:
         links = [(a, b, cost) for (a, b), cost in sorted(eligible.items())]
         started = time.perf_counter_ns()
         result = shortest_path(links, self._source, self._destination)
+        fallback = False
+        if result is not None:
+            self._fallback_since = None
+        elif self._rtt_fallback and self._fallback_allowed(now):
+            # Reliability policy only: no path over links whose delivery probability is known.
+            # "Not rated yet" (statistics off, too few probes, a node just restarted) is not "no
+            # route": rank the up, RTT-measured links by RTT instead, and say so.
+            links = [(a, b, cost) for (a, b), cost in sorted(self._rtt_fallback.items())]
+            result = shortest_path(links, self._source, self._destination)
+            fallback = result is not None
         self.stats.compute_us.append((time.perf_counter_ns() - started) // 1_000)
 
         trigger = self._forced_trigger
@@ -609,7 +665,34 @@ class RouteController:
             if plan.sessions == node_sessions:
                 return  # the same route, backups included, is already installing or in use
             trigger = "node_restarted"
-        self._start_plan(KIND_ROUTE, result, node_sessions, links, now, trigger, extra)
+        self._start_plan(
+            KIND_ROUTE, result, node_sessions, links, now, trigger, extra, rtt_fallback=fallback
+        )
+
+    def _fallback_allowed(self, now: int) -> bool:
+        """May a route be chosen by RTT because no path has known delivery probabilities?
+
+        Yes at once when a route was in use: it is broken or unpriceable and is replaced at once,
+        never left waiting. With no route yet, links are RTT-measured a little before they are
+        rated (a node needs a few completed probes), so wait one evaluation interval for ratings
+        before settling for RTT, instead of committing to a path the policy would then leave.
+        """
+        if self._plan is not None and self._plan.kind == KIND_ROUTE:
+            return True
+        if self._fallback_since is None:
+            self._fallback_since = now
+        wait = self._fallback_since + self._config.policy_eval_interval_ms - now
+        if wait <= 0:
+            return True
+        due = now + wait
+        if self._fallback_timer_at != due:
+            self._fallback_timer_at = due
+            self._gateway.call_later(wait, self._retry_fallback)
+        return False
+
+    def _retry_fallback(self) -> None:
+        self._basis = None  # nothing changed, but the wait is over: decide again
+        self._reconcile()
 
     # ---- policy evaluation and hysteresis (Phase 9) ----
 
@@ -738,7 +821,11 @@ class RouteController:
         )
         involved = set(result.path) | set(extra.entries)
         node_sessions = {n: sessions.get(_name(n), 0) for n in involved}
-        self._basis = (frozenset(eligible), tuple(sorted(sessions.items())))
+        self._basis = (
+            frozenset(eligible),
+            tuple(sorted(sessions.items())),
+            frozenset(self._rtt_fallback),
+        )
         self._start_plan(
             KIND_ROUTE, result, node_sessions, links, now, "policy_better_route", extra
         )
@@ -769,6 +856,7 @@ class RouteController:
         now: int,
         trigger: str,
         extra: BackupPlan | None = None,
+        rtt_fallback: bool = False,
     ) -> None:
         if self._plan is not None and self._plan.state in (COMPUTED, INSTALLING):
             self._plan.state = SUPERSEDED
@@ -785,15 +873,17 @@ class RouteController:
             computed_ms=now,
             trigger=trigger,
             policy=self._policy,
+            rtt_fallback=rtt_fallback,
         )
-        if result is not None and self._policy == POLICY_HIGHEST_RELIABILITY:
+        reliability = self._policy == POLICY_HIGHEST_RELIABILITY and not rtt_fallback
+        if result is not None and reliability:
             plan.delivery = path_delivery(result.cost_ms)
             plan.cost_ms = None  # the cost is -ln(p), not milliseconds
         if extra is not None:
             plan.backups, plan.entries = dict(extra.backups), dict(extra.entries)
         self._plan = plan
         flow = f"{self._config.source}->{self._config.destination}"
-        if self._policy == POLICY_HIGHEST_RELIABILITY:
+        if reliability:
             graph = [
                 {
                     "link": f"{_name(a)}-{_name(b)}",
@@ -829,6 +919,7 @@ class RouteController:
                     "trigger": trigger,
                     "backups": {_name(n): _name(b) for n, b in sorted(plan.backups.items())},
                     "backup_entries": {_name(n): _name(h) for n, h in sorted(plan.entries.items())},
+                    **({"rtt_fallback": True} if rtt_fallback else {}),
                 },
             )
         else:
@@ -957,6 +1048,7 @@ class RouteController:
                     "distribution_ms": now - plan.computed_ms,
                     "trigger": plan.trigger,
                     "backups": {_name(n): _name(b) for n, b in sorted(plan.backups.items())},
+                    **({"rtt_fallback": True} if plan.rtt_fallback else {}),
                 },
             )
         else:
