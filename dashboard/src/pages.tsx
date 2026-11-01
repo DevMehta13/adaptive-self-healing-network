@@ -1,10 +1,14 @@
 import type { ReactNode } from 'react';
 import type { ConnectionState } from './connection';
 import type { Count } from './fixtures';
-import { eventText, policyName } from './live';
+import { policyName } from './live';
 import type { Live } from './useLive';
-import { CountCard, GraphGrid, ReadingsPanel, StaleNotice } from './NetworkScene';
+import { CountCard, GraphGrid, StaleNotice } from './NetworkScene';
 import { ageText, latestReading, nodeLines, readingAgeMs, recentChanges, seconds } from './overview';
+import { ReadingsChart } from './ReadingsChart';
+import { axisTime } from './chartData';
+import type { LiveState } from './liveData';
+import type { Theme } from './theme';
 import { NetworkView } from './NetworkView';
 import { PageHeader } from './PageHeader';
 import { hrefFor } from './route';
@@ -55,7 +59,7 @@ function LiveTag({ live }: { live: Live }) {
 
 const seeAll = (id: PageId, text: string) => <a className="see-all" href={hrefFor(id)}>{text} →</a>;
 
-export function OverviewPage({ connection, live }: { connection: ConnectionState; live: Live }) {
+export function OverviewPage({ connection, live, data }: { connection: ConnectionState; live: Live; data: LiveState }) {
   return <>
     <PageHeader title="Overview" shows="The current state of the network in one view: the latest temperature, the route, each board, the delivery numbers and the last changes."
       reading="Read it top to bottom: is a reading arriving, which way is it going, is every board reachable, is anything being lost. Each block links to its full page."
@@ -65,7 +69,7 @@ export function OverviewPage({ connection, live }: { connection: ConnectionState
       const active = view.route.state === 'active' && view.route.kind === 'route' ? view.route.path : null;
       const unit = unitOf(view.mode);
       const nodes = nodeLines(view.nodes);
-      const changes = recentChanges(view.recent_events, view.clock.sim_ms);
+      const changes = data.timeMap ? recentChanges(data.changes, data.nowAt, data.timeMap) : [];
       const key = (label: string, count: Count | null | undefined) => <div className="key-number"><span>{label}</span><strong>{count?.value ?? '—'}</strong><small>{count ? `${count.known_by}${count.age_ms != null ? ` · ${seconds(count.age_ms)} old` : ''}` : 'Awaiting telemetry'}</small></div>;
       return <>
         <StaleNotice view={view} />
@@ -99,7 +103,7 @@ export function OverviewPage({ connection, live }: { connection: ConnectionState
   </>;
 }
 
-export function NetworkPage({ connection, live }: { connection: ConnectionState; live: Live }) {
+export function NetworkPage({ connection, live, data }: { connection: ConnectionState; live: Live; data: LiveState }) {
   const { loadedAt, pending, feedback, controlsReady, act } = live;
   return <>
     <PageHeader title="Network" shows="The four boards and their links as the controller sees them, the route it planned, and the controls."
@@ -110,8 +114,7 @@ export function NetworkPage({ connection, live }: { connection: ConnectionState;
       const conditions = view.presenter.conditions;
       const bStopped = conditions?.stopped_nodes.includes('B') ?? false;
       const gatewayAttached = conditions?.gateway_attached ?? true;
-      const events = view.recent_events.map(e => ({ event: e, title: eventText(e) }))
-        .filter((item): item is { event: typeof item.event; title: string } => item.title !== null).slice(-8).reverse();
+      const events = data.timeMap ? recentChanges(data.changes, data.nowAt, data.timeMap, 8) : [];
       return <>
         <div className="live-meta"><span>Run {view.run_id} · {view.scenario ?? 'hardware session'}</span><span>Simulation clock {seconds(view.clock.sim_ms)}{view.clock.paused ? ' · paused' : ''}</span><span>Snapshot at {loadedAt ? new Date(loadedAt).toLocaleTimeString() : '—'}</span></div>
         {connection.snapshot && <p className="mode-note">{connection.snapshot.label}</p>}
@@ -129,19 +132,37 @@ export function NetworkPage({ connection, live }: { connection: ConnectionState;
         <StaleNotice view={view} />
         <GraphGrid view={view} unit={unitOf(view.mode)} />
         <div className="details-grid single"><div className="detail-panel"><h3>Recent network changes</h3>
-          {events.length ? <ol className="event-list">{events.map(({ event, title }) => <li className={event.type === 'environment' ? 'injected' : ''} key={event.event_id}><span className="story-time">{typeof event.data.sim_ms === 'number' ? seconds(event.data.sim_ms) : '—'}</span><span>{title}</span>{event.type === 'environment' && <small>Presenter action</small>}</li>)}</ol> : <p className="empty-state">No significant change is in the recent event window. Readings and telemetry continue above.</p>}
+          {events.length ? <ol className="event-list">{events.map(c => <li className={c.injected ? 'injected' : ''} key={c.id}><span className="story-time">{c.time}</span><span>{c.title}{c.ago && <span className="ago"> · {c.ago}</span>}</span>{c.injected && <small>Presenter action</small>}</li>)}</ol> : <p className="empty-state">No significant change is in the recent event window. Readings and telemetry continue above.</p>}
         </div></div>
       </>;
     }}</LiveGate>
   </>;
 }
 
-export function ReadingsPage({ live }: { live: Live }) {
+export function ReadingsPage({ live, data, theme }: { live: Live; data: LiveState; theme: Theme }) {
   return <>
-    <PageHeader title="Readings" shows="Temperature readings from node A, as received by the controller (node C)."
-      reading="Newest first. The path is what C observed, not the plan. “Delayed” readings were held at C while the controller was unreachable and replayed later."
+    <PageHeader title="Readings" shows="Temperature readings from node A, as received by the controller (node C), over time."
+      reading="Each point is one reading, coloured by the relay that handed it to C. Hollow points were held at C while the controller was unreachable and replayed later. Dashed lines mark events such as a failover. Hover for details."
       aside={<LiveTag live={live} />} />
-    <LiveGate live={live}>{view => <div className="details-grid single"><ReadingsPanel view={view} unit={unitOf(view.mode)} /></div>}</LiveGate>
+    <LiveGate live={live}>{view => {
+      const unit = unitOf(view.mode);
+      const map = data.timeMap;
+      if (!map) return null;
+      const rows = [...data.readings].sort((x, y) => y.at - x.at).slice(0, 50);
+      return <>
+        <StaleNotice view={view} />
+        <ReadingsChart readings={data.readings} changes={data.changes} map={map} nowAt={data.nowAt} theme={theme} unit={unit} />
+        <section className="detail-panel readings-table" aria-labelledby="table-title"><h3 id="table-title">Recent readings</h3>
+          {rows.length ? <div className="table-scroll"><table>
+            <thead><tr><th scope="col">Time at C</th><th scope="col">Value</th><th scope="col">Path observed at C</th><th scope="col">Live or replayed</th></tr></thead>
+            <tbody>{rows.map(r => <tr key={r.key} className={r.replayed ? 'replayed-row' : ''}>
+              <td>{axisTime(map, r.at)}</td><td>{r.value.toFixed(unit === 'units' ? 2 : 1)} {unit}</td>
+              <td>{r.path.map(n => n ?? '?').join(' → ')}</td>
+              <td>{r.replayed ? `Replayed · held ${seconds(r.delayMs)}, reached the controller ${axisTime(map, r.reachedAt)}` : 'Live'}</td>
+            </tr>)}</tbody></table></div> : <p className="empty-state">No delivered reading has been recorded yet.</p>}
+        </section>
+      </>;
+    }}</LiveGate>
   </>;
 }
 

@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { ConnectionState } from './connection';
 import { parseLiveSnapshot, postLiveAction } from './live';
+import type { LiveStore, SnapshotLike } from './liveData';
 import type { LiveSnapshot } from './live';
 
 /** The refreshed live view and the presenter actions. Called once by the app, so changing page never restarts the polling. */
-export function useLive(connection: ConnectionState) {
+export function useLive(connection: ConnectionState, store: LiveStore) {
   const [polled, setPolled] = useState<{ snapshot: LiveSnapshot; baseAt: number | null; loadedAt: number } | null>(null);
   const [pollError, setPollError] = useState<string | null>(null);
   const [pending, setPending] = useState<string | null>(null);
@@ -35,6 +36,7 @@ export function useLive(connection: ConnectionState) {
         if (!response.ok) throw new Error(`Live refresh failed (${response.status}).`);
         const snapshot = parseLiveSnapshot(await response.json());
         if (active) {
+          store.ingestSnapshot(snapshot as unknown as SnapshotLike);
           setPolled({ snapshot, baseAt: connection.snapshotAt, loadedAt: Date.now() });
           setPollError(null);
         }
@@ -47,7 +49,7 @@ export function useLive(connection: ConnectionState) {
     };
     void poll();
     return () => { active = false; clearTimeout(timer); controller?.abort(); };
-  }, [connected, base, connection.snapshotAt, refresh]);
+  }, [connected, base, connection.snapshotAt, refresh, store]);
 
   async function act(label: string, path: string, body: Record<string, unknown>) {
     if (!controlsReady) return;

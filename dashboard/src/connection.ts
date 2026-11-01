@@ -20,6 +20,8 @@ export interface ConnectionState {
   error: string | null;
 }
 
+export interface LiveEvent { type: string; event_id: number; data: Record<string, unknown> }
+
 interface Envelope {
   v: 1;
   seq: number;
@@ -35,6 +37,10 @@ interface Options {
   createSocket?: (url: string) => Socket;
   fetchSnapshot?: (url: string, init: RequestInit) => Promise<Response>;
   now?: () => number;
+  /** Every snapshot that is accepted (including the extra fields the backend sends), before buffered events are applied. */
+  onSnapshot?: (snapshot: Snapshot) => void;
+  /** Every state-changing event once, in order, after the documented ordering and dedup rules (and `reset` when it arrives). */
+  onEvent?: (event: LiveEvent) => void;
 }
 
 const object = (value: unknown): value is Record<string, unknown> =>
@@ -189,12 +195,13 @@ export class DashboardConnection {
     }
     if (event.event_id <= this.cursor) return;
     if (event.type === 'reset' || event.event_id !== this.cursor + 1) {
+      if (event.type === 'reset') this.options.onEvent?.({ type: event.type, event_id: event.event_id, data: event.data });
       void this.synchronize();
       this.pending.push(event);
       return;
     }
-    // D0 tracks continuity only; it does not turn packet events into a network view.
     this.cursor = event.event_id;
+    this.options.onEvent?.({ type: event.type, event_id: event.event_id, data: event.data });
   }
 
   private async synchronize() {
@@ -213,6 +220,7 @@ export class DashboardConnection {
       const snapshot = parseSnapshot(await response.json());
       if (!this.active || generation !== this.generation) return;
       this.cursor = snapshot.last_event_id;
+      this.options.onSnapshot?.(snapshot);
       this.syncing = false;
       this.retryMs = 1000;
       // HTTP success does not prove that the WebSocket is still sending messages.

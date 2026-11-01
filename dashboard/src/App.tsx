@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { DashboardConnection } from './connection';
 import type { ConnectionState } from './connection';
 import { ConnectionFacts, DeliveryPage, NetworkPage, OverviewPage, ReadingsPage, RunsPage, statusLabels } from './pages';
@@ -6,6 +6,8 @@ import { documentTitle, hrefFor, pages, parseRoute } from './route';
 import { applyTheme, initialTheme, rememberTheme, storedTheme, systemTheme } from './theme';
 import type { Theme } from './theme';
 import { useLive } from './useLive';
+import { LiveStore } from './liveData';
+import type { SnapshotLike } from './liveData';
 
 function useRoute() {
   const [route, setRoute] = useState(() => parseRoute(window.location.hash));
@@ -20,7 +22,8 @@ function useRoute() {
 
 function useTheme() {
   const [theme, setTheme] = useState<Theme>(initialTheme);
-  useEffect(() => { applyTheme(theme); }, [theme]);
+  // Layout effect: the chart reads the theme's colours in a (child) effect, which must see the new theme already applied.
+  useLayoutEffect(() => { applyTheme(theme); }, [theme]);
   useEffect(() => {
     // Until the person picks a theme, keep following the system setting.
     const query = window.matchMedia?.('(prefers-color-scheme: dark)');
@@ -41,6 +44,8 @@ export function App() {
   const [connection, setConnection] = useState<ConnectionState>({
     status: 'connecting', snapshot: null, snapshotAt: null, lastMessageAt: null, error: null,
   });
+  const [store] = useState(() => new LiveStore());
+  const data = useSyncExternalStore(store.subscribe, store.getState);
   const route = useRoute();
   const [theme, toggleTheme] = useTheme();
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -50,12 +55,16 @@ export function App() {
   useEffect(() => {
     const url = new URL('/ws', window.location.href);
     url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
-    const client = new DashboardConnection({ socketUrl: url.href, snapshotUrl: '/api/snapshot' }, setConnection);
+    const client = new DashboardConnection({
+      socketUrl: url.href, snapshotUrl: '/api/snapshot',
+      onSnapshot: snapshot => store.ingestSnapshot(snapshot as unknown as SnapshotLike),
+      onEvent: event => store.ingestEvent(event),
+    }, setConnection);
     client.start();
     return () => client.stop();
-  }, []);
+  }, [store]);
 
-  const live = useLive(connection);
+  const live = useLive(connection, store);
 
   useEffect(() => { setDetailsOpen(false); }, [route]);
   useEffect(() => {
@@ -99,9 +108,9 @@ export function App() {
       </header>
 
       <main>
-        {route === 'overview' && <OverviewPage connection={connection} live={live} />}
-        {route === 'network' && <NetworkPage connection={connection} live={live} />}
-        {route === 'readings' && <ReadingsPage live={live} />}
+        {route === 'overview' && <OverviewPage connection={connection} live={live} data={data} />}
+        {route === 'network' && <NetworkPage connection={connection} live={live} data={data} />}
+        {route === 'readings' && <ReadingsPage live={live} data={data} theme={theme} />}
         {route === 'delivery' && <DeliveryPage live={live} />}
         {route === 'runs' && <RunsPage />}
       </main>

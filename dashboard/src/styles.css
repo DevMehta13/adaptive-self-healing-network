@@ -8,6 +8,7 @@
   --link-up: #a4bba7; --node-fill: #dcebdd; --node-stroke: #39724d; --edge-unknown: #dce2d9;
   --ok-bg: #e6efdf; --ok-ink: #3d653d; --brand-dot: #c5df91; --shadow: #254c2910;
   --bar-bg: #fffef9ee;
+  --series-b: #2a6fbd; --series-d: #c9651b; --series-other: #6b7280;
   color-scheme: light;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: var(--ink); background: var(--bg); font-synthesis: none; text-rendering: optimizeLegibility; -webkit-font-smoothing: antialiased;
 }
@@ -21,6 +22,7 @@
   --link-up: #5f9a76; --node-fill: #1f4733; --node-stroke: #6fc08f; --edge-unknown: #34483f;
   --ok-bg: #1f4733; --ok-ink: #a9dcb7; --brand-dot: #c5df91; --shadow: #00000040;
   --bar-bg: #15231fee;
+  --series-b: #6db0f0; --series-d: #f0a35e; --series-other: #aab4bd;
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
@@ -134,3 +136,38 @@ dd { margin: 0; font-size: 14px; font-variant-numeric: tabular-nums; }
 .flow-arrow{align-self:center;font-size:26px;color:var(--muted-2)}
 .count-note{font-size:12px;line-height:1.5;color:var(--ink-2);margin:0 0 8px}
 @media(max-width:800px){.route-pair{grid-template-columns:1fr}.key-numbers{gap:8px}.key-number strong{font-size:24px}.flow{grid-template-columns:1fr}.flow-arrow{transform:rotate(90deg);justify-self:center}.quiet .connection-facts{grid-template-columns:repeat(2,1fr)}}
+
+.chart-card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:20px 22px 16px;margin-bottom:18px}
+.chart-toolbar{display:flex;justify-content:space-between;align-items:center;gap:14px 20px;flex-wrap:wrap}
+.chart-toolbar h2{font-size:17px;font-weight:600;margin:0;letter-spacing:-.2px}
+.chart-controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.segmented{display:inline-flex;border:1px solid var(--line-strong);border-radius:8px;overflow:hidden}
+.segmented button,.plain-button{font:inherit;font-size:12px;cursor:pointer;border:0;background:var(--surface);color:var(--ink-2);padding:7px 12px}
+.segmented button+button{border-left:1px solid var(--line-strong)}
+.segmented button[aria-pressed=true]{background:var(--accent);color:var(--on-accent)}
+.plain-button{border:1px solid var(--line-strong);border-radius:8px}
+.segmented button:focus-visible,.plain-button:focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+.chart-legend{list-style:none;display:flex;flex-wrap:wrap;gap:6px 18px;margin:12px 0 8px;padding:0;font-size:12px;color:var(--muted)}
+.chart-legend li{display:flex;align-items:center;gap:7px}
+.swatch{display:inline-block;width:10px;height:10px;border-radius:50%}
+.swatch.b{background:var(--series-b)}.swatch.d{background:var(--series-d)}.swatch.other{background:var(--series-other)}
+.swatch.hollow{border:2px solid var(--muted);background:var(--surface)}
+.swatch.marker{width:0;height:12px;border-radius:0;border-left:2px dashed var(--muted-2)}
+.chart-frame{position:relative}
+.chart-host{width:100%;min-height:340px}
+.chart-host .u-over{cursor:crosshair}
+.chart-host .u-select{background:var(--accent-soft);opacity:.5}
+.chart-tooltip{position:absolute;z-index:5;pointer-events:none;background:var(--surface);border:1px solid var(--line-strong);border-radius:8px;box-shadow:0 6px 18px var(--shadow);padding:8px 11px;font-size:12px;line-height:1.5;display:flex;flex-direction:column;max-width:280px}
+.chart-tooltip[hidden]{display:none}
+.chart-tooltip strong{font-size:14px}
+.chart-tooltip span{color:var(--muted)}
+.chart-empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;margin:0;font-size:13px;color:var(--muted);pointer-events:none}
+.chart-caption{font-size:11px;color:var(--muted);margin:8px 0 0;line-height:1.5}
+.u-wrap{background:transparent}
+.readings-table h3{margin:0 0 14px}
+.table-scroll{overflow-x:auto}
+.readings-table table{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
+.readings-table th{text-align:left;font-size:11px;font-weight:600;color:var(--muted);padding:8px 12px 8px 0;border-bottom:1px solid var(--line)}
+.readings-table td{padding:9px 12px 9px 0;border-bottom:1px solid var(--line-soft);vertical-align:top}
+.readings-table .replayed-row td:last-child{color:var(--warn-ink)}
+@media(max-width:800px){.chart-card{padding:16px 14px 12px}.chart-host{min-height:300px}.readings-table td:nth-child(4){min-width:170px}}

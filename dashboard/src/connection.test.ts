@@ -194,3 +194,43 @@ describe('dashboard connection contract', () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 });
+
+describe('event listener', () => {
+  it('passes each snapshot and each in-order event once, never the ones the snapshot covers', async () => {
+    const sockets: FakeSocket[] = [];
+    const seen: string[] = [];
+    let finish!: (response: Response) => void;
+    const client = new DashboardConnection({
+      socketUrl: 'ws://localhost/ws', snapshotUrl: '/api/snapshot',
+      fetchSnapshot: () => new Promise(resolve => { finish = resolve; }),
+      createSocket: () => { const socket = new FakeSocket(); sockets.push(socket); return socket; },
+      onSnapshot: s => seen.push(`snapshot ${s.last_event_id}`),
+      onEvent: e => seen.push(`${e.type} ${e.event_id}`),
+    }, () => {});
+    client.start();
+    sockets[0].open(); status(sockets[0]);
+    sockets[0].send('reading_received', {}, 4);
+    sockets[0].send('reading_received', {}, 5);
+    finish(new Response(JSON.stringify(snapshot(4)))); await settle();
+    sockets[0].send('reading_received', {}, 5); // duplicate
+    sockets[0].send('local_failover', {}, 6);
+    expect(seen).toEqual(['snapshot 4', 'reading_received 5', 'local_failover 6']);
+    client.stop();
+  });
+
+  it('reports a reset when it arrives', async () => {
+    const sockets: FakeSocket[] = [];
+    const seen: string[] = [];
+    const client = new DashboardConnection({
+      socketUrl: 'ws://localhost/ws', snapshotUrl: '/api/snapshot',
+      fetchSnapshot: async () => new Response(JSON.stringify(snapshot(4))),
+      createSocket: () => { const socket = new FakeSocket(); sockets.push(socket); return socket; },
+      onEvent: e => seen.push(e.type),
+    }, () => {});
+    client.start();
+    sockets[0].open(); status(sockets[0]); await settle();
+    sockets[0].send('reset', { run_id: 2 }, 9);
+    expect(seen).toEqual(['reset']);
+    client.stop();
+  });
+});

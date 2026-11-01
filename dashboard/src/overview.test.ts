@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { NodeView, Reading, RecordedEvent } from './fixtures';
+import type { NodeView, Reading } from './fixtures';
+import type { ChangeEvent, TimeMap } from './liveData';
 import { ageText, latestReading, nodeLines, readingAgeMs, recentChanges } from './overview';
 
 const reading = (seq: number, received_ms: number, extra: Partial<Reading> = {}): Reading =>
@@ -40,17 +41,19 @@ describe('nodeLines', () => {
 });
 
 describe('recentChanges', () => {
-  const events: RecordedEvent[] = [
-    { type: 'node_seen', event_id: 1, data: { sim_ms: 1000, node: 'B' } },
-    { type: 'telemetry', event_id: 2, data: { sim_ms: 2000 } },
-    { type: 'environment', event_id: 3, data: { sim_ms: 3000, label: 'Stop B (injected by presenter, simulation)' } },
-    { type: 'local_failover', event_id: 4, data: { sim_ms: 4000, to: 'D' } },
+  const sim: TimeMap = { mode: 'simulation', offsetMs: 0 };
+  const change = (id: number, type: string, at: number, data: Record<string, unknown> = {}): ChangeEvent => ({ key: `1:${id}`, id, type, at, data });
+  const changes = [
+    change(1, 'node_seen', 1000, { node: 'B' }), change(2, 'telemetry', 2000),
+    change(3, 'environment', 3000, { label: 'Stop B (injected by presenter, simulation)' }),
+    change(4, 'local_failover', 4000, { to: 'D' }),
   ];
   it('skips untitled events and is newest first', () => {
-    const changes = recentChanges(events, 10_000);
-    expect(changes.map(c => c.id)).toEqual([4, 3, 1]);
-    expect(changes[0]).toMatchObject({ title: 'A switched locally to D', time: '4.0 s', ago: '6 s ago' });
-    expect(changes[1].injected).toBe(true);
+    const out = recentChanges(changes, 10_000, sim);
+    expect(out.map(c => c.id)).toEqual(['1:4', '1:3', '1:1']);
+    expect(out[0]).toMatchObject({ title: 'A switched locally to D', time: '00:04', ago: '6 s ago' });
+    expect(out[1].injected).toBe(true);
   });
-  it('respects the limit', () => expect(recentChanges(events, 10_000, 2)).toHaveLength(2));
+  it('respects the limit', () => expect(recentChanges(changes, 10_000, sim, 2)).toHaveLength(2));
+  it('has no age without a clock', () => expect(recentChanges(changes, null, sim)[0].ago).toBe(''));
 });

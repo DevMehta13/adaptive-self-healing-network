@@ -1,5 +1,7 @@
 import { eventText } from './live';
-import type { NodeId, NodeView, Reading, RecordedEvent } from './fixtures';
+import type { NodeId, NodeView, Reading } from './fixtures';
+import type { ChangeEvent, TimeMap } from './liveData';
+import { axisTime } from './chartData';
 
 export const nodeRoles: Record<NodeId, string> = { A: 'Source', B: 'Relay', C: 'USB gateway', D: 'Relay' };
 
@@ -41,15 +43,14 @@ export function nodeLines(nodes: NodeView[]): NodeLine[] {
 
 export interface Change { id: number | string; title: string; time: string; ago: string; injected: boolean }
 
-/** Newest first, only the events the dashboard has a readable title for. */
-export function recentChanges(events: RecordedEvent[], simMs: number, limit = 5): Change[] {
+/** Newest first, only the events the dashboard has a readable title for. Times are on the shared axis (wall clock in hardware, simulated in simulation). */
+export function recentChanges(changes: ChangeEvent[], nowAt: number | null, map: TimeMap, limit = 5): Change[] {
   const out: Change[] = [];
-  for (let i = events.length - 1; i >= 0 && out.length < limit; i--) {
-    const event = events[i];
-    const title = eventText(event);
+  for (let i = changes.length - 1; i >= 0 && out.length < limit; i--) {
+    const change = changes[i];
+    const title = eventText({ type: change.type, event_id: change.id, data: change.data });
     if (title === null) continue;
-    const at = typeof event.data.sim_ms === 'number' ? event.data.sim_ms : null;
-    out.push({ id: event.event_id ?? i, title, time: at === null ? '—' : seconds(at), ago: at === null ? '' : ageText(Math.max(0, simMs - at)), injected: event.type === 'environment' });
+    out.push({ id: change.key, title, time: axisTime(map, change.at), ago: nowAt === null ? '' : ageText(Math.max(0, nowAt - change.at)), injected: change.type === 'environment' });
   }
   return out;
 }
