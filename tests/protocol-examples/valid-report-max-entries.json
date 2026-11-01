@@ -1,0 +1,67 @@
+{
+  "name": "report-max-entries",
+  "description": "8 entries (65-byte payload); one age saturated at 65535 ms.",
+  "valid": true,
+  "frame": {
+    "version": 1,
+    "type": "TOPOLOGY_REPORT",
+    "src": 2,
+    "dst": 3,
+    "session": 4294967295,
+    "seq": 4294967295,
+    "ttl": 255,
+    "payload": {
+      "entries": [
+        {
+          "neighbor": 1,
+          "state": "TWO_WAY",
+          "session": 4294967294,
+          "age_ms": 1000
+        },
+        {
+          "neighbor": 2,
+          "state": "LOST",
+          "session": 4294967293,
+          "age_ms": 2000
+        },
+        {
+          "neighbor": 3,
+          "state": "ONE_WAY",
+          "session": 4294967292,
+          "age_ms": 3000
+        },
+        {
+          "neighbor": 4,
+          "state": "TWO_WAY",
+          "session": 4294967291,
+          "age_ms": 4000
+        },
+        {
+          "neighbor": 5,
+          "state": "LOST",
+          "session": 4294967290,
+          "age_ms": 5000
+        },
+        {
+          "neighbor": 6,
+          "state": "ONE_WAY",
+          "session": 4294967289,
+          "age_ms": 6000
+        },
+        {
+          "neighbor": 7,
+          "state": "TWO_WAY",
+          "session": 4294967288,
+          "age_ms": 7000
+        },
+        {
+          "neighbor": 8,
+          "state": "LOST",
+          "session": 4294967287,
+          "age_ms": 65535
+        }
+      ]
+    }
+  },
+  "hex": "01110203ffffffffffffffffff41080102feffffffe8030203fdffffffd0070301fcffffffb80b0402fbffffffa00f0503faffffff88130601f9ffffff70170702f8ffffff581b0803f7ffffffffff"
+}

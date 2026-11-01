@@ -1,0 +1,8 @@
+{
+  "name": "invalid-down-resend-from-zero",
+  "description": "Numbering starts at 1.",
+  "direction": "down",
+  "line": "{\"v\":1,\"t\":\"rs\",\"b\":5,\"from\":0}*D50E",
+  "result": "rejected",
+  "reason": "bad_value"
+}

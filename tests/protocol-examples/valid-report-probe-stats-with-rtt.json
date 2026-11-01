@@ -1,0 +1,36 @@
+{
+  "name": "report-probe-stats-with-rtt",
+  "description": "A reports B two-way with a measured RTT of 22 ms, of its last 20 completed probes to B 19 answered, and D two-way with no RTT yet but 20 of 20 probes answered. The RTT trailer names only B; the probe-statistics trailer names B and D.",
+  "valid": true,
+  "frame": {
+    "version": 1,
+    "type": "TOPOLOGY_REPORT",
+    "src": 1,
+    "dst": 3,
+    "session": 168496141,
+    "seq": 31,
+    "ttl": 8,
+    "payload": {
+      "entries": [
+        {
+          "neighbor": 2,
+          "state": "TWO_WAY",
+          "session": 572662306,
+          "age_ms": 120,
+          "rtt_ms": 22,
+          "probes_ok": 19,
+          "probes_total": 20
+        },
+        {
+          "neighbor": 4,
+          "state": "TWO_WAY",
+          "session": 1145324612,
+          "age_ms": 90,
+          "probes_ok": 20,
+          "probes_total": 20
+        }
+      ]
+    }
+  },
+  "hex": "011101030d0c0b0a1f000000081c0202022222222278000402444444445a000102160002021314041414"
+}

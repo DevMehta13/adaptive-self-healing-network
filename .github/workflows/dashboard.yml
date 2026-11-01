@@ -1,0 +1,35 @@
+name: Dashboard
+
+on:
+  push:
+    paths:
+      - "dashboard/**"
+      - ".github/workflows/dashboard.yml"
+  pull_request:
+    paths:
+      - "dashboard/**"
+      - ".github/workflows/dashboard.yml"
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: dashboard
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: dashboard/package-lock.json
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Type-check and build
+        run: npm run build
+      - name: Test connection behavior
+        run: npm test

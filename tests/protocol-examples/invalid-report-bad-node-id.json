@@ -1,0 +1,7 @@
+{
+  "name": "report-bad-node-id",
+  "description": "Neighbor id 255 is reserved.",
+  "valid": false,
+  "hex": "011101030d0c0b0a01000000080901ff02050000000000",
+  "reject_reason": "bad_node_id"
+}

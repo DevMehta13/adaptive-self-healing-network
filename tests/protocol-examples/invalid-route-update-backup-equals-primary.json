@@ -1,0 +1,7 @@
+{
+  "name": "route-update-backup-equals-primary",
+  "description": "ROUTE_UPDATE whose backup is the same node as the primary.",
+  "valid": false,
+  "hex": "011203018877665516000000080b00f1536504000000030202",
+  "reject_reason": "bad_value"
+}

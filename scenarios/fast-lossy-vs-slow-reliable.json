@@ -1,0 +1,26 @@
+{
+  "name": "fast-lossy-vs-slow-reliable",
+  "description": "SIMULATED SETTING, not a measurement. The path A > B > C is fast (10 ms one way per link) but lossy: every frame sent over A-B or B-C is lost 15 % of the time, in each direction. The path A > D > C is slower (25 ms one way per link) and loses nothing. Probes, local failover off (so that false failover triggers do not confound the comparison), the controller routes by the policy named in the controller section, and the study --compare-policies runs the same seeds under each policy. Lowest delay is expected to stay on the fast lossy path; highest reliability is expected to move to the slow clean one.",
+  "seed": 1,
+  "duration_s": 180,
+  "routing": "controller",
+  "settings": {
+    "probe_interval_ms": 1000,
+    "probe_window": 20
+  },
+  "controller": {
+    "epoch": 1000,
+    "policy": "lowest_delay"
+  },
+  "links": {
+    "A->B": { "delay_ms": 10, "loss": 0.15 },
+    "B->A": { "delay_ms": 10, "loss": 0.15 },
+    "B->C": { "delay_ms": 10, "loss": 0.15 },
+    "C->B": { "delay_ms": 10, "loss": 0.15 },
+    "A->D": { "delay_ms": 25 },
+    "D->A": { "delay_ms": 25 },
+    "D->C": { "delay_ms": 25 },
+    "C->D": { "delay_ms": 25 }
+  },
+  "actions": []
+}

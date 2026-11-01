@@ -1,0 +1,8 @@
+{
+  "name": "invalid-down-bad-checksum",
+  "description": "One changed character.",
+  "direction": "down",
+  "line": "{\"v\":1,\"t\":\"hb\",\"b\":2766734100,\"ack\":18}*FA9B",
+  "result": "rejected",
+  "reason": "bad_checksum"
+}

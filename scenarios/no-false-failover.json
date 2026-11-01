@@ -1,0 +1,52 @@
+{
+  "name": "no-false-failover",
+  "description": "SIMULATED SETTING, not a measurement: link delays are configured so that A-B and B-C (10 ms one way) are cheaper than A-D and D-C (25 ms one way). Two consecutive link-layer failures to B (K-1 with K=3) happen three times, each separated by successes. T2 must not trigger and no failover happens. (The false-trigger rate under random loss is measured with --false-triggers.)",
+  "seed": 42,
+  "duration_s": 60,
+  "routing": "controller",
+  "settings": {
+    "probe_interval_ms": 1000,
+    "local_failover": true,
+    "failover_t1": true,
+    "failover_t2_k": 3
+  },
+  "controller": {
+    "epoch": 1000,
+    "backup_next_hops": true
+  },
+  "links": {
+    "A->B": {
+      "delay_ms": 10,
+      "drop_frames": [
+        30,
+        31,
+        70,
+        71,
+        110,
+        111
+      ]
+    },
+    "B->A": {
+      "delay_ms": 10
+    },
+    "B->C": {
+      "delay_ms": 10
+    },
+    "C->B": {
+      "delay_ms": 10
+    },
+    "A->D": {
+      "delay_ms": 25
+    },
+    "D->A": {
+      "delay_ms": 25
+    },
+    "D->C": {
+      "delay_ms": 25
+    },
+    "C->D": {
+      "delay_ms": 25
+    }
+  },
+  "actions": []
+}

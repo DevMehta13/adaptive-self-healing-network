@@ -1,0 +1,7 @@
+{
+  "name": "stale-report-expiry",
+  "description": "C stops at 10 s, so no reports reach the controller any more. Its view must not stay fresh: after the 15 s expiry every node and link becomes stale and nothing is usable.",
+  "seed": 42,
+  "duration_s": 40,
+  "actions": [{ "at_ms": 10000, "action": "stop_node", "node": "C" }]
+}

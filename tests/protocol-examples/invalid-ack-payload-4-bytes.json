@@ -1,0 +1,7 @@
+{
+  "name": "ack-payload-4-bytes",
+  "description": "DELIVERY_ACK payload must be exactly 9 bytes; this one has 4.",
+  "valid": false,
+  "hex": "010201020d0c0b0a07000000080401020304",
+  "reject_reason": "bad_payload_length"
+}

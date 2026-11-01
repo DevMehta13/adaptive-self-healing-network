@@ -1,0 +1,27 @@
+{
+  "name": "report-probe-stats-without-rtt",
+  "description": "A reports B two-way with no RTT measurement but 5 of 5 probes answered. The RTT trailer is a single 0 byte so that the probe-statistics trailer after it can be found.",
+  "valid": true,
+  "frame": {
+    "version": 1,
+    "type": "TOPOLOGY_REPORT",
+    "src": 1,
+    "dst": 3,
+    "session": 168496141,
+    "seq": 31,
+    "ttl": 8,
+    "payload": {
+      "entries": [
+        {
+          "neighbor": 2,
+          "state": "TWO_WAY",
+          "session": 572662306,
+          "age_ms": 120,
+          "probes_ok": 5,
+          "probes_total": 5
+        }
+      ]
+    }
+  },
+  "hex": "011101030d0c0b0a1f000000080e0102022222222278000001020505"
+}

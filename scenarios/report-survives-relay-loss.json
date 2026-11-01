@@ -1,0 +1,7 @@
+{
+  "name": "report-survives-relay-loss",
+  "description": "B stops at 6 s. A's later topology reports still reach C by flooding through D, even though A's data route (through B) is broken.",
+  "seed": 42,
+  "duration_s": 20,
+  "actions": [{ "at_ms": 6000, "action": "stop_node", "node": "B" }]
+}

@@ -1,0 +1,18 @@
+{
+  "name": "data-min-value",
+  "description": "Smallest int32 reading.",
+  "valid": true,
+  "frame": {
+    "version": 1,
+    "type": "DATA",
+    "src": 1,
+    "dst": 2,
+    "session": 168496141,
+    "seq": 7,
+    "ttl": 8,
+    "payload": {
+      "value": -2147483648
+    }
+  },
+  "hex": "010101020d0c0b0a07000000080400000080"
+}

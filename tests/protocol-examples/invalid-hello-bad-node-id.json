@@ -1,0 +1,7 @@
+{
+  "name": "hello-bad-node-id",
+  "description": "HELLO neighbor id 0 is invalid.",
+  "valid": false,
+  "hex": "011001020d0c0b0a010000000106010005000000",
+  "reject_reason": "bad_node_id"
+}

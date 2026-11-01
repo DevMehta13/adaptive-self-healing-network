@@ -1,0 +1,8 @@
+{
+  "name": "invalid-up-gone-kinds-length",
+  "description": "kinds must have one letter per number.",
+  "direction": "up",
+  "line": "{\"v\":1,\"t\":\"gone\",\"b\":1,\"from\":5,\"to\":7,\"kinds\":\"RR\"}*64F0",
+  "result": "rejected",
+  "reason": "bad_value"
+}

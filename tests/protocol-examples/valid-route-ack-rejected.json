@@ -1,0 +1,21 @@
+{
+  "name": "route-ack-rejected",
+  "description": "A cannot use the update (for example the next hop is not a permitted neighbor).",
+  "valid": true,
+  "frame": {
+    "version": 1,
+    "type": "ROUTE_INSTALL_ACK",
+    "src": 1,
+    "dst": 3,
+    "session": 168496141,
+    "seq": 56,
+    "ttl": 8,
+    "payload": {
+      "epoch": 1700000000,
+      "version": 10,
+      "destination": 3,
+      "status": "REJECTED"
+    }
+  },
+  "hex": "011301030d0c0b0a38000000080a00f153650a0000000303"
+}

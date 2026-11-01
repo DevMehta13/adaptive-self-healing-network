@@ -1,0 +1,7 @@
+{
+  "name": "report-bad-session",
+  "description": "Neighbor session 0 is reserved.",
+  "valid": false,
+  "hex": "011101030d0c0b0a010000000809010202000000000000",
+  "reject_reason": "bad_session"
+}

@@ -1,0 +1,8 @@
+{
+  "name": "invalid-up-dup-on-report",
+  "description": "dup is only for DATA.",
+  "direction": "up",
+  "line": "{\"v\":1,\"t\":\"fr\",\"b\":2766734100,\"n\":14,\"age\":0,\"rp\":0,\"via\":2,\"dup\":0,\"hex\":\"011102034e65fabcd20000000818020102457c326378000302d1030000540102011e00032300\"}*026D",
+  "result": "rejected",
+  "reason": "unknown_field"
+}

@@ -1,0 +1,202 @@
+[
+ {
+  "trial": 1,
+  "relay_removed": "B",
+  "local_failover_ms": 287.272216796875,
+  "local_failover_trigger": "send_failures",
+  "controller_route_active_ms": 537.272216796875,
+  "controller_trigger": "local_failover_report",
+  "link_declared_down_ms": 2412.272216796875,
+  "first_delivery_via_new_path_ms": 943.272216796875,
+  "new_path": [
+   "A",
+   "D",
+   "C"
+  ],
+  "delivery_gap_ms": 1579,
+  "sent_in_window": 16,
+  "delivered_in_window": 19,
+  "lost_estimate": -3,
+  "duplicates_total": 0
+ },
+ {
+  "trial": 2,
+  "relay_removed": "D",
+  "local_failover_ms": 253.8359375,
+  "local_failover_trigger": "send_failures",
+  "controller_route_active_ms": 473.8359375,
+  "controller_trigger": "local_failover_report",
+  "link_declared_down_ms": 2940.8359375,
+  "first_delivery_via_new_path_ms": 1207.8359375,
+  "new_path": [
+   "A",
+   "B",
+   "C"
+  ],
+  "delivery_gap_ms": 2579,
+  "sent_in_window": 16,
+  "delivered_in_window": 19,
+  "lost_estimate": -3,
+  "duplicates_total": 0
+ },
+ {
+  "trial": 3,
+  "relay_removed": "B",
+  "local_failover_ms": 667.943603515625,
+  "local_failover_trigger": "send_failures",
+  "controller_route_active_ms": 1246.943603515625,
+  "controller_trigger": "local_failover_report",
+  "link_declared_down_ms": 2981.943603515625,
+  "first_delivery_via_new_path_ms": 1121.943603515625,
+  "new_path": [
+   "A",
+   "D",
+   "C"
+  ],
+  "delivery_gap_ms": 2531,
+  "sent_in_window": 16,
+  "delivered_in_window": 19,
+  "lost_estimate": -3,
+  "duplicates_total": 0
+ },
+ {
+  "trial": 4,
+  "relay_removed": "D",
+  "local_failover_ms": 349.4931640625,
+  "local_failover_trigger": "send_failures",
+  "controller_route_active_ms": 599.4931640625,
+  "controller_trigger": "local_failover_report",
+  "link_declared_down_ms": 2691.4931640625,
+  "first_delivery_via_new_path_ms": 1020.4931640625,
+  "new_path": [
+   "A",
+   "B",
+   "C"
+  ],
+  "delivery_gap_ms": 2579,
+  "sent_in_window": 16,
+  "delivered_in_window": 19,
+  "lost_estimate": -3,
+  "duplicates_total": 1
+ },
+ {
+  "trial": 5,
+  "relay_removed": "B",
+  "local_failover_ms": 368.5498046875,
+  "local_failover_trigger": "send_failures",
+  "controller_route_active_ms": 508.5498046875,
+  "controller_trigger": "local_failover_report",
+  "link_declared_down_ms": 2712.5498046875,
+  "first_delivery_via_new_path_ms": 1289.5498046875,
+  "new_path": [
+   "A",
+   "D",
+   "C"
+  ],
+  "delivery_gap_ms": 2531,
+  "sent_in_window": 16,
+  "delivered_in_window": 19,
+  "lost_estimate": -3,
+  "duplicates_total": 1
+ },
+ {
+  "trial": 6,
+  "relay_removed": "B",
+  "local_failover_ms": 961.97705078125,
+  "local_failover_trigger": "send_failures",
+  "controller_route_active_ms": 1163.97705078125,
+  "controller_trigger": "local_failover_report",
+  "link_declared_down_ms": 2774.97705078125,
+  "first_delivery_via_new_path_ms": 1492.97705078125,
+  "new_path": [
+   "A",
+   "D",
+   "C"
+  ],
+  "delivery_gap_ms": 1562,
+  "sent_in_window": 16,
+  "delivered_in_window": 19,
+  "lost_estimate": -3,
+  "duplicates_total": 1
+ },
+ {
+  "trial": 7,
+  "relay_removed": "B",
+  "local_failover_ms": 1094.827880859375,
+  "local_failover_trigger": "send_failures",
+  "controller_route_active_ms": 1375.827880859375,
+  "controller_trigger": "local_failover_report",
+  "link_declared_down_ms": 2000.827880859375,
+  "first_delivery_via_new_path_ms": 1265.827880859375,
+  "new_path": [
+   "A",
+   "D",
+   "C"
+  ],
+  "delivery_gap_ms": 1625,
+  "sent_in_window": 17,
+  "delivered_in_window": 18,
+  "lost_estimate": -1,
+  "duplicates_total": 1
+ },
+ {
+  "trial": 8,
+  "relay_removed": "B",
+  "local_failover_ms": 956.074951171875,
+  "local_failover_trigger": "send_failures",
+  "controller_route_active_ms": 10127.074951171875,
+  "controller_trigger": "topology_changed",
+  "link_declared_down_ms": 2706.074951171875,
+  "first_delivery_via_new_path_ms": 11362.074951171875,
+  "new_path": [
+   "A",
+   "D",
+   "C"
+  ],
+  "delivery_gap_ms": 12235,
+  "sent_in_window": 16,
+  "delivered_in_window": 12,
+  "lost_estimate": 4,
+  "duplicates_total": 1
+ },
+ {
+  "trial": 9,
+  "relay_removed": "B",
+  "local_failover_ms": 274.275634765625,
+  "local_failover_trigger": "send_failures",
+  "controller_route_active_ms": 587.275634765625,
+  "controller_trigger": "local_failover_report",
+  "link_declared_down_ms": 2134.275634765625,
+  "first_delivery_via_new_path_ms": 1056.275634765625,
+  "new_path": [
+   "A",
+   "D",
+   "C"
+  ],
+  "delivery_gap_ms": 1517,
+  "sent_in_window": 16,
+  "delivered_in_window": 18,
+  "lost_estimate": -2,
+  "duplicates_total": 1
+ },
+ {
+  "trial": 10,
+  "relay_removed": "B",
+  "local_failover_ms": 691.96923828125,
+  "local_failover_trigger": "send_failures",
+  "controller_route_active_ms": 1018.96923828125,
+  "controller_trigger": "local_failover_report",
+  "link_declared_down_ms": 2237.96923828125,
+  "first_delivery_via_new_path_ms": 1643.96923828125,
+  "new_path": [
+   "A",
+   "D",
+   "C"
+  ],
+  "delivery_gap_ms": 2531,
+  "sent_in_window": 16,
+  "delivered_in_window": 19,
+  "lost_estimate": -3,
+  "duplicates_total": 1
+ }
+]

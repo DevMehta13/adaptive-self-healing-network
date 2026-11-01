@@ -1,0 +1,22 @@
+{
+  "name": "route-update-with-backup",
+  "description": "C tells A: for C use B, with D as backup (the backup field is used from Phase 4b).",
+  "valid": true,
+  "frame": {
+    "version": 1,
+    "type": "ROUTE_UPDATE",
+    "src": 3,
+    "dst": 1,
+    "session": 1432778632,
+    "seq": 22,
+    "ttl": 8,
+    "payload": {
+      "epoch": 1700000000,
+      "version": 4,
+      "destination": 3,
+      "next_hop": 2,
+      "backup_next_hop": 4
+    }
+  },
+  "hex": "011203018877665516000000080b00f1536504000000030204"
+}

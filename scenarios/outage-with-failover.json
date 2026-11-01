@@ -1,0 +1,62 @@
+{
+  "name": "outage-with-failover",
+  "description": "SIMULATED SETTING, not a measurement: link delays are configured so that A-B and B-C (10 ms one way) are cheaper than A-D and D-C (25 ms one way). The controller is detached from 15 s to 40 s and B stops at 20 s. A fails over to D on its own while the controller is away; its failover report is held at C. After reattachment the replay tells the controller, which confirms the route through D without fighting the node's switch.",
+  "seed": 42,
+  "duration_s": 70,
+  "routing": "controller",
+  "settings": {
+    "probe_interval_ms": 1000,
+    "local_failover": true,
+    "failover_t1": true,
+    "failover_t2_k": 3,
+    "telemetry_interval_ms": 5000,
+    "controller_timeout_ms": 3000,
+    "buffer_capacity": 50
+  },
+  "controller": {
+    "epoch": 1000,
+    "backup_next_hops": true,
+    "heartbeat_interval_ms": 1000
+  },
+  "links": {
+    "A->B": {
+      "delay_ms": 10
+    },
+    "B->A": {
+      "delay_ms": 10
+    },
+    "B->C": {
+      "delay_ms": 10
+    },
+    "C->B": {
+      "delay_ms": 10
+    },
+    "A->D": {
+      "delay_ms": 25
+    },
+    "D->A": {
+      "delay_ms": 25
+    },
+    "D->C": {
+      "delay_ms": 25
+    },
+    "C->D": {
+      "delay_ms": 25
+    }
+  },
+  "actions": [
+    {
+      "at_ms": 15000,
+      "action": "detach_gateway"
+    },
+    {
+      "at_ms": 20000,
+      "action": "stop_node",
+      "node": "B"
+    },
+    {
+      "at_ms": 40000,
+      "action": "attach_gateway"
+    }
+  ]
+}

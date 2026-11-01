@@ -1,0 +1,7 @@
+{
+  "name": "route-update-next-hop-255",
+  "description": "ROUTE_UPDATE whose next hop is the reserved id 255.",
+  "valid": false,
+  "hex": "011203028877665515000000080b00f153650300000003ff00",
+  "reject_reason": "bad_node_id"
+}

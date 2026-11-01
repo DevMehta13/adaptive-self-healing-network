@@ -1,0 +1,8 @@
+{
+  "name": "invalid-up-bad-checksum-dropped-digit",
+  "description": "One digit of n was lost on the wire (12 became 2). The JSON is still valid, which is why every data line has a checksum.",
+  "direction": "up",
+  "line": "{\"v\":1,\"t\":\"fr\",\"b\":2766734100,\"n\":2,\"age\":0,\"rp\":0,\"via\":2,\"dup\":0,\"hex\":\"01010103457c32632d0000000704dd070000\"}*B412",
+  "result": "rejected",
+  "reason": "bad_checksum"
+}

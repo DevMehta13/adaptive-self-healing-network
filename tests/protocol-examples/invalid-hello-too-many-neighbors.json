@@ -1,0 +1,7 @@
+{
+  "name": "hello-too-many-neighbors",
+  "description": "HELLO lists 9 neighbors; the limit is 8.",
+  "valid": false,
+  "hex": "011001020d0c0b0a01000000012e09020500000002050000000205000000020500000002050000000205000000020500000002050000000205000000",
+  "reject_reason": "bad_payload_length"
+}

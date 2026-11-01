@@ -1,0 +1,32 @@
+{
+  "name": "report-rtt-one-measured",
+  "description": "A reports B two-way with a measured RTT of 22 ms and D two-way with no measurement yet; the trailer names only B.",
+  "valid": true,
+  "frame": {
+    "version": 1,
+    "type": "TOPOLOGY_REPORT",
+    "src": 1,
+    "dst": 3,
+    "session": 168496141,
+    "seq": 31,
+    "ttl": 8,
+    "payload": {
+      "entries": [
+        {
+          "neighbor": 2,
+          "state": "TWO_WAY",
+          "session": 572662306,
+          "age_ms": 120,
+          "rtt_ms": 22
+        },
+        {
+          "neighbor": 4,
+          "state": "TWO_WAY",
+          "session": 1145324612,
+          "age_ms": 90
+        }
+      ]
+    }
+  },
+  "hex": "011101030d0c0b0a1f00000008150202022222222278000402444444445a0001021600"
+}

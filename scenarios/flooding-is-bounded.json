@@ -1,0 +1,7 @@
+{
+  "name": "flooding-is-bounded",
+  "description": "A tiny flood cache (8 identities) and a faster report rate stress the flooding. Each node still forwards a given management frame at most once, TTL ends every flood, and the run stays small.",
+  "seed": 42,
+  "duration_s": 30,
+  "settings": { "flood_cache_size": 8, "report_interval_ms": 1000 }
+}

@@ -1,0 +1,17 @@
+{
+  "name": "valid-up-frame-failover-replayed",
+  "description": "A's local-failover report, held by C for 20.5 s during an outage and replayed (rp 1, age 20500).",
+  "direction": "up",
+  "line": "{\"v\":1,\"t\":\"fr\",\"b\":2766734100,\"n\":16,\"age\":20500,\"rp\":1,\"via\":4,\"hex\":\"01160103457c32633c000000060ce80300000100000003020402\"}*0484",
+  "result": "message",
+  "fields": {
+    "v": 1,
+    "t": "fr",
+    "b": 2766734100,
+    "n": 16,
+    "age": 20500,
+    "rp": 1,
+    "via": 4,
+    "hex": "01160103457c32633c000000060ce80300000100000003020402"
+  }
+}

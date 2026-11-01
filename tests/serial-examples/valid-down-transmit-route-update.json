@@ -1,0 +1,14 @@
+{
+  "name": "valid-down-transmit-route-update",
+  "description": "Originate a ROUTE_UPDATE (type 18) for B: next hop C for destination C, epoch 1000, version 2. C writes the header (its own src, session, seq, TTL).",
+  "direction": "down",
+  "line": "{\"v\":1,\"t\":\"tx\",\"dst\":2,\"mt\":18,\"p\":\"e803000002000000030300\"}*08D1",
+  "result": "message",
+  "fields": {
+    "v": 1,
+    "t": "tx",
+    "dst": 2,
+    "mt": 18,
+    "p": "e803000002000000030300"
+  }
+}

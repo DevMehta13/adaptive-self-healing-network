@@ -1,0 +1,7 @@
+{
+  "name": "data-payload-2-bytes",
+  "description": "DATA payload must be exactly 4 bytes; this one has 2.",
+  "valid": false,
+  "hex": "010101020d0c0b0a0700000008020102",
+  "reject_reason": "bad_payload_length"
+}

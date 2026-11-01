@@ -1,0 +1,89 @@
+{
+  "name": "no-route-told-explicitly",
+  "description": "SIMULATED SETTING, not a measurement: link delays are configured so that A-B and B-C (10 ms one way) are cheaper than A-D and D-C (25 ms one way). At 12 s every link loses one direction (B>A, C>B, A>D, D>C), so no link is two-way, while management messages can still go around the ring. The controller reports No available route and tells A explicitly; A then drops new readings with reason no_route. At 30 s the links return and, after the hold-down, the route comes back.",
+  "seed": 42,
+  "duration_s": 55,
+  "routing": "controller",
+  "settings": {
+    "probe_interval_ms": 1000
+  },
+  "controller": {
+    "epoch": 1000
+  },
+  "links": {
+    "A->B": {
+      "delay_ms": 10
+    },
+    "B->A": {
+      "delay_ms": 10
+    },
+    "B->C": {
+      "delay_ms": 10
+    },
+    "C->B": {
+      "delay_ms": 10
+    },
+    "A->D": {
+      "delay_ms": 25
+    },
+    "D->A": {
+      "delay_ms": 25
+    },
+    "D->C": {
+      "delay_ms": 25
+    },
+    "C->D": {
+      "delay_ms": 25
+    }
+  },
+  "actions": [
+    {
+      "at_ms": 12000,
+      "action": "link_down",
+      "link": "B->A",
+      "down": true
+    },
+    {
+      "at_ms": 12000,
+      "action": "link_down",
+      "link": "C->B",
+      "down": true
+    },
+    {
+      "at_ms": 12000,
+      "action": "link_down",
+      "link": "A->D",
+      "down": true
+    },
+    {
+      "at_ms": 12000,
+      "action": "link_down",
+      "link": "D->C",
+      "down": true
+    },
+    {
+      "at_ms": 30000,
+      "action": "link_down",
+      "link": "B->A",
+      "down": false
+    },
+    {
+      "at_ms": 30000,
+      "action": "link_down",
+      "link": "C->B",
+      "down": false
+    },
+    {
+      "at_ms": 30000,
+      "action": "link_down",
+      "link": "A->D",
+      "down": false
+    },
+    {
+      "at_ms": 30000,
+      "action": "link_down",
+      "link": "D->C",
+      "down": false
+    }
+  ]
+}

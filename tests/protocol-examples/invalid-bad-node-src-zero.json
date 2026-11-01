@@ -1,0 +1,7 @@
+{
+  "name": "bad-node-src-zero",
+  "description": "Source node id 0 is invalid.",
+  "valid": false,
+  "hex": "010100020d0c0b0a07000000080429090000",
+  "reject_reason": "bad_node_id"
+}

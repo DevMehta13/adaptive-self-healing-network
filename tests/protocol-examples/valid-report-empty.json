@@ -1,0 +1,18 @@
+{
+  "name": "report-empty",
+  "description": "A report with no neighbor observations.",
+  "valid": true,
+  "frame": {
+    "version": 1,
+    "type": "TOPOLOGY_REPORT",
+    "src": 4,
+    "dst": 3,
+    "session": 1145324612,
+    "seq": 1,
+    "ttl": 8,
+    "payload": {
+      "entries": []
+    }
+  },
+  "hex": "011104034444444401000000080100"
+}

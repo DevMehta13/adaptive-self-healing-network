@@ -1,0 +1,7 @@
+{
+  "name": "report-rtt-bad-node",
+  "description": "An RTT entry for node 0.",
+  "valid": false,
+  "hex": "011101030d0c0b0a1f00000008150202022222222278000402444444445a0001001600",
+  "reject_reason": "bad_node_id"
+}

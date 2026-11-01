@@ -1,0 +1,7 @@
+{
+  "name": "report-bad-state-4",
+  "description": "State 4 is not defined.",
+  "valid": false,
+  "hex": "011101030d0c0b0a010000000809010204050000000000",
+  "reject_reason": "bad_value"
+}

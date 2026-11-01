@@ -1,0 +1,8 @@
+{
+  "name": "invalid-up-not-ascii",
+  "description": "A byte outside printable ASCII inside a data line.",
+  "direction": "up",
+  "line_hex": "7b2276223a312c2274223a2268656c6c6f222c2262223a312c226e6f6465223a332c22636170223a35302c2277696e223a31362c226677223a22e9227d2a43443331",
+  "result": "rejected",
+  "reason": "not_ascii"
+}

@@ -1,0 +1,22 @@
+{
+  "name": "route-update-no-route",
+  "description": "C tells A explicitly that there is no route to C (next hop none).",
+  "valid": true,
+  "frame": {
+    "version": 1,
+    "type": "ROUTE_UPDATE",
+    "src": 3,
+    "dst": 1,
+    "session": 1432778632,
+    "seq": 23,
+    "ttl": 8,
+    "payload": {
+      "epoch": 1700000000,
+      "version": 5,
+      "destination": 3,
+      "next_hop": null,
+      "backup_next_hop": null
+    }
+  },
+  "hex": "011203018877665517000000080b00f1536505000000030000"
+}

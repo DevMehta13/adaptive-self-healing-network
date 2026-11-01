@@ -1,0 +1,8 @@
+{
+  "name": "invalid-up-unexpected-frame",
+  "description": "A HELLO frame: C never hands those up.",
+  "direction": "up",
+  "line": "{\"v\":1,\"t\":\"fr\",\"b\":2766734100,\"n\":12,\"age\":0,\"rp\":0,\"via\":1,\"hex\":\"01100103457c326303000000010100\"}*3D7D",
+  "result": "rejected",
+  "reason": "unexpected_frame"
+}

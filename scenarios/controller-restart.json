@@ -1,0 +1,51 @@
+{
+  "name": "controller-restart",
+  "description": "SIMULATED SETTING, not a measurement: link delays are configured so that A-B and B-C (10 ms one way) are cheaper than A-D and D-C (25 ms one way). B stops at 10 s and the route moves to D (epoch 1000, version 2). At 25 s the controller restarts with epoch 1001 and an empty view; its version numbers start again at 1. Nodes accept the newer epoch although 1 is smaller than 2, and delivery continues throughout.",
+  "seed": 42,
+  "duration_s": 45,
+  "routing": "controller",
+  "settings": {
+    "probe_interval_ms": 1000
+  },
+  "controller": {
+    "epoch": 1000
+  },
+  "links": {
+    "A->B": {
+      "delay_ms": 10
+    },
+    "B->A": {
+      "delay_ms": 10
+    },
+    "B->C": {
+      "delay_ms": 10
+    },
+    "C->B": {
+      "delay_ms": 10
+    },
+    "A->D": {
+      "delay_ms": 25
+    },
+    "D->A": {
+      "delay_ms": 25
+    },
+    "D->C": {
+      "delay_ms": 25
+    },
+    "C->D": {
+      "delay_ms": 25
+    }
+  },
+  "actions": [
+    {
+      "at_ms": 10000,
+      "action": "stop_node",
+      "node": "B"
+    },
+    {
+      "at_ms": 25000,
+      "action": "restart_controller",
+      "epoch": 1001
+    }
+  ]
+}

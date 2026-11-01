@@ -1,0 +1,7 @@
+{
+  "name": "length-extra",
+  "description": "One trailing byte beyond the declared payload.",
+  "valid": false,
+  "hex": "010101020d0c0b0a0700000008042909000000",
+  "reject_reason": "length_mismatch"
+}

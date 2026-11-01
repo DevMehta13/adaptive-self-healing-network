@@ -1,0 +1,13 @@
+{
+  "name": "valid-down-ack",
+  "description": "Acknowledgement only (not a heartbeat): C may free 1..24.",
+  "direction": "down",
+  "line": "{\"v\":1,\"t\":\"ack\",\"b\":2766734100,\"ack\":24}*F9A4",
+  "result": "message",
+  "fields": {
+    "v": 1,
+    "t": "ack",
+    "b": 2766734100,
+    "ack": 24
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "name": "bad-version",
+  "description": "Version byte is 2.",
+  "valid": false,
+  "hex": "020101020d0c0b0a07000000080429090000",
+  "reject_reason": "bad_version"
+}
