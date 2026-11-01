@@ -199,7 +199,7 @@ export function DeliveryPage({ live }: { live: Live }) {
 export function RunsPage() {
   return <>
     <PageHeader title="Saved runs" shows="Recorded relay-failure and controller-outage runs, explained moment by moment."
-      reading="Pick a run, then step through its moments. This works offline and is independent of the live connection." />
+      reading="Pick a recording, then step through its moments with Previous and Next, the dots or the list. The graph, route, counts and readings below show the controller’s knowledge at that moment. This works offline and is independent of the live connection." />
     <NetworkView />
   </>;
 }

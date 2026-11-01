@@ -1,7 +1,6 @@
 # Dashboard
 
-Dev's React + TypeScript + Vite dashboard. **D0 provides the backend connection shell, D1 a recorded-run viewer, and D2 the live network view and presenter controls.**
-Run history browsing comes in a later increment.
+Dev's React + TypeScript + Vite dashboard: five pages behind a top bar (Overview, Network, Readings, Delivery, Saved runs), live from the backend and, for Saved runs, from recordings that work offline. Run history browsing is not part of it.
 The backend is still simulation-only or tested against fake C; no real board is verified.
 
 ## Start on macOS or Windows
@@ -51,52 +50,33 @@ start the backend again. The indicator returns to Connected after a fresh snapsh
 and live message. The last successful snapshot remains labelled with its load time.
 Backend connectivity does **not** prove C is reachable or a sensor packet was delivered.
 
-## D2 live demonstration
+## Pages
 
-The top network view refreshes from the backend snapshot about once a second while the
-WebSocket is healthy. It shows the controller's planned route separately from the path
-of the last reading C received. Counts state who reported them and how old A's
-telemetry is. During an outage, the gateway warning says the view is stale. If the
-backend disconnects, the last view remains labelled as old and controls are disabled;
-reconnecting replaces it with a fresh snapshot, including after a backend restart.
+Hash routes, no router library; an unknown hash opens the Overview, refresh keeps the page, and
+switching pages never reconnects (one connection and one set of buffers serve the whole app).
 
-In simulation mode, use **Stop B / Start B** to test failover and return, **Detach C /
-Attach C** to test a laptop-link outage and replay, **Pause / Resume** to inspect a
-moment, and **Reset run** to start the current scenario again. Each command reports
-that the presenter action was accepted; the graph and readings are the separate
-evidence of what happened afterward. A changed policy can take several evaluations
-before an intact route switches. The policy menu also works in hardware mode, but
-simulation controls do not. None of these browser checks proves radio delivery.
+| Page | Route | What it shows |
+| --- | --- | --- |
+| Overview | `#/` | Latest temperature (marked replayed if late), planned route beside the last observed path, one status line per board, created / delivered / lost in total, the major network changes, and the backend facts. |
+| Network | `#/network` | The diamond with link states, the planned route and node trouble marked; node cards; planned route vs observed path; the controls (routing policy in both modes; in simulation also Stop/Start B and D, one link direction, Detach/Attach C, Pause/Resume, Reset run); and the timeline of network changes ("Major changes only" is on by default; presenter actions are marked "What we did"). |
+| Readings | `#/readings` | An interactive uPlot chart (1/5/15 min and All, Live/Paused, drag to zoom, hover details; colour by relay, hollow points for replayed readings, markers for failover, route change, node and link events) and a table of recent readings. |
+| Delivery | `#/delivery` | Created at A, delivered at C and acknowledged at A as a flow, then the loss and late counters, each with its source and age. |
+| Saved runs | `#/runs` | The two recordings (relay failure, controller outage), stepped through moment by moment with Previous/Next, the dots or a list. Works with the backend off. |
 
-The **Recent network changes** list highlights controller changes and presenter
-actions without exposing every telemetry and reading update. The backend keeps only
-its most recent 100 events in a snapshot, so older changes leave that list. Expand
-**Explore saved runs** to review the complete teaching examples offline.
+The top bar shows the mode pill (Simulation / Hardware / Mode unconfirmed), the connection state (its details
+open from the pill) and a light/dark toggle. The theme follows the system until you choose; the choice is
+remembered in `localStorage`.
 
-## D1 recorded network viewer
+When the backend is down, stale or reconnecting, every live page says so in a banner, dims its numbers and
+names the time of the last snapshot; controls are disabled until the live connection is healthy.
 
-Under **Explore saved runs**, choose **Relay failure** or **Controller outage** and use
-**Earlier moment**, **Next moment**, or the named-moment menu. The saved runs are bundled from
-`tests/dashboard-fixtures/`; they work even if the backend is stopped. Start and mid-run
-snapshots set the state at those points. The viewer applies only later numbered events,
-so a reading already included in the mid-run snapshot is not counted twice.
+Times: in hardware mode the Readings chart and the timeline use the laptop's clock (HH:MM:SS), which stays
+continuous across backend restarts, and the buffers are kept across a restart (so the controller-loss demo shows
+the points from before the outage). In simulation they use the simulated clock (mm:ss) and are cleared on a
+reset. A late reading is always written "replayed · delayed N s". The backend keeps only the latest 100 events;
+the dashboard keeps its own buffers (about 2,000 readings and 500 network changes) while the page is open.
 
-The recordings contain 116 and 98 numbered state changes, respectively. Most are small
-updates such as a link report, a counter report or one reading. D1 processes those
-internally but offers a short story of named moments to the viewer. This makes the
-presenter's action, the network's response and the controller's later knowledge easy
-to distinguish. The **Story so far** list shows those moments in time order.
-
-The diamond's lines are configured **logical** links. Solid, dashed and grey styles show
-the controller's reported link state. The planned route is shown only after route
-installation was acknowledged; it is separate from the path C observed for a received
-reading. The event list marks presenter actions as injected. During the controller
-outage, an alert says the network view is stale, source counters show the age of A's
-last telemetry, and replayed readings are labelled **delayed** with their hold time.
-The graph is a teaching view of recorded simulation, not a live hardware measurement.
-
-The D1 check compares both runs against their saved mid-run snapshots and verifies
-the local failover, outage, replay and final route/count outcomes.
+None of these browser checks proves radio delivery; hardware mode connected to the fake C is not a hardware test.
 
 ## Connection contract
 

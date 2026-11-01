@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { LinkView, NodeId } from './fixtures';
+import type { LinkView, NetworkSnapshot, NodeId } from './fixtures';
 import { policyName } from './live';
 import type { LiveSnapshot } from './live';
 import { along, directions, edgeKey, edges, geometryFor, labelPosition, linkText, nodeFacts } from './graphModel';
@@ -27,7 +27,7 @@ function useNarrow(query = '(max-width: 600px)') {
 /** The diamond, larger than before. Link labels sit off the lines, the planned route has a halo, trouble has a badge. */
 const pathOrNone = (path?: readonly (string | null)[]) => path?.length ? pathText(path) : '';
 
-export function NetworkGraph({ view }: { view: LiveSnapshot }) {
+export function NetworkGraph({ view }: { view: NetworkSnapshot }) {
   const g = geometryFor(useNarrow());
   const { positions, centre, radius } = g;
   const active = view.route.state === 'active' && view.route.kind === 'route' ? view.route.path : undefined;
@@ -78,7 +78,7 @@ export function NetworkGraph({ view }: { view: LiveSnapshot }) {
 }
 
 /** Planned route and last observed path side by side, plus the gateway link. */
-export function RoutePanel({ view, unit }: { view: LiveSnapshot; unit: string }) {
+export function RoutePanel({ view, unit }: { view: NetworkSnapshot; unit: string }) {
   const active = view.route.state === 'active' && view.route.kind === 'route' ? view.route.path : undefined;
   const latest = latestReading(view.readings.recent);
   return <div className="evidence-panel route-panel">
@@ -156,8 +156,8 @@ const filters: { id: Filter; label: string }[] = [
 ];
 
 /** One row per change. The Overview and the Network timeline both use this, so titles and tags are identical. */
-export function TimelineRows({ items, compact = false }: { items: TimelineItem[]; compact?: boolean }) {
-  return <ol className={`timeline-list${compact ? ' compact' : ''}`}>{items.map(item => <li key={item.key} className={`timeline-item ${item.kind}${item.presenter ? ' presenter' : ''}`}>
+export function TimelineRows({ items, compact = false, currentKey }: { items: TimelineItem[]; compact?: boolean; currentKey?: string }) {
+  return <ol className={`timeline-list${compact ? ' compact' : ''}`}>{items.map(item => <li key={item.key} aria-current={item.key === currentKey ? 'step' : undefined} className={`timeline-item ${item.kind}${item.presenter ? ' presenter' : ''}${item.key === currentKey ? ' current' : ''}`}>
     <div className="when"><time>{item.time}</time>{item.ago && <small>{item.ago}</small>}</div>
     <div className="what"><span className={`tag ${item.kind}`}>{item.tag}</span><strong>{item.title}</strong>{!compact && item.detail && <p>{item.detail}</p>}</div>
   </li>)}</ol>;

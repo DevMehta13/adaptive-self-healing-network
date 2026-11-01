@@ -15,6 +15,7 @@ Written by Harshal's backend work for Dev, who owns `dashboard/` and `firmware/`
 5. [How to run every demo](#5-how-to-run-every-demo)
 6. [Known limitations](#6-known-limitations)
 7. [Hardware test plan for Phases 6 to 8](#7-hardware-test-plan-for-phases-6-to-8)
+8. [Dashboard redesign (for Dev's review)](#8-dashboard-redesign-for-devs-review)
 
 ---
 
@@ -327,3 +328,28 @@ Report min / median / max over the ten, in the same layout `--measure-seeds` pri
 - C's free heap cannot hold even 20 buffer entries: say so in the demonstration and shorten the outage test.
 - Opening the port always resets C and cannot be fixed on the board: the controller must not be started while the demonstration is running, or use a different USB chip setting.
 - Free heap shrinks over the soak: find the leak before anything else.
+
+---
+
+## 8. Dashboard redesign (for Dev's review)
+
+Done on `harshal-dev` with Dev's agreement, frontend only: **no API, WebSocket, contract or backend change was made.** The plan and its phases (U1 to U6) are in [UI_REDESIGN_PLAN.md](UI_REDESIGN_PLAN.md); each phase has a dated line in [STATUS.md](STATUS.md); screenshots are in [ui-screenshots/](ui-screenshots/) (taken in simulation, light theme).
+
+**Pages and routes (hash routing, no router library).** Overview `#/`, Network `#/network`, Readings `#/readings`, Delivery `#/delivery`, Saved runs `#/runs`; an unknown hash opens the Overview. Sticky top bar with mode pill, connection state and a light/dark toggle (follows the system, remembered in `localStorage`). `dashboard/README.md` describes each page.
+
+**One connection, app-level buffers.** `App.tsx` owns the single `DashboardConnection` (it now also passes accepted snapshots and in-order events to a listener; the ordering and dedup rules are unchanged), the polling hook `useLive.ts`, and a `LiveStore` (`liveData.ts`): a readings buffer (identity origin/session/seq, about 2,000) and a network-change buffer (everything except readings and telemetry, about 500). Hardware mode keeps them across a backend restart and uses the laptop's wall clock; simulation clears them on a new run or reset and drops the previous run's events that the backend still lists. A reading is placed at `received_ms` (when C received it); `received_ms + delay_ms` is when the controller got it.
+
+**New and changed files in `dashboard/src/`.**
+
+| File | Role |
+| --- | --- |
+| `route.ts`, `theme.ts` | Hash routes and page titles; theme choice. |
+| `liveData.ts`, `chartData.ts`, `ReadingsChart.tsx` | Buffers and time mapping; series, gaps, markers and ranges for the chart; the uPlot component. |
+| `timeline.ts`, `graphModel.ts`, `NetworkPanels.tsx` | Event titles, kinds and the major-changes filter; graph geometry and node facts; the Network page parts. |
+| `format.ts`, `viewState.ts` | One set of number, age, path, time and "replayed · delayed N s" formats; the connecting, down, stale and refresh-failed states. |
+| `pages.tsx`, `PageHeader.tsx`, `overview.ts`, `NetworkView.tsx`, `story.ts` | The five pages; the shared page header; Overview helpers; the Saved runs viewer and its story helpers. |
+| `contrast.test.ts` | Checks every theme colour pair (text 4.5:1, graphics 3:1, both themes) against `styles.css`. |
+
+**New dependency.** `uplot` 1.6.32 (MIT), pinned exactly. No other runtime dependency was added. `vite.config.ts` gained a `test.css.include` setting so the contrast test can read the real stylesheet.
+
+**Checks.** `npm run check`, `npm test` and `npm run build` pass. The pages were looked at in light and dark, at 1280 px and 375 px, against the simulator and against the fake C; the backend-restart replay, stop B / start B and controller loss were each exercised in the browser. **Not done:** a run against the real boards with this dashboard; that check is still pending.

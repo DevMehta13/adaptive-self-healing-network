@@ -1,6 +1,6 @@
 # Dashboard redesign plan (UI only)
 
-Status: approved by Harshal on 2026-11-01. Phases are done one at a time; each phase ends with a review before the next one starts.
+Status: **complete** (U1 to U6 done on `harshal-dev`, 2026-11-01), ready for Dev's review. Approved by Harshal on 2026-11-01; phases were done one at a time, each ending with a review.
 
 ## Goal
 
@@ -111,7 +111,7 @@ Type `stop B` / `start B`, `link A->B down`, `unplug` / `replug` in the fake C w
 - [x] U3 — Readings with uPlot
 - [x] U4 — Network page
 - [x] U5 — Polish across pages
-- [ ] U6 — Saved runs and wrap-up
+- [x] U6 — Saved runs and wrap-up
 
 ## Report expected at the end of each phase
 
