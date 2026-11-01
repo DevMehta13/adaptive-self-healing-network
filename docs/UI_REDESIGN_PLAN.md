@@ -110,7 +110,7 @@ Type `stop B` / `start B`, `link A->B down`, `unplug` / `replug` in the fake C w
 - [x] U2 — Overview and Delivery
 - [x] U3 — Readings with uPlot
 - [x] U4 — Network page
-- [ ] U5 — Polish across pages
+- [x] U5 — Polish across pages
 - [ ] U6 — Saved runs and wrap-up
 
 ## Report expected at the end of each phase

@@ -1,23 +1,22 @@
 import type { ReactNode } from 'react';
 import type { ConnectionState } from './connection';
 import type { Count } from './fixtures';
+import { ageText, clockText, elapsedText, formatNumber, lateLabel, oldText, pathText, readable, seconds, unitOf } from './format';
 import { policyName } from './live';
 import type { Live } from './useLive';
 import { CountCard, StaleNotice } from './NetworkScene';
-import { ControlsPanel, NetworkGraph, NodeCards, RoutePanel, Timeline } from './NetworkPanels';
-import { ageText, latestReading, nodeLines, readingAgeMs, recentChanges, seconds } from './overview';
+import { ControlsPanel, NetworkGraph, NodeCards, RoutePanel, Timeline, TimelineRows } from './NetworkPanels';
+import { latestReading, nodeLines, readingAgeMs } from './overview';
 import { ReadingsChart } from './ReadingsChart';
 import { axisTime } from './chartData';
 import type { LiveState } from './liveData';
 import type { Theme } from './theme';
+import { majorChanges } from './timeline';
 import { NetworkView } from './NetworkView';
 import { PageHeader } from './PageHeader';
 import { hrefFor } from './route';
 import type { PageId } from './route';
-
-const readable = (value: string) => value.replaceAll('_', ' ');
-const time = (value: number | null) => value === null ? 'Waiting for backend' : new Date(value).toLocaleTimeString();
-const unitOf = (mode: string) => mode === 'hardware' ? '°C' : 'units';
+import { isLive, stateMessage, stateTag, viewState } from './viewState';
 
 export const statusLabels = { connecting: 'Connecting', connected: 'Connected', stale: 'Stale', disconnected: 'Disconnected' };
 const statusDescriptions = {
@@ -36,55 +35,65 @@ export function ConnectionFacts({ connection }: { connection: ConnectionState })
     <dl className="connection-facts">
       <div><dt>Backend version</dt><dd>{snapshot?.backend.version ?? '—'}</dd></div>
       <div><dt>Current run</dt><dd>{snapshot ? `Run ${snapshot.run_id}` : '—'}</dd></div>
-      <div><dt>Snapshot loaded</dt><dd>{time(connection.snapshotAt)}</dd></div>
-      <div><dt>Last live message</dt><dd>{time(connection.lastMessageAt)}</dd></div>
+      <div><dt>Snapshot loaded</dt><dd>{connection.snapshotAt === null ? 'Waiting for backend' : clockText(connection.snapshotAt)}</dd></div>
+      <div><dt>Last live message</dt><dd>{connection.lastMessageAt === null ? 'Waiting for backend' : clockText(connection.lastMessageAt)}</dd></div>
     </dl>
     {snapshot && <p className="mode-note">{snapshot.label}</p>}
   </>;
 }
 
-/** Shows the page body only once a complete snapshot exists, and says plainly when the view is not live. */
-function LiveGate({ live, children }: { live: Live; children: (current: NonNullable<Live['current']>) => ReactNode }) {
-  const { current, connected, pollError, status } = live;
-  if (!current) return <div className="gateway-alert" role="status">{status === 'connecting' ? 'Connecting to the backend and loading a snapshot…' : status === 'disconnected' ? 'The backend is not reachable, so there is nothing to show yet. The dashboard keeps retrying; start the backend using the dashboard instructions.' : 'Waiting for a complete backend snapshot.'}</div>;
+function stateOf(live: Live) {
+  const state = viewState({ status: live.status, hasData: live.current !== null, pollError: live.pollError });
+  const asOf = live.current && live.loadedAt ? clockText(live.loadedAt) : null;
+  return { state, message: stateMessage(state, asOf, live.pollError) };
+}
+
+/**
+ * The page body only exists once a complete snapshot has arrived. After that, any state other than live says so in a banner
+ * and dims the numbers, so a stale figure is never mistaken for a live one.
+ */
+function LiveGate({ live, children }: { live: Live; children: (current: NonNullable<Live['current']>, isLiveNow: boolean) => ReactNode }) {
+  const { state, message } = stateOf(live);
+  const banner = message && <div className={`state-banner ${state}`} role={message.role}><strong>{message.title}.</strong> {message.text}</div>;
+  if (!live.current) return <>{banner}</>;
   return <>
-    {(!connected || pollError) && <div className="gateway-alert" role="alert"><strong>Live view paused.</strong> {pollError ?? 'The backend connection is not healthy.'} Values below are the last received snapshot and may be out of date. Controls will return when the live connection is healthy.</div>}
-    {children(current)}
+    {banner}
+    <div className={isLive(state) ? 'live-body' : 'live-body not-live'} data-state={state}>{children(live.current, isLive(state))}</div>
   </>;
 }
 
 function LiveTag({ live }: { live: Live }) {
-  const on = live.connected && !live.pollError;
-  return <span className={`recorded-tag ${on ? 'live-tag' : ''}`}>{on ? 'Live view' : 'Last known view'}</span>;
+  const { state } = stateOf(live);
+  return <span className={`recorded-tag ${isLive(state) ? 'live-tag' : `not-live-tag ${state}`}`}>{stateTag[state]}</span>;
 }
 
 const seeAll = (id: PageId, text: string) => <a className="see-all" href={hrefFor(id)}>{text} →</a>;
 
 export function OverviewPage({ connection, live, data }: { connection: ConnectionState; live: Live; data: LiveState }) {
   return <>
-    <PageHeader title="Overview" shows="The current state of the network in one view: the latest temperature, the route, each board, the delivery numbers and the last changes."
+    <PageHeader title="Overview" shows="The current state of the network in one view: the latest temperature, the route, each board, the delivery numbers and the major changes."
       reading="Read it top to bottom: is a reading arriving, which way is it going, is every board reachable, is anything being lost. Each block links to its full page."
       aside={<LiveTag live={live} />} />
-    <LiveGate live={live}>{view => {
+    <LiveGate live={live}>{(view, liveNow) => {
       const latest = latestReading(view.readings.recent);
       const active = view.route.state === 'active' && view.route.kind === 'route' ? view.route.path : null;
       const unit = unitOf(view.mode);
       const nodes = nodeLines(view.nodes);
-      const changes = data.timeMap ? recentChanges(data.changes, data.nowAt, data.timeMap) : [];
-      const key = (label: string, count: Count | null | undefined) => <div className="key-number"><span>{label}</span><strong>{count?.value ?? '—'}</strong><small>{count ? `${count.known_by}${count.age_ms != null ? ` · ${seconds(count.age_ms)} old` : ''}` : 'Awaiting telemetry'}</small></div>;
+      const changes = data.timeMap ? majorChanges(data.changes, data.nowAt, data.timeMap, 5) : [];
+      const key = (label: string, count: Count | null | undefined) => <div className="key-number"><span>{label}</span><strong>{count?.value ?? '—'}</strong><small>{count ? `${count.known_by}${count.age_ms != null ? ` · ${oldText(count.age_ms)}` : ''}` : 'Awaiting telemetry'}</small></div>;
       return <>
         <StaleNotice view={view} />
         <div className="overview-grid">
           <section className="detail-panel tile" aria-labelledby="ov-latest"><div className="tile-head"><h3 id="ov-latest">Latest temperature</h3>{seeAll('readings', 'Readings')}</div>
             {latest ? <>
-              <p className="big-value">{latest.value.toFixed(unit === 'units' ? 2 : 1)} <span className="unit">{unit}</span>{latest.replayed && <span className="chip replayed">replayed</span>}</p>
-              <p className="muted">{readingAgeMs(view.clock.sim_ms, latest) < 1500 ? 'received just now' : `received ${ageText(readingAgeMs(view.clock.sim_ms, latest))}`} at C · via relay {latest.via ?? '?'}{latest.replayed ? ` · held ${seconds(latest.delay_ms)} while the controller was unreachable` : ''}</p>
+              <p className="big-value">{formatNumber(latest.value, unit)} <span className="unit">{unit}</span>{latest.replayed && <span className="chip replayed">{lateLabel(latest.delay_ms)}</span>}</p>
+              <p className="muted">received {liveNow ? ageText(readingAgeMs(view.clock.sim_ms, latest)) : `${seconds(readingAgeMs(view.clock.sim_ms, latest))} before the last snapshot`} at C · via relay {latest.via ?? '?'}{latest.replayed ? ' · held at C while the controller was unreachable' : ''}</p>
             </> : <p className="empty-state">No reading has reached C yet.</p>}
           </section>
           <section className="detail-panel tile" aria-labelledby="ov-route"><div className="tile-head"><h3 id="ov-route">Route</h3>{seeAll('network', 'Network')}</div>
             <div className="route-pair">
-              <div><span className="label">Planned by the controller</span><p className="path">{active ? active.map(n => n ?? '?').join(' → ') : view.route.kind === 'no_route' ? 'No available route' : `No active route · ${readable(view.route.state)}`}</p></div>
-              <div><span className="label">Last observed at C</span><p className="path">{latest ? latest.observed_path.map(n => n ?? '?').join(' → ') : 'No reading yet'}</p></div>
+              <div><span className="label">Planned by the controller</span><p className="path">{active ? pathText(active) : view.route.kind === 'no_route' ? 'No available route' : `No active route · ${readable(view.route.state)}`}</p></div>
+              <div><span className="label">Last observed at C</span><p className="path">{latest ? pathText(latest.observed_path) : 'No reading yet'}</p></div>
             </div>
             <p className="muted">Policy {policyName(view.policy.current)} · gateway {readable(view.gateway.state)}. A plan is an intention; the observed path is what a packet took.</p>
           </section>
@@ -94,8 +103,8 @@ export function OverviewPage({ connection, live, data }: { connection: Connectio
           <section className="detail-panel tile" aria-labelledby="ov-numbers"><div className="tile-head"><h3 id="ov-numbers">Delivery in numbers</h3>{seeAll('delivery', 'Delivery')}</div>
             <div className="key-numbers">{key('Created at A', view.counts.created)}{key('Delivered at C', view.counts.delivered)}{key('Lost in total', view.counts.lost_total)}</div>
           </section>
-          <section className="detail-panel tile wide" aria-labelledby="ov-changes"><div className="tile-head"><h3 id="ov-changes">Latest network changes</h3>{seeAll('network', 'Network')}</div>
-            {changes.length ? <ol className="event-list">{changes.map(c => <li className={c.injected ? 'injected' : ''} key={c.id}><span className="story-time">{c.time}</span><span>{c.title}{c.ago && <span className="ago"> · {c.ago}</span>}</span>{c.injected && <small>Presenter action</small>}</li>)}</ol> : <p className="empty-state">No significant change yet. Changes such as a relay failover or a lost link appear here.</p>}
+          <section className="detail-panel tile wide" aria-labelledby="ov-changes"><div className="tile-head"><h3 id="ov-changes">Major network changes</h3>{seeAll('network', 'All changes')}</div>
+            {changes.length ? <TimelineRows items={changes} compact /> : <p className="empty-state">No major change yet. A relay failover, lost contact or a lost link will appear here.</p>}
           </section>
           <section className="quiet wide" aria-label="Backend facts"><ConnectionFacts connection={connection} /></section>
         </div>
@@ -113,7 +122,7 @@ export function NetworkPage({ connection, live, data }: { connection: Connection
       const map = data.timeMap;
       if (!map) return null;
       return <>
-        <div className="live-meta"><span>Run {view.run_id} · {view.scenario ?? 'hardware session'}</span><span>{view.mode === 'hardware' ? 'Laptop clock since the backend started' : 'Simulation clock'} {seconds(view.clock.sim_ms)}{view.clock.paused ? ' · paused' : ''}</span><span>Snapshot at {live.loadedAt ? new Date(live.loadedAt).toLocaleTimeString() : '—'}</span></div>
+        <div className="live-meta"><span>Run {view.run_id} · {view.scenario ?? 'hardware session'}</span><span>{view.mode === 'hardware' ? 'Laptop clock since the backend started' : 'Simulation clock'} {elapsedText(view.clock.sim_ms)}{view.clock.paused ? ' · paused' : ''}</span><span>Snapshot at {clockText(live.loadedAt)}</span></div>
         {connection.snapshot && <p className="mode-note">{connection.snapshot.label}</p>}
         <StaleNotice view={view} />
         <div className="network-layout">
@@ -145,10 +154,10 @@ export function ReadingsPage({ live, data, theme }: { live: Live; data: LiveStat
           {rows.length ? <div className="table-scroll"><table>
             <thead><tr><th scope="col">Time at C</th><th scope="col">Value</th><th scope="col">Path observed at C</th><th scope="col">Live or replayed</th></tr></thead>
             <tbody>{rows.map(r => <tr key={r.key} className={r.replayed ? 'replayed-row' : ''}>
-              <td>{axisTime(map, r.at)}</td><td>{r.value.toFixed(unit === 'units' ? 2 : 1)} {unit}</td>
-              <td>{r.path.map(n => n ?? '?').join(' → ')}</td>
-              <td>{r.replayed ? `Replayed · held ${seconds(r.delayMs)}, reached the controller ${axisTime(map, r.reachedAt)}` : 'Live'}</td>
-            </tr>)}</tbody></table></div> : <p className="empty-state">No delivered reading has been recorded yet.</p>}
+              <td>{axisTime(map, r.at)}</td><td>{formatNumber(r.value, unit)} {unit}</td>
+              <td>{pathText(r.path)}</td>
+              <td>{r.replayed ? <>{lateLabel(r.delayMs)}<small>the controller got it at {axisTime(map, r.reachedAt)}</small></> : 'Live'}</td>
+            </tr>)}</tbody></table></div> : <p className="empty-state">No reading has reached C yet. They appear here, newest first, as soon as one arrives.</p>}
         </section>
       </>;
     }}</LiveGate>

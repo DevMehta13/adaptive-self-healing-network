@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { runs } from './fixtures';
-import { eventText, parseLiveSnapshot, postLiveAction } from './live';
+import { parseLiveSnapshot, postLiveAction } from './live';
 
 const live = () => ({ ...structuredClone(runs[0].mid), mode: 'simulation', scenario: 'live-demo',
   clock: { sim_ms: 20000, speed: 1, paused: false },
@@ -26,11 +26,5 @@ describe('live snapshot and actions', () => {
       method: 'POST', body: '{"node":"B","action":"stop"}', headers: { 'Content-Type': 'application/json' },
     }));
     await expect(postLiveAction('/api/control/node', { node: 'B', action: 'stop' })).rejects.toThrow('Simulation controls unavailable');
-  });
-
-  it('marks presenter action separately and hides routine telemetry', () => {
-    expect(eventText({ type: 'environment', data: { label: 'Stop node B', source: 'presenter' } })).toBe('Stop node B');
-    expect(eventText({ type: 'route_active', data: { path: ['A', 'D', 'C'] } })).toBe('Controller confirmed route A → D → C');
-    expect(eventText({ type: 'reading_received', data: {} })).toBeNull();
   });
 });

@@ -4,7 +4,7 @@ import 'uplot/dist/uPlot.min.css';
 import type { ChangeEvent, ChartReading, TimeMap } from './liveData';
 import { SERIES, axisCaption, axisTime, buildChartData, markersFrom, visibleRange, yRange } from './chartData';
 import type { ChartData, Marker, WindowChoice } from './chartData';
-import { seconds } from './overview';
+import { formatValue, lateLabel, pathText } from './format';
 import type { Theme } from './theme';
 
 const css = (name: string) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -17,14 +17,13 @@ const windows: { label: string; value: WindowChoice }[] = [
 interface Shown { readings: ChartReading[]; changes: ChangeEvent[]; nowAt: number | null }
 interface View { data: ChartData; markers: Marker[]; map: TimeMap; unit: string; windowMs: WindowChoice; zoom: [number, number] | null; nowAt: number | null }
 
-const pathText = (path: (string | null)[]) => path.map(n => n ?? '?').join(' → ');
 
 /** Fills the tooltip with text nodes only: reading fields come from the backend. */
 function fillTooltip(el: HTMLElement, reading: ChartReading, view: View) {
   const lines = [
-    `${reading.value.toFixed(view.unit === 'units' ? 2 : 1)} ${view.unit}`,
+    formatValue(reading.value, view.unit),
     `via ${reading.via ?? '?'} · ${pathText(reading.path)}`,
-    reading.replayed ? `replayed · held ${seconds(reading.delayMs)}` : 'live',
+    reading.replayed ? lateLabel(reading.delayMs) : 'live',
     reading.replayed ? `reached C ${axisTime(view.map, reading.at)} · controller ${axisTime(view.map, reading.reachedAt)}` : `at C ${axisTime(view.map, reading.at)}`,
   ];
   el.replaceChildren(...lines.map((text, i) => { const line = document.createElement(i === 0 ? 'strong' : 'span'); line.textContent = text; return line; }));

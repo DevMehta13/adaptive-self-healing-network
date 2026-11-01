@@ -1,4 +1,4 @@
-import { ageText } from './overview';
+import { ageText } from './format';
 import { axisTime } from './chartData';
 import type { ChangeEvent, TimeMap } from './liveData';
 
@@ -14,6 +14,20 @@ const KIND_BY_TYPE: Record<string, Kind> = {
   gateway_link_lost: 'gateway', gateway_link_restored: 'gateway', replay_started: 'gateway', replay_finished: 'gateway', uplink_loss: 'gateway', serial_port: 'gateway',
   environment: 'presenter', runtime: 'presenter', reset: 'presenter',
 };
+
+/** Intermediate steps that explain *how* the controller got somewhere, not *what* happened. Hidden by "Major changes only". */
+const MINOR_TYPES = new Set(['route_installing', 'route_computed', 'route_candidate', 'route_candidate_dropped', 'epoch_advanced', 'link_held_down', 'node_seen', 'node_stale', 'no_route_confirmed']);
+
+/**
+ * Major: what a viewer would tell a colleague: what we did, failovers, confirmed routes, lost contact, link and controller-link changes.
+ * Minor: route installation steps, the plan before it is confirmed, hold-downs, first sightings, expiring reports, and links merely going stale.
+ * An event type this code does not know is major, so a new kind of event is never hidden.
+ */
+export function isMajor(type: string, data: Record<string, unknown>): boolean {
+  if (MINOR_TYPES.has(type)) return false;
+  if (type === 'link_state_changed') return data.new === 'up' || data.new === 'down' || data.new === 'one_way';
+  return true;
+}
 
 export const eventKind = (type: string): Kind => KIND_BY_TYPE[type] ?? 'route';
 
@@ -72,7 +86,7 @@ export function eventTitle(event: Pick<ChangeEvent, 'type' | 'data'>): { title: 
   }
 }
 
-export interface TimelineItem { key: string; kind: Kind; tag: string; title: string; detail?: string; time: string; ago: string; presenter: boolean }
+export interface TimelineItem { key: string; kind: Kind; tag: string; title: string; detail?: string; time: string; ago: string; presenter: boolean; major: boolean }
 
 /** Newest first. Times use the same clock as the chart: wall clock in hardware mode, simulated mm:ss in simulation mode. */
 export function buildTimeline(changes: ChangeEvent[], nowAt: number | null, map: TimeMap): TimelineItem[] {
@@ -80,7 +94,7 @@ export function buildTimeline(changes: ChangeEvent[], nowAt: number | null, map:
     const kind = eventKind(change.type);
     const { title, detail } = eventTitle(change);
     return {
-      key: change.key, kind, tag: kindLabels[kind], title, detail, presenter: kind === 'presenter',
+      key: change.key, kind, tag: kindLabels[kind], title, detail, presenter: kind === 'presenter', major: isMajor(change.type, change.data),
       time: axisTime(map, change.at), ago: nowAt === null ? '' : ageText(Math.max(0, nowAt - change.at)),
     };
   });
@@ -88,8 +102,12 @@ export function buildTimeline(changes: ChangeEvent[], nowAt: number | null, map:
 
 export type Filter = 'all' | 'controller' | 'presenter';
 
-export const filterTimeline = (items: TimelineItem[], filter: Filter) =>
-  filter === 'all' ? items : items.filter(item => item.presenter === (filter === 'presenter'));
+export const filterTimeline = (items: TimelineItem[], filter: Filter, majorOnly = false) =>
+  items.filter(item => (!majorOnly || item.major) && (filter === 'all' || item.presenter === (filter === 'presenter')));
+
+/** The newest major changes, for the Overview. Same titles and tags as the Network timeline. */
+export const majorChanges = (changes: ChangeEvent[], nowAt: number | null, map: TimeMap, limit = 5) =>
+  filterTimeline(buildTimeline(changes, nowAt, map), 'all', true).slice(0, limit);
 
 export const PAGE_SIZE = 15;
 

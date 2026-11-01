@@ -1,4 +1,4 @@
-import type { NetworkSnapshot, RecordedEvent } from './fixtures';
+import type { NetworkSnapshot } from './fixtures';
 
 export interface LiveSnapshot extends NetworkSnapshot {
   mode: 'simulation' | 'hardware';
@@ -33,26 +33,6 @@ const name: Record<string, string> = {
   immediate_rtt: 'Immediate RTT', lowest_delay: 'Lowest delay', highest_reliability: 'Highest reliability',
 };
 export const policyName = (key: string) => name[key] ?? key.replaceAll('_', ' ');
-
-export function eventText(event: RecordedEvent): string | null {
-  const d = event.data;
-  const path = Array.isArray(d.path) ? d.path.join(' → ') : '';
-  switch (event.type) {
-    case 'environment': return typeof d.label === 'string' ? d.label : 'Presenter changed the simulation';
-    case 'local_failover': return `A switched locally${d.to ? ` to ${d.to}` : ''}`;
-    case 'route_active': return `Controller confirmed route ${path || 'unknown'}`;
-    case 'route_computed': return `Controller planned route ${path || 'unknown'}`;
-    case 'node_lost_contact': return `${d.node ?? 'A node'} lost contact`;
-    case 'node_seen': return `${d.node ?? 'A node'} reported in`;
-    case 'gateway_link_lost': return 'C’s laptop link was lost';
-    case 'gateway_link_restored': return 'C’s laptop link returned';
-    case 'replay_started': return 'C started replaying held reports';
-    case 'replay_finished': return 'C finished replaying held reports';
-    case 'policy_changed': return `Routing policy changed to ${policyName(String(d.new ?? 'unknown'))}`;
-    case 'no_available_route': return 'No available route';
-    default: return null;
-  }
-}
 
 export async function postLiveAction(path: string, body: Record<string, unknown>, signal?: AbortSignal): Promise<void> {
   const response = await fetch(path, {

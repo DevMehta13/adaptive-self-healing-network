@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Reading } from './fixtures';
-import { LiveStore, mapTime, mergeChanges, mergeReadings, timeMapFor, toChangeEvent, toChartReading } from './liveData';
+import { LiveStore, mapTime, mergeChanges, mergeReadings, sinceLastReset, timeMapFor, toChangeEvent, toChartReading } from './liveData';
 import type { ChangeEvent, ChartReading, SnapshotLike } from './liveData';
 
 const raw = (seq: number, received_ms: number, extra: Partial<Reading> = {}): Reading =>
@@ -150,5 +150,28 @@ describe('LiveStore clearing rules', () => {
     off();
     store.ingestEvent(event(1, 1000));
     expect(calls).toBe(1);
+  });
+});
+
+describe('sinceLastReset', () => {
+  const e = (event_id: number, sim_ms?: number) => ({ event_id, data: sim_ms === undefined ? {} : { sim_ms } });
+  it('drops the previous run that the backend still lists after a reset', () => {
+    expect(sinceLastReset([e(1, 40_000), e(2, 50_000), e(3, 1000), e(4, 2000)]).map(x => x.event_id)).toEqual([3, 4]);
+  });
+  it('keeps everything in a single run, including events without a time', () => {
+    expect(sinceLastReset([e(1, 10), e(2), e(3, 20), e(4, 20)]).map(x => x.event_id)).toEqual([1, 2, 3, 4]);
+    expect(sinceLastReset([])).toEqual([]);
+  });
+  it('keeps only the newest run when there were several resets', () => {
+    expect(sinceLastReset([e(1, 90), e(2, 10), e(3, 50), e(4, 5), e(5, 8)]).map(x => x.event_id)).toEqual([4, 5]);
+  });
+  it('is applied to simulation snapshots only', () => {
+    const store = new LiveStore();
+    const old = [{ type: 'node_lost_contact', event_id: 1, data: { sim_ms: 90_000, node: 'B' } }, { type: 'node_lost_contact', event_id: 2, data: { sim_ms: 2000, node: 'C' } }];
+    store.ingestSnapshot(snapshot({ mode: sim, recent_events: old }));
+    expect(store.getState().changes.map(c => c.id)).toEqual([2]);
+    const hw = new LiveStore();
+    hw.ingestSnapshot(snapshot({ recent_events: old }));
+    expect(hw.getState().changes).toHaveLength(2);
   });
 });

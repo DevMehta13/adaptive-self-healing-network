@@ -4,13 +4,12 @@ import { policyName } from './live';
 import type { LiveSnapshot } from './live';
 import { along, directions, edgeKey, edges, geometryFor, labelPosition, linkText, nodeFacts } from './graphModel';
 import type { ChangeEvent, TimeMap } from './liveData';
-import { nodeRoles, seconds } from './overview';
+import { formatValue, lateLabel, pathText, readable } from './format';
+import { latestReading, nodeRoles } from './overview';
 import { PAGE_SIZE, buildTimeline, filterTimeline, visibleCount } from './timeline';
-import type { Filter } from './timeline';
+import type { Filter, TimelineItem } from './timeline';
 import type { Live } from './useLive';
 
-const readable = (value: string) => value.replaceAll('_', ' ');
-const pathText = (path?: (string | null)[]) => path?.length ? path.map(n => n ?? '?').join(' → ') : '';
 
 function useNarrow(query = '(max-width: 600px)') {
   const [narrow, setNarrow] = useState(() => typeof window.matchMedia === 'function' && window.matchMedia(query).matches);
@@ -26,6 +25,8 @@ function useNarrow(query = '(max-width: 600px)') {
 }
 
 /** The diamond, larger than before. Link labels sit off the lines, the planned route has a halo, trouble has a badge. */
+const pathOrNone = (path?: readonly (string | null)[]) => path?.length ? pathText(path) : '';
+
 export function NetworkGraph({ view }: { view: LiveSnapshot }) {
   const g = geometryFor(useNarrow());
   const { positions, centre, radius } = g;
@@ -34,7 +35,7 @@ export function NetworkGraph({ view }: { view: LiveSnapshot }) {
   const linkFor = (a: NodeId, b: NodeId): LinkView | undefined => view.links.find(l => (l.a === a && l.b === b) || (l.a === b && l.b === a));
   return <div className="graph-panel big-graph">
     <div className="panel-heading"><div><span className="eyebrow">Configured diamond</span><h3>Four-board network</h3></div><span className="small-note">Controller view</span></div>
-    <svg className="network-svg big" viewBox={`0 0 ${g.width} ${g.height}`} role="img" aria-label={`Four-node diamond. Planned route: ${active ? pathText(active) : 'not active'}. Gateway: ${view.gateway.state}.`}>
+    <svg className="network-svg big" viewBox={`0 0 ${g.width} ${g.height}`} role="img" aria-label={`Four-node diamond. Planned route: ${active ? pathOrNone(active) : 'not active'}. Gateway: ${view.gateway.state}.`}>
       {edges.map(([a, b]) => {
         const link = linkFor(a, b);
         const isPlanned = planned.has(edgeKey(a, b));
@@ -79,17 +80,16 @@ export function NetworkGraph({ view }: { view: LiveSnapshot }) {
 /** Planned route and last observed path side by side, plus the gateway link. */
 export function RoutePanel({ view, unit }: { view: LiveSnapshot; unit: string }) {
   const active = view.route.state === 'active' && view.route.kind === 'route' ? view.route.path : undefined;
-  const latest = view.readings.recent.at(-1);
-  const shown = (v: number) => unit === 'units' ? v.toFixed(2) : v.toFixed(1);
+  const latest = latestReading(view.readings.recent);
   return <div className="evidence-panel route-panel">
     <div><span className="eyebrow">Keep plan and evidence apart</span><h3>Route and delivery</h3></div>
     <div className="route-pair">
       <div className="planned"><span className="label">Planned by the controller</span>
-        <p className="path">{active ? pathText(active) : view.route.kind === 'no_route' ? 'No available route' : `No active route · ${readable(view.route.state)}`}</p>
+        <p className="path">{active ? pathOrNone(active) : view.route.kind === 'no_route' ? 'No available route' : `No active route · ${readable(view.route.state)}`}</p>
         <small>{active ? `Version ${view.route.version ?? '—'} · ${readable(view.route.policy ?? 'unknown policy')}${view.route.cost_ms != null ? ` · ${view.route.cost_ms} ms link RTT sum` : ''}` : 'Only an acknowledged active route is shown as a plan.'}</small></div>
       <div className="observed"><span className="label">Last observed at C</span>
-        <p className="path">{latest ? pathText(latest.observed_path) : 'No reading yet'}</p>
-        <small>{latest ? `${shown(latest.value)} ${unit} · via ${latest.via ?? '?'}${latest.replayed ? ` · delayed ${seconds(latest.delay_ms)}` : ''}` : 'Observed paths come from C’s sender and TTL evidence.'}</small></div>
+        <p className="path">{latest ? pathOrNone(latest.observed_path) : 'No reading yet'}</p>
+        <small>{latest ? `${formatValue(latest.value, unit)} · via ${latest.via ?? '?'}${latest.replayed ? ` · ${lateLabel(latest.delay_ms)}` : ''}` : 'Observed paths come from C’s sender and TTL evidence.'}</small></div>
     </div>
     <div className="evidence-block"><span>Gateway link (controller to C)</span><strong>{readable(view.gateway.state)}</strong><small>{view.gateway.network_view ?? 'No gateway message yet'}</small></div>
     <p className="evidence-note">A local failover can move packets through D before the controller confirms a new route. A replayed report describes an earlier event, received later.</p>
@@ -155,21 +155,32 @@ const filters: { id: Filter; label: string }[] = [
   { id: 'all', label: 'Everything' }, { id: 'controller', label: 'What the controller noticed' }, { id: 'presenter', label: 'What we did' },
 ];
 
+/** One row per change. The Overview and the Network timeline both use this, so titles and tags are identical. */
+export function TimelineRows({ items, compact = false }: { items: TimelineItem[]; compact?: boolean }) {
+  return <ol className={`timeline-list${compact ? ' compact' : ''}`}>{items.map(item => <li key={item.key} className={`timeline-item ${item.kind}${item.presenter ? ' presenter' : ''}`}>
+    <div className="when"><time>{item.time}</time>{item.ago && <small>{item.ago}</small>}</div>
+    <div className="what"><span className={`tag ${item.kind}`}>{item.tag}</span><strong>{item.title}</strong>{!compact && item.detail && <p>{item.detail}</p>}</div>
+  </li>)}</ol>;
+}
+
 export function Timeline({ changes, nowAt, map }: { changes: ChangeEvent[]; nowAt: number | null; map: TimeMap }) {
   const [filter, setFilter] = useState<Filter>('all');
+  const [majorOnly, setMajorOnly] = useState(true);
   const [pages, setPages] = useState(1);
-  const items = filterTimeline(buildTimeline(changes, nowAt, map), filter);
+  const everything = buildTimeline(changes, nowAt, map);
+  const items = filterTimeline(everything, filter, majorOnly);
+  const hidden = filterTimeline(everything, filter, false).length - items.length;
   const shown = items.slice(0, visibleCount(items.length, pages));
   const clock = map.mode === 'hardware' ? 'the laptop’s clock' : 'the simulated clock';
   return <section className="detail-panel timeline" aria-labelledby="timeline-title">
     <div className="timeline-head"><h3 id="timeline-title">Network changes</h3>
-      <div className="segmented" role="group" aria-label="Show">{filters.map(f => <button type="button" key={f.id} aria-pressed={filter === f.id} onClick={() => { setFilter(f.id); setPages(1); }}>{f.label}</button>)}</div></div>
-    <p className="timeline-note">Newest first. Times are on {clock}. Rows marked <span className="tag presenter">What we did</span> are presenter actions in the simulation; they are not something the controller knows until the network reports it.</p>
-    {shown.length ? <ol className="timeline-list">{shown.map(item => <li key={item.key} className={`timeline-item ${item.kind}${item.presenter ? ' presenter' : ''}`}>
-      <div className="when"><time>{item.time}</time>{item.ago && <small>{item.ago}</small>}</div>
-      <div className="what"><span className={`tag ${item.kind}`}>{item.tag}</span><strong>{item.title}</strong>{item.detail && <p>{item.detail}</p>}</div>
-    </li>)}</ol> : <p className="empty-state">{filter === 'presenter' ? 'Nothing has been done to the simulation yet.' : 'No network change has been seen yet. Failovers, lost contact and route changes appear here.'}</p>}
+      <div className="timeline-controls">
+        <label className="check"><input type="checkbox" checked={majorOnly} onChange={e => { setMajorOnly(e.target.checked); setPages(1); }} /> Major changes only</label>
+        <div className="segmented" role="group" aria-label="Show">{filters.map(f => <button type="button" key={f.id} aria-pressed={filter === f.id} onClick={() => { setFilter(f.id); setPages(1); }}>{f.label}</button>)}</div>
+      </div></div>
+    <p className="timeline-note">Newest first. Times are on {clock}. Rows marked <span className="tag presenter">What we did</span> are presenter actions in the simulation; they are not something the controller knows until the network reports it.
+      {majorOnly && hidden > 0 && <> {hidden} intermediate step{hidden === 1 ? ' is' : 's are'} hidden (route installation, hold-downs and similar). <button type="button" className="link-button" onClick={() => setMajorOnly(false)}>Show every step</button></>}</p>
+    {shown.length ? <TimelineRows items={shown} /> : <p className="empty-state">{filter === 'presenter' ? 'Nothing has been done to the simulation yet.' : majorOnly && hidden > 0 ? 'Only intermediate steps so far. Untick “Major changes only” to see them.' : 'No network change has been seen yet. Failovers, lost contact and route changes appear here.'}</p>}
     {shown.length < items.length && <button type="button" className="plain-button show-more" onClick={() => setPages(p => p + 1)}>Show {Math.min(PAGE_SIZE, items.length - shown.length)} more ({items.length - shown.length} older)</button>}
   </section>;
 }
-

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ChangeEvent, TimeMap } from './liveData';
-import { PAGE_SIZE, buildTimeline, eventKind, eventTitle, filterTimeline, visibleCount } from './timeline';
+import { PAGE_SIZE, buildTimeline, eventKind, eventTitle, filterTimeline, isMajor, majorChanges, visibleCount } from './timeline';
 
 const sim: TimeMap = { mode: 'simulation', offsetMs: 0 };
 const ev = (id: number, type: string, atSec: number, data: Record<string, unknown> = {}): ChangeEvent => ({ key: `1:${id}`, id, type, at: atSec * 1000, data });
@@ -83,5 +83,45 @@ describe('filterTimeline and paging', () => {
     expect(visibleCount(4, 1)).toBe(4);
     expect(visibleCount(0, 1)).toBe(0);
     expect(visibleCount(10, 0)).toBe(10);
+  });
+});
+
+describe('isMajor', () => {
+  it('keeps what happened and drops the steps in between', () => {
+    for (const type of ['environment', 'local_failover', 'route_active', 'no_available_route', 'node_lost_contact', 'node_regained_contact', 'node_restarted', 'gateway_link_lost', 'gateway_link_restored', 'replay_started', 'replay_finished', 'uplink_loss', 'policy_changed', 'route_install_failed', 'runtime', 'reset']) {
+      expect(isMajor(type, {})).toBe(true);
+    }
+    for (const type of ['route_installing', 'route_computed', 'route_candidate', 'route_candidate_dropped', 'epoch_advanced', 'link_held_down', 'node_seen', 'node_stale', 'no_route_confirmed']) {
+      expect(isMajor(type, {})).toBe(false);
+    }
+  });
+  it('counts a link as major when it goes up, down or one-way, not when it merely goes stale', () => {
+    expect(isMajor('link_state_changed', { new: 'down' })).toBe(true);
+    expect(isMajor('link_state_changed', { new: 'up' })).toBe(true);
+    expect(isMajor('link_state_changed', { new: 'one_way' })).toBe(true);
+    expect(isMajor('link_state_changed', { new: 'stale' })).toBe(false);
+  });
+  it('never hides an event type it does not know', () => expect(isMajor('something_new', {})).toBe(true));
+});
+
+describe('major-only filtering', () => {
+  const changes = [
+    ev(1, 'environment', 1, { label: 'Stop B' }), ev(2, 'local_failover', 2, { node: 'A', to: 'D' }), ev(3, 'route_installing', 3, { phase: 'relays' }),
+    ev(4, 'route_computed', 3, { path: ['A', 'D', 'C'] }), ev(5, 'route_active', 4, { path: ['A', 'D', 'C'] }), ev(6, 'link_state_changed', 5, { link: 'A-B', new: 'stale' }),
+  ];
+  const items = buildTimeline(changes, 10_000, sim);
+  it('hides route-installation steps and keeps the list one click away', () => {
+    expect(filterTimeline(items, 'all', true).map(i => i.key)).toEqual(['1:5', '1:2', '1:1']);
+    expect(filterTimeline(items, 'all', false)).toHaveLength(6);
+  });
+  it('combines with the presenter filters', () => {
+    expect(filterTimeline(items, 'presenter', true).map(i => i.key)).toEqual(['1:1']);
+    expect(filterTimeline(items, 'controller', true).map(i => i.key)).toEqual(['1:5', '1:2']);
+  });
+  it('gives the Overview the same titles and tags as the Network timeline', () => {
+    const overview = majorChanges(changes, 10_000, sim, 5);
+    const network = filterTimeline(items, 'all', true);
+    expect(overview).toEqual(network);
+    expect(majorChanges(changes, 10_000, sim, 2)).toHaveLength(2);
   });
 });

@@ -50,6 +50,8 @@ export function App() {
   const [theme, toggleTheme] = useTheme();
   const [detailsOpen, setDetailsOpen] = useState(false);
   const detailsRef = useRef<HTMLDivElement>(null);
+  const pillRef = useRef<HTMLButtonElement>(null);
+  const mainRef = useRef<HTMLElement>(null);
 
   // One connection for the whole app: pages receive its state and never open their own.
   useEffect(() => {
@@ -70,7 +72,9 @@ export function App() {
   useEffect(() => {
     if (!detailsOpen) return;
     const close = (event: MouseEvent | KeyboardEvent) => {
-      if (event instanceof KeyboardEvent ? event.key === 'Escape' : !detailsRef.current?.contains(event.target as Node)) setDetailsOpen(false);
+      if (event instanceof KeyboardEvent) {
+        if (event.key === 'Escape') { setDetailsOpen(false); pillRef.current?.focus(); }
+      } else if (!detailsRef.current?.contains(event.target as Node)) setDetailsOpen(false);
     };
     document.addEventListener('mousedown', close);
     document.addEventListener('keydown', close);
@@ -81,6 +85,7 @@ export function App() {
   const mode = snapshot ? snapshot.mode : 'unknown';
   return (
     <div className="app-shell">
+      <button type="button" className="skip-link" onClick={() => mainRef.current?.focus()}>Skip to the page content</button>
       <header className="topbar">
         <a href={hrefFor('overview')} className="brand" aria-label="Relay dashboard overview">
           <span className="brand-mark" aria-hidden="true">r<span>·</span></span>
@@ -92,7 +97,7 @@ export function App() {
         <div className="bar-status">
           <span className={`mode-tag ${mode}`}>{snapshot ? snapshot.mode === 'simulation' ? 'Simulation' : 'Hardware' : 'Mode unconfirmed'}</span>
           <div className="conn" ref={detailsRef}>
-            <button type="button" className={`status-pill ${status}`} aria-expanded={detailsOpen} aria-controls="connection-details" onClick={() => setDetailsOpen(open => !open)}>
+            <button type="button" ref={pillRef} className={`status-pill ${status}`} aria-expanded={detailsOpen} aria-controls="connection-details" onClick={() => setDetailsOpen(open => !open)}>
               <span aria-hidden="true" />{statusLabels[status]}
             </button>
             <span className="visually-hidden" role="status" aria-live="polite">Connection {statusLabels[status]}</span>
@@ -107,7 +112,7 @@ export function App() {
         </div>
       </header>
 
-      <main>
+      <main id="main" ref={mainRef} tabIndex={-1}>
         {route === 'overview' && <OverviewPage connection={connection} live={live} data={data} />}
         {route === 'network' && <NetworkPage connection={connection} live={live} data={data} />}
         {route === 'readings' && <ReadingsPage live={live} data={data} theme={theme} />}

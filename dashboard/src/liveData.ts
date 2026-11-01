@@ -65,6 +65,21 @@ function mergeSorted<T extends { key: string; at: number }>(existing: T[], incom
 export const mergeReadings = (existing: ChartReading[], incoming: ChartReading[], cap = READING_CAP) => mergeSorted(existing, incoming, cap);
 export const mergeChanges = (existing: ChangeEvent[], incoming: ChangeEvent[], cap = CHANGE_CAP) => mergeSorted(existing, incoming, cap);
 
+/**
+ * The backend keeps the last 100 events across a simulation reset, so after a reset its window still holds the old run's
+ * events. Within a run the simulated clock never goes backwards, so the newest stretch that does not step back is the current run.
+ */
+export function sinceLastReset<T extends { data: Record<string, unknown> }>(events: T[]): T[] {
+  let next = Infinity;
+  for (let i = events.length - 1; i >= 0; i--) {
+    const at = events[i].data.sim_ms;
+    if (typeof at !== 'number') continue;
+    if (at > next) return events.slice(i + 1);
+    next = at;
+  }
+  return events;
+}
+
 export interface SnapshotLike {
   mode: Mode; run_id: number; server_time: string; clock: { sim_ms: number };
   readings?: { recent?: Reading[] };
@@ -107,7 +122,8 @@ export class LiveStore {
     }
     const map = s.timeMap!;
     const readings = (snapshot.readings?.recent ?? []).map(r => toChartReading(r, map));
-    const changes = (snapshot.recent_events ?? []).map((e, i) => toChangeEvent(e, map, s.instance, i)).filter((e): e is ChangeEvent => e !== null);
+    const events = snapshot.mode === 'simulation' ? sinceLastReset(snapshot.recent_events ?? []) : snapshot.recent_events ?? [];
+    const changes = events.map((e, i) => toChangeEvent(e, map, s.instance, i)).filter((e): e is ChangeEvent => e !== null);
     this.set({
       ...s, runId: snapshot.run_id, nowAt: mapTime(map, snapshot.clock.sim_ms),
       readings: mergeReadings(s.readings, readings), changes: mergeChanges(s.changes, changes),

@@ -10,6 +10,8 @@ export default defineConfig(({ mode }) => {
   };
   return {
     plugins: [react()],
+    // The contrast test reads the real stylesheet text (styles.css?raw); by default Vitest swaps CSS for an empty string.
+    test: { css: { include: [/styles\.css/] } },
     server: { host: 'localhost', port: 5173, strictPort: true, proxy },
     preview: { host: 'localhost', port: 5173, strictPort: true, proxy },
   };
