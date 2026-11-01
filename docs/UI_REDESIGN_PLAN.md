@@ -61,7 +61,7 @@ Type `stop B` / `start B`, `link A->B down`, `unplug` / `replug` in the fake C w
 
 - **Data:** a browser-side buffer of readings, kept at app level (shared by all pages). It is fed by `reading_received` events from the existing WebSocket (expose them from `DashboardConnection` through a listener; same messages, no protocol change, the documented ordering and dedup rules still apply) and by merging `readings.recent` from every snapshot/poll by identity, as a backstop. Identity is `(origin, session, seq)`: no duplicates. Capped at about 2,000 points. In simulation mode it is cleared when `run_id` changes or a `reset` arrives. In hardware mode it is kept across backend restarts (the controller-loss demo restarts the backend), because its time axis is the wall clock.
 - **Network-change buffer:** likewise an app-level buffer of significant state-changing events (everything except `reading_received` and `telemetry`), seeded from the snapshot's `recent_events`, extended from the WebSocket, capped at about 500. The backend's own window of 100 events is mostly telemetry, so Overview's "last changes", the chart markers and the Network timeline all use this buffer instead.
-- **X-axis:** in **hardware mode**, the laptop's wall-clock time (HH:MM:SS), computed from the snapshot's `server_time` and `clock.sim_ms` (an event at `t` happened at `server_time − (clock.sim_ms − t)`); this stays continuous across backend restarts. In **simulation mode**, the simulated clock (`sim_ms`, shown as mm:ss). A reading is placed at the time C received it: `received_ms − delay_ms` (equal to `received_ms` for live readings), so replayed readings fill the outage gap. The axis caption says which clock is used, and the tooltip shows both times for replayed readings. A `local_failover` with `replayed: true` is placed at `received_ms`, as the API requires.
+- **X-axis:** in **hardware mode**, the laptop's wall-clock time (HH:MM:SS), computed from the snapshot's `server_time` and `clock.sim_ms` (an event at `t` happened at `server_time − (clock.sim_ms − t)`); this stays continuous across backend restarts. In **simulation mode**, the simulated clock (`sim_ms`, shown as mm:ss). A reading is placed at `received_ms`, the (estimated, for replayed readings) time C received it; the controller learned of it at `received_ms + delay_ms`. So replayed readings fill the outage gap. (Corrected after U3: the first version of this plan subtracted `delay_ms`, which misread the API.) The axis caption says which clock is used, and the tooltip shows both times for replayed readings. A `local_failover` with `replayed: true` is placed at `received_ms`, as the API requires.
 - **Y-axis:** °C in hardware mode, "units" in simulation mode (as today). Auto range with padding and a minimum span of 2, so whole-degree DHT11 steps do not look like spikes.
 - **Interaction:** hover crosshair and tooltip (value, time, path, live or replayed with delay); window buttons 1 min / 5 min / 15 min / All; Live (follows new data) and Paused (frozen for explaining); drag-to-zoom with a "Reset zoom" control.
 - **Gaps:** the line is not drawn across a gap with no readings (more than about 3 reading intervals), so an outage that was not replayed is visible as a gap.
@@ -109,7 +109,7 @@ Type `stop B` / `start B`, `link A->B down`, `unplug` / `replug` in the fake C w
 - [x] U1 — Shell, navigation, routing, theme
 - [x] U2 — Overview and Delivery
 - [x] U3 — Readings with uPlot
-- [ ] U4 — Network page
+- [x] U4 — Network page
 - [ ] U5 — Polish across pages
 - [ ] U6 — Saved runs and wrap-up
 

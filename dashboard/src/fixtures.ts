@@ -6,7 +6,7 @@ import outageMid from '../../tests/dashboard-fixtures/outage-run.snapshot-mid.js
 import outageEvents from '../../tests/dashboard-fixtures/outage-run.events.json?raw';
 
 export type NodeId = 'A' | 'B' | 'C' | 'D';
-export interface NodeView { id: NodeId; status: string; session: number | null; last_report_age_ms: number | null; source?: { observed_by: string[]; silent_for_ms: number }; telemetry: { counters: Record<string, number>; received_ms: number; age_ms?: number; known_by?: string } | null }
+export interface NodeView { id: NodeId; status: string; session: number | null; since_ms?: number | null; last_report_age_ms: number | null; source?: { observed_by: string[]; silent_for_ms: number }; telemetry: { counters: Record<string, number>; received_ms: number; age_ms?: number; known_by?: string } | null }
 export interface LinkView { a: NodeId; b: NodeId; state: string; usable: boolean; directions?: Record<string, boolean>; cost_ms?: number | null }
 export interface RouteView { state: string; kind: string | null; path?: NodeId[]; version?: number | null; policy?: string; backups?: Record<string, string>; cost_ms?: number | null; delivery_probability?: number | null }
 export interface Reading { origin: NodeId; session: number; seq: number; value: number; via: NodeId | null; observed_path: (NodeId | null)[]; received_ms: number; replayed: boolean; delay_ms: number }

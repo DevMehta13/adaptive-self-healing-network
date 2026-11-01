@@ -10,6 +10,7 @@ export function useLive(connection: ConnectionState, store: LiveStore) {
   const [pollError, setPollError] = useState<string | null>(null);
   const [pending, setPending] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [feedbackOk, setFeedbackOk] = useState(true);
   const [refresh, setRefresh] = useState(0);
 
   const base = useMemo(() => {
@@ -59,17 +60,19 @@ export function useLive(connection: ConnectionState, store: LiveStore) {
     const timeout = setTimeout(() => controller.abort(), 5000);
     try {
       await postLiveAction(path, body, controller.signal);
-      setFeedback(`${label} applied. Watch the controller view and received readings for the result.`);
+      setFeedback(`${label} applied. Watch the timeline and the readings for the result.`);
+      setFeedbackOk(true);
       setRefresh(value => value + 1);
     } catch (error) {
       setFeedback(error instanceof Error ? error.message : 'The action failed.');
+      setFeedbackOk(false);
     } finally {
       clearTimeout(timeout);
       setPending(null);
     }
   }
 
-  return { status: connection.status, base, current, loadedAt, connected, pollError, pending, feedback, controlsReady, act };
+  return { status: connection.status, base, current, loadedAt, connected, pollError, pending, feedback, feedbackOk, controlsReady, act };
 }
 
 export type Live = ReturnType<typeof useLive>;

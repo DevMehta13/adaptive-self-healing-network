@@ -5,7 +5,7 @@ export interface LiveSnapshot extends NetworkSnapshot {
   scenario: string | null;
   clock: { sim_ms: number; speed: number; paused: boolean };
   policy: { current: string; available: string[] };
-  presenter: { conditions: { stopped_nodes: string[]; gateway_attached: boolean } | null };
+  presenter: { conditions: { stopped_nodes: string[]; links_down?: string[]; gateway_attached: boolean } | null };
 }
 
 const record = (value: unknown): value is Record<string, unknown> =>
@@ -49,7 +49,7 @@ export function eventText(event: RecordedEvent): string | null {
     case 'replay_started': return 'C started replaying held reports';
     case 'replay_finished': return 'C finished replaying held reports';
     case 'policy_changed': return `Routing policy changed to ${policyName(String(d.new ?? 'unknown'))}`;
-    case 'no_route': return 'Controller found no route';
+    case 'no_available_route': return 'No available route';
     default: return null;
   }
 }

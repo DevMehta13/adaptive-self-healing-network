@@ -3,7 +3,8 @@ import type { ConnectionState } from './connection';
 import type { Count } from './fixtures';
 import { policyName } from './live';
 import type { Live } from './useLive';
-import { CountCard, GraphGrid, StaleNotice } from './NetworkScene';
+import { CountCard, StaleNotice } from './NetworkScene';
+import { ControlsPanel, NetworkGraph, NodeCards, RoutePanel, Timeline } from './NetworkPanels';
 import { ageText, latestReading, nodeLines, readingAgeMs, recentChanges, seconds } from './overview';
 import { ReadingsChart } from './ReadingsChart';
 import { axisTime } from './chartData';
@@ -104,36 +105,24 @@ export function OverviewPage({ connection, live, data }: { connection: Connectio
 }
 
 export function NetworkPage({ connection, live, data }: { connection: ConnectionState; live: Live; data: LiveState }) {
-  const { loadedAt, pending, feedback, controlsReady, act } = live;
   return <>
-    <PageHeader title="Network" shows="The four boards and their links as the controller sees them, the route it planned, and the controls."
-      reading="Solid lines are links both ends reported up. “Planned” is the controller’s intention; the last reading observed at C shows the path that actually carried data."
+    <PageHeader title="Network" shows="The four boards and their links as the controller sees them, the route it planned, the path a reading actually took, and what changed."
+      reading="Solid lines are links both ends reported up; dashed or grey lines are weaker or unknown. “Planned” is the controller’s intention; the observed path is what C saw. The timeline lists changes newest first."
       aside={<LiveTag live={live} />} />
     <LiveGate live={live}>{view => {
-      const simulation = view.mode === 'simulation';
-      const conditions = view.presenter.conditions;
-      const bStopped = conditions?.stopped_nodes.includes('B') ?? false;
-      const gatewayAttached = conditions?.gateway_attached ?? true;
-      const events = data.timeMap ? recentChanges(data.changes, data.nowAt, data.timeMap, 8) : [];
+      const map = data.timeMap;
+      if (!map) return null;
       return <>
-        <div className="live-meta"><span>Run {view.run_id} · {view.scenario ?? 'hardware session'}</span><span>Simulation clock {seconds(view.clock.sim_ms)}{view.clock.paused ? ' · paused' : ''}</span><span>Snapshot at {loadedAt ? new Date(loadedAt).toLocaleTimeString() : '—'}</span></div>
+        <div className="live-meta"><span>Run {view.run_id} · {view.scenario ?? 'hardware session'}</span><span>{view.mode === 'hardware' ? 'Laptop clock since the backend started' : 'Simulation clock'} {seconds(view.clock.sim_ms)}{view.clock.paused ? ' · paused' : ''}</span><span>Snapshot at {live.loadedAt ? new Date(live.loadedAt).toLocaleTimeString() : '—'}</span></div>
         {connection.snapshot && <p className="mode-note">{connection.snapshot.label}</p>}
-        <div className="control-panel"><div className="control-heading"><div><span className="eyebrow">Presenter controls</span><h3>Change the demonstration</h3></div><span>{simulation ? 'Simulation only' : 'Hardware mode: simulation controls unavailable'}</span></div>
-          {!simulation && <p className="hardware-note" role="note">These controls act on the simulator, so they are turned off while real boards are connected (the backend would answer 409). To test failover on hardware, unplug relay B yourself; to test controller loss, stop the backend. The routing policy below still works.</p>}
-          {simulation && <div className="control-groups">
-            <div className="control-group"><strong>Relay B</strong><p>Stopping B tests whether A uses D while the controller catches up.</p><button type="button" disabled={!controlsReady} onClick={() => void act(bStopped ? 'Start B' : 'Stop B', '/api/control/node', { node: 'B', action: bStopped ? 'start' : 'stop' })}>{bStopped ? 'Start B' : 'Stop B'}</button></div>
-            <div className="control-group"><strong>C’s laptop link</strong><p>Detach C to hold reports, then attach it to observe replay.</p><button type="button" disabled={!controlsReady} onClick={() => void act(gatewayAttached ? 'Detach C' : 'Attach C', '/api/control/gateway', { attached: !gatewayAttached })}>{gatewayAttached ? 'Detach C' : 'Attach C'}</button></div>
-            <div className="control-group"><strong>Simulation run</strong><p>Pause to inspect the current state, or reset this scenario to its beginning.</p><div className="control-actions"><button type="button" disabled={!controlsReady} onClick={() => void act(view.clock.paused ? 'Resume' : 'Pause', view.clock.paused ? '/api/control/resume' : '/api/control/pause', {})}>{view.clock.paused ? 'Resume' : 'Pause'}</button><button type="button" disabled={!controlsReady || !view.scenario} onClick={() => void act('Reset run', '/api/control/reset', { scenario: view.scenario })}>Reset run</button></div></div>
-          </div>}
-          <div className="policy-control"><label htmlFor="routing-policy">Routing policy</label><select id="routing-policy" value={view.policy.current} disabled={!controlsReady} onChange={e => void act(`Policy: ${policyName(e.target.value)}`, '/api/policy', { policy: e.target.value })}>{view.policy.available.map(key => <option key={key} value={key}>{policyName(key)}</option>)}</select><p>Policy changes affect future route choices. An intact route may stay in place until a better choice wins repeated evaluations.</p></div>
-          {pending && <p className="control-feedback" role="status">Applying {pending}…</p>}
-          {feedback && <p className="control-feedback" role="status">{feedback}</p>}
-        </div>
         <StaleNotice view={view} />
-        <GraphGrid view={view} unit={unitOf(view.mode)} />
-        <div className="details-grid single"><div className="detail-panel"><h3>Recent network changes</h3>
-          {events.length ? <ol className="event-list">{events.map(c => <li className={c.injected ? 'injected' : ''} key={c.id}><span className="story-time">{c.time}</span><span>{c.title}{c.ago && <span className="ago"> · {c.ago}</span>}</span>{c.injected && <small>Presenter action</small>}</li>)}</ol> : <p className="empty-state">No significant change is in the recent event window. Readings and telemetry continue above.</p>}
-        </div></div>
+        <div className="network-layout">
+          <NetworkGraph view={view} />
+          <RoutePanel view={view} unit={unitOf(view.mode)} />
+        </div>
+        <NodeCards view={view} changes={data.changes} map={map} />
+        <ControlsPanel view={view} live={live} />
+        <Timeline changes={data.changes} nowAt={data.nowAt} map={map} />
       </>;
     }}</LiveGate>
   </>;
