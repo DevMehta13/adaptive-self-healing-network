@@ -27,6 +27,8 @@ The two sides meet only through written contracts. The first is [docs/DASHBOARD_
 
 ## Completed
 
+- 2026-11-01: **Dashboard redesign U1 (shell, navigation, routing, theme)** ([plan](UI_REDESIGN_PLAN.md), `harshal-dev`, frontend only): the single long page is now five hash-routed pages (Overview, Network, Readings, Delivery, Saved runs) behind a sticky top bar with the mode pill, connection state (its facts open in a popover and sit on Overview) and a light/dark toggle (follows the system, remembered in localStorage). One shared connection and one live-polling hook serve all pages, so switching pages does not reconnect. Existing sections were moved, not redesigned; the hero headline, Connection status card, D2 row, "Coming later" note, breadcrumb and "ESP8266" footer were removed. Check, 34 tests (including the new route parsing tests) and build pass; every page was screenshotted in both themes against the fake C (hardware mode) and the simulator, and at 375 px wide without horizontal scroll. No backend, contract or dependency change.
+
 - 2026-10-19: **Sensor decision deferred to lab availability by the owner**:
   do not purchase or design around a named module yet. Phase 8 will use a
   sensor confirmed available in the lab and compatible with ESP32 3.3 V

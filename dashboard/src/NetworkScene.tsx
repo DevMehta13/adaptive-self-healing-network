@@ -9,7 +9,7 @@ const age = (ms: number | null | undefined) => ms == null ? 'age unknown' : `${s
 const readable = (value: string) => value.replaceAll('_', ' ');
 const routeText = (path?: (NodeId | null)[]) => path?.length ? path.map(n => n ?? '?').join(' → ') : 'None recorded';
 
-function CountCard({ label, count }: { label: string; count: Count | null | undefined }) {
+export function CountCard({ label, count }: { label: string; count: Count | null | undefined }) {
   return <div className="count-card"><span>{label}</span><strong>{count?.value ?? '—'}</strong><small>{count ? `${count.known_by}${count.age_ms != null ? ` · ${age(count.age_ms)}` : ''}` : 'Awaiting telemetry'}</small></div>;
 }
 
@@ -17,19 +17,24 @@ function Sparkline({ values, unit }: { values: number[]; unit: string }) {
   if (values.length < 2) return null;
   const lo = Math.min(...values), hi = Math.max(...values), span = hi - lo || 1;
   const pts = values.map((v, i) => `${(i / (values.length - 1)) * 200},${34 - ((v - lo) / span) * 28}`).join(' ');
-  return <figure className="sparkline"><svg viewBox="0 0 200 40" role="img" aria-label={`Last ${values.length} readings, ${lo.toFixed(1)} to ${hi.toFixed(1)} ${unit}`}><polyline points={pts} fill="none" stroke="#315d47" strokeWidth="2" /></svg><figcaption>Last {values.length} readings: {lo.toFixed(1)}–{hi.toFixed(1)} {unit}</figcaption></figure>;
+  return <figure className="sparkline"><svg viewBox="0 0 200 40" role="img" aria-label={`Last ${values.length} readings, ${lo.toFixed(1)} to ${hi.toFixed(1)} ${unit}`}><polyline points={pts} fill="none" className="sparkline-line" strokeWidth="2" /></svg><figcaption>Last {values.length} readings: {lo.toFixed(1)}–{hi.toFixed(1)} {unit}</figcaption></figure>;
 }
 
-export function NetworkScene({ view, timelineTitle, timeline, unit = 'units' }: { view: NetworkSnapshot; timelineTitle: string; timeline: ReactNode; unit?: string }) {
-  const shown = (v: number) => unit === 'units' ? v.toFixed(2) : v.toFixed(1);
+type SceneProps = { view: NetworkSnapshot; unit?: string };
+const shownValue = (v: number, unit: string) => unit === 'units' ? v.toFixed(2) : v.toFixed(1);
+
+export function StaleNotice({ view }: { view: NetworkSnapshot }) {
+  return view.gateway.state === 'lost' ? <div className="gateway-alert" role="note"><strong>Network view stale.</strong> C has stopped reporting to the controller. The graph and counts show the last information it received; they do not reveal what the boards are doing now.</div> : null;
+}
+
+export function GraphGrid({ view, unit = 'units' }: SceneProps) {
+  const shown = (v: number) => shownValue(v, unit);
   const latest = view.readings.recent.at(-1);
   const activePath = view.route.state === 'active' && view.route.kind === 'route' ? view.route.path : undefined;
   const activeEdges = new Set((activePath ?? []).slice(0, -1).map((n, i) => [n, activePath?.[i + 1]].sort().join('-')));
   const linkFor = (a: NodeId, b: NodeId): LinkView | undefined => view.links.find(l => (l.a === a && l.b === b) || (l.a === b && l.b === a));
 
-  return <>
-    {view.gateway.state === 'lost' && <div className="gateway-alert" role="note"><strong>Network view stale.</strong> C has stopped reporting to the controller. The graph and counts show the last information it received; they do not reveal what the boards are doing now.</div>}
-    <div className="network-grid">
+  return <div className="network-grid">
       <div className="graph-panel"><div className="panel-heading"><div><span className="eyebrow">Configured diamond</span><h3>Four-board network</h3></div><span className="small-note">Controller view</span></div>
         <svg className="network-svg" viewBox="0 0 470 340" role="img" aria-label={`Four-node diamond. Planned route: ${activePath ? routeText(activePath) : 'not active'}. Gateway: ${view.gateway.state}.`}>
           {edges.map(([a, b]) => { const link = linkFor(a, b); const key = [a, b].sort().join('-'); const planned = activeEdges.has(key); return <g key={key}><line className={`network-edge ${link?.state ?? 'unknown'}`} x1={positions[a][0]} y1={positions[a][1]} x2={positions[b][0]} y2={positions[b][1]} /><text className="edge-label" x={(positions[a][0] + positions[b][0]) / 2} y={(positions[a][1] + positions[b][1]) / 2 - 8}>{a}–{b}: {link ? readable(link.state) : 'not reported'}</text>{planned && <text className="planned-label" x={(positions[a][0] + positions[b][0]) / 2} y={(positions[a][1] + positions[b][1]) / 2 + 16}>planned</text>}</g>; })}
@@ -44,9 +49,23 @@ export function NetworkScene({ view, timelineTitle, timeline, unit = 'units' }: 
         <div className="evidence-block"><span>Gateway link</span><strong>{readable(view.gateway.state)}</strong><small>{view.gateway.network_view ?? 'No gateway message yet'}</small></div>
         <p className="evidence-note">A local failover can move packets through D before the controller confirms a new route. A replayed report describes an earlier event, received later.</p>
       </div>
-    </div>
-    <div className="counts-grid"><CountCard label="Created at A" count={view.counts.created} /><CountCard label="Delivered at C" count={view.counts.delivered} /><CountCard label="Acknowledged at A" count={view.counts.acknowledged} /><CountCard label="Lost at A" count={view.counts.lost} /><CountCard label="Lost at C" count={view.counts.lost_at_c} /><CountCard label="Lost in total" count={view.counts.lost_total} /><CountCard label="No route at A" count={view.counts.no_route} /><CountCard label="Delivered late" count={view.counts.delivered_late} /></div>
-    <div className="details-grid"><div className="detail-panel"><h3>Recent readings</h3><Sparkline values={view.readings.recent.slice(-20).map(r => r.value)} unit={unit} />{view.readings.recent.length ? <ul className="reading-list">{[...view.readings.recent].slice(-5).reverse().map(r => <li key={`${r.origin}-${r.session}-${r.seq}`}><span>{shown(r.value)} {unit} received</span><strong>{routeText(r.observed_path)}</strong><small>{seconds(r.received_ms)} at C{r.replayed ? ` · delayed ${seconds(r.delay_ms)}` : ''}</small></li>)}</ul> : <p className="empty-state">No delivered reading has been recorded yet.</p>}</div>
-      <div className="detail-panel"><h3>{timelineTitle}</h3>{timeline}</div></div>
+  </div>;
+}
+
+export function CountsGrid({ view }: { view: NetworkSnapshot }) {
+  return <div className="counts-grid"><CountCard label="Created at A" count={view.counts.created} /><CountCard label="Delivered at C" count={view.counts.delivered} /><CountCard label="Acknowledged at A" count={view.counts.acknowledged} /><CountCard label="Lost at A" count={view.counts.lost} /><CountCard label="Lost at C" count={view.counts.lost_at_c} /><CountCard label="Lost in total" count={view.counts.lost_total} /><CountCard label="No route at A" count={view.counts.no_route} /><CountCard label="Delivered late" count={view.counts.delivered_late} /></div>;
+}
+
+export function ReadingsPanel({ view, unit = 'units' }: SceneProps) {
+  const shown = (v: number) => shownValue(v, unit);
+  return <div className="detail-panel"><h3>Recent readings</h3><Sparkline values={view.readings.recent.slice(-20).map(r => r.value)} unit={unit} />{view.readings.recent.length ? <ul className="reading-list">{[...view.readings.recent].slice(-5).reverse().map(r => <li key={`${r.origin}-${r.session}-${r.seq}`}><span>{shown(r.value)} {unit} received</span><strong>{routeText(r.observed_path)}</strong><small>{seconds(r.received_ms)} at C{r.replayed ? ` · delayed ${seconds(r.delay_ms)}` : ''}</small></li>)}</ul> : <p className="empty-state">No delivered reading has been recorded yet.</p>}</div>;
+}
+
+export function NetworkScene({ view, timelineTitle, timeline, unit = 'units' }: { view: NetworkSnapshot; timelineTitle: string; timeline: ReactNode; unit?: string }) {
+  return <>
+    <StaleNotice view={view} />
+    <GraphGrid view={view} unit={unit} />
+    <CountsGrid view={view} />
+    <div className="details-grid"><ReadingsPanel view={view} unit={unit} /><div className="detail-panel"><h3>{timelineTitle}</h3>{timeline}</div></div>
   </>;
 }

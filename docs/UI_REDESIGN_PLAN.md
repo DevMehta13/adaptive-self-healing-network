@@ -1,0 +1,116 @@
+# Dashboard redesign plan (UI only)
+
+Status: approved by Harshal on 2026-11-01. Phases are done one at a time; each phase ends with a review before the next one starts.
+
+## Goal
+
+Turn the single long scrolling page into five focused pages behind a slim top navigation bar, with a short heading on every page that says what the page shows and how to read it, an interactive time-series chart for the readings (uPlot), and a light/dark theme toggle. The information shown stays the same; it is reorganised and presented better.
+
+## Rules for every phase
+
+- **Frontend only.** Change files under `dashboard/` (and this plan, `docs/STATUS.md`). Do not change `backend/`, `firmware/`, the API, the WebSocket messages or any contract document. If a phase seems to need a backend or contract change, stop and report it instead.
+- **Git:** work on `harshal-dev` only. Commit at the end of the phase with a clear message. **Never push, never merge, never switch to or commit on `main` or `dev-work`.**
+- **Ownership:** `dashboard/` is Dev's area. This pass is agreed with him; each phase adds one dated line to `docs/STATUS.md` saying what changed in the UI.
+- **Dependencies:** the only new runtime dependency allowed is `uplot` (Phase U3), pinned to an exact version like the existing ones. No router, UI kit, CSS framework or chart library besides uPlot.
+- **Keep the honesty rules of the current UI:** the mode (simulation / hardware) is always visible; planned route and observed path stay separate; "lost contact", never "powered off"; replayed readings are labelled as replayed; simulation is never presented as hardware evidence. The texts in `docs/DASHBOARD_API.md` ("Labels the UI must show") still apply.
+- **Checks before every commit:** `npm run check`, `npm test`, `npm run build` in `dashboard/` all pass. Add unit tests (Vitest) for new pure logic (route parsing, readings buffer, grouping of counters); no snapshot tests of markup.
+- **Look at the result:** run it against the fake C in hardware mode and against the simulator (commands below), take screenshots of every page touched in that phase in light and dark theme (headless Chrome or Playwright, saved outside the repo), and look at them before reporting.
+
+## How to test without boards
+
+From `backend/` and `dashboard/`, in separate windows:
+
+```powershell
+# Hardware-mode screen, fed by the fake C (not real hardware)
+uv run python -m iot_backend.fake_c
+$env:IOT_MODE = "hardware"; $env:IOT_SERIAL_PORT = "socket://127.0.0.1:7777"; uv run python -m iot_backend
+npm run dev
+
+# Simulation-mode screen (presenter controls work)
+Remove-Item Env:IOT_MODE -ErrorAction SilentlyContinue; uv run python -m iot_backend
+npm run dev
+```
+
+Type `stop B` / `start B`, `link A->B down`, `unplug` / `replug` in the fake C window to cause changes; stop the backend for ~30 s and restart it to cause a replay.
+
+## Shared design decisions
+
+**Navigation bar** (sticky, slim, one row): brand on the left; page links `Overview · Network · Readings · Delivery · Saved runs` in the middle; on the right a mode pill (Simulation / Hardware / Mode unconfirmed), the connection state (Connected / Stale / Disconnected / Connecting, with a dot) and the theme toggle. The active page is highlighted and marked `aria-current="page"`. On narrow screens the links scroll horizontally or collapse into a menu; no horizontal page scroll.
+
+**Routing:** hash routes, no library: `#/` (Overview), `#/network`, `#/readings`, `#/delivery`, `#/runs`. Unknown hash → Overview. Refresh keeps the page; browser back/forward work. Page `document.title` follows the page.
+
+**One live connection for the whole app:** the existing `DashboardConnection` stays at the top of the app; pages receive its state. Switching pages never reconnects or loses data.
+
+**Page header** (same component on every page): a short title, one line *what this page shows*, one line *how to read it*. Example: **Readings** — "Temperature from node A, as received by the controller." / "Each point is one reading. Hollow points were held at C while the controller was unreachable and replayed later."
+
+**Theme:** colours become CSS custom properties on `:root`, with a dark set. Default follows the system (`prefers-color-scheme`); the toggle overrides it and is remembered in `localStorage` (wrapped in try/catch; the page works without it). Keep the current calm green look for light; dark must be equally readable (check contrast of text, pills, graph lines and chart).
+
+**Removed or fixed:** the big hero headline ("See the network change course."), the separate "Connection status" card (its facts move to a small details popover or the Overview page), the "D2 · 03 / 12" learning row, "Coming later: Physical boards", the "Live simulation" breadcrumb, and the "ESP8266" footer (the boards are ESP32). Labels follow the actual mode.
+
+## Pages
+
+| Page | Content |
+| --- | --- |
+| **Overview** `#/` | The 30-second view. Current temperature tile (latest reading, its age, via which relay), current route (planned) and last observed path, a one-line status for each of A, B, C, D, three key numbers (created at A, delivered at C, lost in total), the last 3–5 network changes, and backend facts (version, run, snapshot time, last message). Each block links to its full page. |
+| **Network** `#/network` | The diamond graph (larger), node cards, planned route vs observed path side by side, routing-policy selector, presenter controls (simulation) or the hardware note (hardware), and the "Recent network changes" timeline with readable times and event titles. |
+| **Readings** `#/readings` | uPlot chart (below) and a cleaner table of recent readings: time, value, path, replayed / delay. |
+| **Delivery** `#/delivery` | The counters as a flow: created at A → delivered at C → acknowledged at A, then the loss counters (lost at A, lost at C, lost in total, no route at A, delivered late), each with a one-line plain explanation and its age/source as today. |
+| **Saved runs** `#/runs` | The existing recorded story ("Explore saved runs"), presented as a proper page. Built last. |
+
+## The readings chart (uPlot)
+
+- **Data:** a browser-side buffer of readings, seeded from `snapshot.readings.recent` and extended by `reading_received` events. Identity is `(origin, session, seq)`: no duplicates. Capped at about 2,000 points. Cleared when `run_id` changes or a `reset` arrives; on reconnect the new snapshot is merged by identity, not used to wipe the buffer.
+- **X-axis:** time on the controller's clock (`sim_ms`; in hardware mode this is the laptop's clock since the backend started), shown as mm:ss. A reading is placed at the time C received it: `received_ms − delay_ms`, which equals `received_ms` for live readings. Axis caption says so, and the tooltip shows both times for replayed readings.
+- **Y-axis:** °C in hardware mode, "units" in simulation mode (as today). Auto range with padding and a minimum span of 2, so whole-degree DHT11 steps do not look like spikes.
+- **Interaction:** hover crosshair and tooltip (value, time, path, live or replayed with delay); window buttons 1 min / 5 min / 15 min / All; Live (follows new data) and Paused (frozen for explaining); drag-to-zoom with a "Reset zoom" control.
+- **Encoding:** points via B and via D in two distinct colours (with a legend, and not by colour alone: the tooltip and table name the path); replayed readings as hollow points; thin vertical event markers with short labels for local failover, route change (`route_active` with a new path), node lost / regained contact, and controller link lost / restored (event names as in `docs/DASHBOARD_API.md`).
+- **Housekeeping:** follows the theme (re-create or re-style on toggle), resizes with its container, destroyed on unmount, no growth of memory over a long run.
+
+## Phases
+
+### U1 — Shell, navigation, routing, theme
+
+- Top bar with navigation, mode pill, connection state and theme toggle; hash routing; page header component; theme tokens with light and dark sets.
+- Move the existing sections onto their pages **without redesigning them yet** (graph, controls, route panel, events → Network; counters → Delivery; readings list and sparkline → Readings; saved runs → Saved runs; Overview can start as a simple placeholder summary).
+- Remove/fix the stale items listed above.
+- Done when: every page is reachable from the bar and by URL, nothing that was shown before is lost, both themes are readable, checks pass, screenshots taken.
+
+### U2 — Overview and Delivery pages
+
+- Build Overview as described (tiles, route, node status line, key numbers, last changes, backend facts, links to pages).
+- Build Delivery as a flow with grouped loss counters and plain explanations.
+- Done when: an examiner can understand the current state from Overview alone in under a minute, in both modes.
+
+### U3 — Readings page with uPlot
+
+- Add `uplot` (exact version), the readings buffer (with unit tests), the chart with all interactions and encodings above, and the recent-readings table.
+- Done when: in the fake C, `stop B` shows the colour change from B to D with a failover marker, and stopping/restarting the backend shows hollow replayed points filling the outage gap; works in both themes and modes.
+
+### U4 — Network page
+
+- Larger, clearer graph layout; node cards; planned vs observed side by side; policy selector and controls/hardware note in a tidy panel; readable event timeline (relative time, icon or tag per event kind, presenter actions marked).
+- Done when: a `stop B` → failover → `start B` sequence reads clearly on this page alone.
+
+### U5 — Polish across pages
+
+- Narrow-screen layout (about 375 px wide) for every page, keyboard focus states, empty / connecting / stale / disconnected states on every page, consistent spacing and typography, dark-theme contrast audit.
+- Done when: no page has horizontal scroll at phone width, and every page makes sense while the backend is down.
+
+### U6 — Saved runs page and wrap-up
+
+- Present the saved-runs story as a proper page in the new design (works offline, as today).
+- Final screenshots of all five pages in both themes and both modes; update `dashboard` notes in `README.md` if they describe the old layout; final `docs/STATUS.md` entry; mark this plan complete.
+- Done when: all phases are checked off below and the branch is ready for Dev's review.
+
+## Progress
+
+- [x] U1 — Shell, navigation, routing, theme
+- [ ] U2 — Overview and Delivery
+- [ ] U3 — Readings with uPlot
+- [ ] U4 — Network page
+- [ ] U5 — Polish across pages
+- [ ] U6 — Saved runs and wrap-up
+
+## Report expected at the end of each phase
+
+Commit hash (not pushed); files changed; output of `npm run check`, `npm test`, `npm run build`; where the screenshots are; what was checked against the fake C and the simulator; anything left undone or any decision made that this plan did not cover.

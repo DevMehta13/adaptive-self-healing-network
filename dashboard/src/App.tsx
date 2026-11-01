@@ -1,24 +1,52 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { DashboardConnection } from './connection';
 import type { ConnectionState } from './connection';
-import { NetworkView } from './NetworkView';
-import { LiveView } from './LiveView';
+import { ConnectionFacts, DeliveryPage, NetworkPage, OverviewPage, ReadingsPage, RunsPage, statusLabels } from './pages';
+import { documentTitle, hrefFor, pages, parseRoute } from './route';
+import { applyTheme, initialTheme, rememberTheme, storedTheme, systemTheme } from './theme';
+import type { Theme } from './theme';
+import { useLive } from './useLive';
 
-const labels = {
-  connecting: 'Connecting', connected: 'Connected', stale: 'Stale', disconnected: 'Disconnected',
-};
-const descriptions = {
-  connecting: 'Connecting to the backend and loading a fresh snapshot.',
-  connected: 'Live messages are arriving from the backend.',
-  stale: 'The connection is open, but live messages have stopped. Information may be out of date.',
-  disconnected: 'The backend connection is unavailable. The dashboard will retry automatically.',
-};
+function useRoute() {
+  const [route, setRoute] = useState(() => parseRoute(window.location.hash));
+  useEffect(() => {
+    const onChange = () => setRoute(parseRoute(window.location.hash));
+    window.addEventListener('hashchange', onChange);
+    return () => window.removeEventListener('hashchange', onChange);
+  }, []);
+  useEffect(() => { document.title = documentTitle(route); }, [route]);
+  return route;
+}
+
+function useTheme() {
+  const [theme, setTheme] = useState<Theme>(initialTheme);
+  useEffect(() => { applyTheme(theme); }, [theme]);
+  useEffect(() => {
+    // Until the person picks a theme, keep following the system setting.
+    const query = window.matchMedia?.('(prefers-color-scheme: dark)');
+    if (!query) return;
+    const follow = () => { if (storedTheme() === null) setTheme(systemTheme()); };
+    query.addEventListener('change', follow);
+    return () => query.removeEventListener('change', follow);
+  }, []);
+  const toggle = () => setTheme(current => {
+    const next: Theme = current === 'dark' ? 'light' : 'dark';
+    rememberTheme(next);
+    return next;
+  });
+  return [theme, toggle] as const;
+}
 
 export function App() {
   const [connection, setConnection] = useState<ConnectionState>({
     status: 'connecting', snapshot: null, snapshotAt: null, lastMessageAt: null, error: null,
   });
+  const route = useRoute();
+  const [theme, toggleTheme] = useTheme();
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const detailsRef = useRef<HTMLDivElement>(null);
 
+  // One connection for the whole app: pages receive its state and never open their own.
   useEffect(() => {
     const url = new URL('/ws', window.location.href);
     url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -27,57 +55,56 @@ export function App() {
     return () => client.stop();
   }, []);
 
+  const live = useLive(connection);
+
+  useEffect(() => { setDetailsOpen(false); }, [route]);
+  useEffect(() => {
+    if (!detailsOpen) return;
+    const close = (event: MouseEvent | KeyboardEvent) => {
+      if (event instanceof KeyboardEvent ? event.key === 'Escape' : !detailsRef.current?.contains(event.target as Node)) setDetailsOpen(false);
+    };
+    document.addEventListener('mousedown', close);
+    document.addEventListener('keydown', close);
+    return () => { document.removeEventListener('mousedown', close); document.removeEventListener('keydown', close); };
+  }, [detailsOpen]);
+
   const { snapshot, status } = connection;
-  const time = (value: number | null) => value === null ? 'Waiting for backend' : new Date(value).toLocaleTimeString();
+  const mode = snapshot ? snapshot.mode : 'unknown';
   return (
     <div className="app-shell">
       <header className="topbar">
-        <a href="/" className="brand" aria-label="Relay dashboard home">
+        <a href={hrefFor('overview')} className="brand" aria-label="Relay dashboard overview">
           <span className="brand-mark" aria-hidden="true">r<span>·</span></span>
-          <span>relay<span className="brand-caption">IoT network lab</span></span>
+          <span className="brand-name">relay</span>
         </a>
-        <span className="project-tag">Adaptive self-healing network</span>
+        <nav className="nav" aria-label="Pages">
+          {pages.map(page => <a key={page.id} href={hrefFor(page.id)} aria-current={page.id === route ? 'page' : undefined}>{page.label}</a>)}
+        </nav>
+        <div className="bar-status">
+          <span className={`mode-tag ${mode}`}>{snapshot ? snapshot.mode === 'simulation' ? 'Simulation' : 'Hardware' : 'Mode unconfirmed'}</span>
+          <div className="conn" ref={detailsRef}>
+            <button type="button" className={`status-pill ${status}`} aria-expanded={detailsOpen} aria-controls="connection-details" onClick={() => setDetailsOpen(open => !open)}>
+              <span aria-hidden="true" />{statusLabels[status]}
+            </button>
+            <span className="visually-hidden" role="status" aria-live="polite">Connection {statusLabels[status]}</span>
+            {detailsOpen && <div className="popover" id="connection-details" role="dialog" aria-label="Backend connection details">
+              <h2>Backend connection</h2>
+              <ConnectionFacts connection={connection} />
+            </div>}
+          </div>
+          <button type="button" className="theme-toggle" onClick={toggleTheme} aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`} title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}>
+            {theme === 'dark' ? '☀' : '☾'}
+          </button>
+        </div>
       </header>
 
       <main>
-        <div className="eyebrow"><span /> Network workspace <span className="divider">/</span> Live simulation</div>
-        <section className="intro" aria-labelledby="page-title">
-          <div>
-            <h1 id="page-title">See the network<br />change course.</h1>
-            <p>Watch readings travel, stop a relay, and see how the network responds.<br className="desktop-break" /> Learn the same sequence step by step in the saved runs below.</p>
-          </div>
-          <span className={`mode-tag ${snapshot?.mode ?? 'unknown'}`}>
-            {snapshot ? snapshot.mode === 'simulation' ? 'Simulation' : 'Hardware' : 'Mode unconfirmed'}
-          </span>
-        </section>
-
-        <section className={`connection-panel ${status}`} aria-labelledby="connection-title">
-          <div className="panel-heading">
-            <div><span className="eyebrow">Backend link</span><h2 id="connection-title">Connection status</h2></div>
-            <div className={`status-pill ${status}`} role="status" aria-live="polite"><span />{labels[status]}</div>
-          </div>
-          <p className="connection-description">{descriptions[status]}</p>
-          {connection.error && <p className="error-detail">{connection.error}</p>}
-          <dl className="connection-facts">
-            <div><dt>Backend version</dt><dd>{snapshot?.backend.version ?? '—'}</dd></div>
-            <div><dt>Current run</dt><dd>{snapshot ? `Run ${snapshot.run_id}` : '—'}</dd></div>
-            <div><dt>Snapshot loaded</dt><dd>{time(connection.snapshotAt)}</dd></div>
-            <div><dt>Last live message</dt><dd>{time(connection.lastMessageAt)}</dd></div>
-          </dl>
-          {snapshot && <p className="mode-note">{snapshot.label}</p>}
-        </section>
-
-        <LiveView connection={connection} />
-
-        <details className="recorded-details"><summary><span><strong>Explore saved runs</strong><small>Relay failure and controller outage, explained moment by moment · works offline</small></span><span aria-hidden="true">▾</span></summary><NetworkView /></details>
-
-        <section className="learning-row" aria-label="About this phase">
-          <div className="phase-number">D2<span>03 / 12</span></div>
-          <div><h2>Change the simulation, then watch for evidence.</h2><p>A button records what the presenter did. The route and readings show what the network and controller observed later.</p></div>
-          <div className="next-note"><span>Coming later</span>Physical boards<br />and hardware evidence</div>
-        </section>
+        {route === 'overview' && <OverviewPage connection={connection} live={live} />}
+        {route === 'network' && <NetworkPage connection={connection} live={live} />}
+        {route === 'readings' && <ReadingsPage live={live} />}
+        {route === 'delivery' && <DeliveryPage live={live} />}
+        {route === 'runs' && <RunsPage />}
       </main>
-      <footer><span>Four nodes. One resilient network.</span><span>Local-first · ESP8266</span></footer>
     </div>
   );
 }
