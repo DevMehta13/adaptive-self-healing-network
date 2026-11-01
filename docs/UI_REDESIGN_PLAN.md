@@ -105,7 +105,7 @@ Type `stop B` / `start B`, `link A->B down`, `unplug` / `replug` in the fake C w
 ## Progress
 
 - [x] U1 — Shell, navigation, routing, theme
-- [ ] U2 — Overview and Delivery
+- [x] U2 — Overview and Delivery
 - [ ] U3 — Readings with uPlot
 - [ ] U4 — Network page
 - [ ] U5 — Polish across pages

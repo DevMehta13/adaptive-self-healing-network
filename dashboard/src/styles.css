@@ -96,3 +96,41 @@ dd { margin: 0; font-size: 14px; font-variant-numeric: tabular-nums; }
 .live-section{margin-top:38px}.live-tag{background:var(--accent-soft);border-color:var(--accent-line);color:var(--accent-text)}.live-meta{display:flex;flex-wrap:wrap;gap:8px 22px;margin:0 0 17px;color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums}.control-panel{background:var(--surface-3);border:1px solid var(--line-strong);border-radius:12px;padding:23px 25px;margin-bottom:18px}.control-heading{display:flex;justify-content:space-between;gap:15px;align-items:start}.control-heading h3{font-size:20px;margin:7px 0 0;font-weight:550}.control-heading>span{font-size:11px;color:var(--muted)}.control-groups{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:13px;margin-top:20px}.control-group{background:var(--surface);border:1px solid var(--line);border-radius:9px;padding:16px;display:flex;flex-direction:column;align-items:start}.control-group strong{font-size:14px}.control-group p,.policy-control p{font-size:11px;line-height:1.5;color:var(--muted);margin:8px 0 14px}.control-group button,.policy-control select{font:inherit;border:1px solid var(--node-stroke);background:var(--accent);color:var(--on-accent);border-radius:7px;padding:9px 13px;font-size:12px;cursor:pointer}.control-group button{margin-top:auto}.control-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:auto}.policy-control{border-top:1px solid var(--line-strong);padding-top:17px;margin-top:19px;display:grid;grid-template-columns:120px minmax(150px,260px) minmax(200px,1fr);gap:12px;align-items:center}.policy-control label{font-size:12px;font-weight:600}.policy-control select{background:var(--surface);color:var(--ink)}.policy-control p{margin:0}.control-feedback{margin:15px 0 0;font-size:12px;color:var(--accent-text)}.recorded-details{margin-top:38px;border-top:1px solid var(--line)}.recorded-details>summary{display:flex;justify-content:space-between;align-items:center;cursor:pointer;padding:22px 4px;list-style:none;color:var(--ink-2)}.recorded-details>summary::-webkit-details-marker{display:none}.recorded-details>summary strong,.recorded-details>summary small{display:block}.recorded-details>summary strong{font-size:18px}.recorded-details>summary small{font-size:12px;color:var(--muted);margin-top:6px}.recorded-details[open]>summary>span:last-child{transform:rotate(180deg)}.recorded-details .network-section{margin-top:12px}select:focus-visible,summary:focus-visible{outline:3px solid var(--focus);outline-offset:3px}@media(max-width:900px){.control-groups{grid-template-columns:1fr 1fr}.policy-control{grid-template-columns:130px minmax(150px,1fr)}.policy-control p{grid-column:1/-1}}@media(max-width:650px){.control-groups{grid-template-columns:1fr}.policy-control{grid-template-columns:1fr}.policy-control p{grid-column:auto}.control-heading{display:block}.control-heading>span{display:block;margin-top:8px}.control-panel{padding:18px}.live-meta{display:block}.live-meta span{display:block;margin-bottom:5px}}
 
 .sparkline{margin:0 0 14px}.sparkline svg{width:100%;height:46px;background:var(--surface-2);border-radius:7px}.sparkline figcaption{font-size:11px;color:var(--muted);margin-top:5px}.hardware-note{font-size:12px;line-height:1.6;color:var(--warn-ink);background:var(--warn-bg);border:1px solid var(--warn-line);border-radius:8px;padding:11px 14px;margin:12px 0}
+
+.tile-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:14px}
+.tile-head h3{margin:0}
+.see-all{font-size:12px;color:var(--accent-text);text-decoration:none;white-space:nowrap}
+.see-all:hover{text-decoration:underline}
+.see-all:focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+.big-value .unit{font-size:15px;color:var(--muted);letter-spacing:0;margin-left:2px}
+.chip{display:inline-block;font-size:11px;letter-spacing:0;font-weight:600;padding:3px 9px;border-radius:20px;margin-left:10px;vertical-align:middle}
+.chip.replayed{background:var(--warn-bg);border:1px solid var(--warn-line);color:var(--warn-ink)}
+.route-pair{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-bottom:12px}
+.route-pair>div{background:var(--surface-2);border-radius:8px;padding:11px 13px}
+.route-pair .label{font-size:11px;color:var(--muted)}
+.route-pair .path{font-size:18px;font-weight:550;margin:6px 0 0}
+.node-status{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+.node-status li{display:flex;gap:11px;align-items:flex-start;font-size:13px;line-height:1.45}
+.node-status .dot{width:9px;height:9px;border-radius:50%;margin-top:5px;flex:none;background:var(--muted-2)}
+.node-status .ok .dot{background:var(--node-stroke)}
+.node-status .bad .dot{background:var(--bad-stroke)}
+.node-status .warn .dot{background:var(--warn-stroke)}
+.node-status .state{color:var(--muted);margin-left:6px}
+.node-status .bad .state{color:var(--bad-ink)}
+.node-status .warn .state{color:var(--warn-ink)}
+.node-status small{display:block;font-size:11px;color:var(--muted)}
+.key-numbers{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.key-number span,.key-number strong,.key-number small{display:block}
+.key-number span{font-size:11px;color:var(--muted)}
+.key-number strong{font-size:30px;font-weight:500;margin:6px 0;font-variant-numeric:tabular-nums}
+.key-number small{font-size:10px;color:var(--muted-2);line-height:1.45}
+.ago{color:var(--muted)}
+.quiet{border-top:1px solid var(--line);padding-top:16px}
+.quiet .connection-description{font-size:12px;margin-bottom:10px}
+.quiet .connection-facts{border-top:0;padding-top:0;grid-template-columns:repeat(4,1fr)}
+.quiet dd{font-size:12px;color:var(--muted)}
+.section-title{font-size:15px;font-weight:600;letter-spacing:0;margin:26px 0 12px}
+.flow{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr) auto minmax(0,1fr);gap:10px;align-items:stretch}
+.flow-arrow{align-self:center;font-size:26px;color:var(--muted-2)}
+.count-note{font-size:12px;line-height:1.5;color:var(--ink-2);margin:0 0 8px}
+@media(max-width:800px){.route-pair{grid-template-columns:1fr}.key-numbers{gap:8px}.key-number strong{font-size:24px}.flow{grid-template-columns:1fr}.flow-arrow{transform:rotate(90deg);justify-self:center}.quiet .connection-facts{grid-template-columns:repeat(2,1fr)}}

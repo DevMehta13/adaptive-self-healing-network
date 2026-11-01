@@ -67,7 +67,7 @@ export function useLive(connection: ConnectionState) {
     }
   }
 
-  return { base, current, loadedAt, connected, pollError, pending, feedback, controlsReady, act };
+  return { status: connection.status, base, current, loadedAt, connected, pollError, pending, feedback, controlsReady, act };
 }
 
 export type Live = ReturnType<typeof useLive>;

@@ -1,16 +1,17 @@
 import type { ReactNode } from 'react';
+import { nodeRoles } from './overview';
 import type { Count, LinkView, NetworkSnapshot, NodeId } from './fixtures';
 
 const positions: Record<NodeId, [number, number]> = { A: [62, 170], B: [235, 55], C: [408, 170], D: [235, 285] };
 const edges: [NodeId, NodeId][] = [['A', 'B'], ['B', 'C'], ['A', 'D'], ['D', 'C']];
-const names: Record<NodeId, string> = { A: 'Source', B: 'Relay', C: 'USB gateway', D: 'Relay' };
+const names = nodeRoles;
 const seconds = (ms: number) => `${(ms / 1000).toFixed(1)} s`;
 const age = (ms: number | null | undefined) => ms == null ? 'age unknown' : `${seconds(ms)} old`;
 const readable = (value: string) => value.replaceAll('_', ' ');
 const routeText = (path?: (NodeId | null)[]) => path?.length ? path.map(n => n ?? '?').join(' → ') : 'None recorded';
 
-export function CountCard({ label, count }: { label: string; count: Count | null | undefined }) {
-  return <div className="count-card"><span>{label}</span><strong>{count?.value ?? '—'}</strong><small>{count ? `${count.known_by}${count.age_ms != null ? ` · ${age(count.age_ms)}` : ''}` : 'Awaiting telemetry'}</small></div>;
+export function CountCard({ label, count, note }: { label: string; count: Count | null | undefined; note?: string }) {
+  return <div className="count-card"><span>{label}</span><strong>{count?.value ?? '—'}</strong>{note && <p className="count-note">{note}</p>}<small>{count ? `${count.known_by}${count.age_ms != null ? ` · ${age(count.age_ms)}` : ''}` : 'Awaiting telemetry'}</small></div>;
 }
 
 function Sparkline({ values, unit }: { values: number[]; unit: string }) {
