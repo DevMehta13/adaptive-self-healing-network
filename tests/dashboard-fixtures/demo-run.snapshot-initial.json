@@ -137,6 +137,26 @@
     "lost_total": null,
     "pending": null
   },
+  "frames": {
+    "last_id": 0,
+    "capacity": 200,
+    "source": "simulation: frame bytes come from the simulator's codec, not from a radio",
+    "counts": {
+      "total": 0,
+      "by_type": {
+        "DATA": 0,
+        "TOPOLOGY_REPORT": 0,
+        "ROUTE_INSTALL_ACK": 0,
+        "LOCAL_FAILOVER_REPORT": 0,
+        "TELEMETRY": 0
+      },
+      "duplicates": 0,
+      "replayed": 0,
+      "rejected": 0,
+      "rejected_by_reason": {}
+    },
+    "recent": []
+  },
   "presenter": {
     "channel": "environment",
     "note": "What the presenter did to the simulated environment. This is not something the controller knows.",

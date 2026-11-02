@@ -190,6 +190,25 @@ def frame_event(
     return None
 
 
+@dataclass(frozen=True)
+class FrameObserved:
+    """One radio frame C handed up, exactly as it arrived (for the packets view).
+
+    Not a controller event: it carries the raw bytes and the decoded frame, so the dashboard can
+    show the header. `frame` is None when the codec refused the bytes; `rejected` then names the
+    codec's reason. Resent copies of a number already received never get here (they are dropped
+    and counted as uplink duplicates before delivery).
+    """
+
+    up: FrameUp
+    received_ms: int  # laptop clock: now, or (for a late frame) now minus the age C reports
+    frame: Frame | None = None
+    rejected: str = ""
+
+
+FrameObserver = Callable[[FrameObserved], None]
+
+
 @dataclass
 class _Pending:
     from_n: int
@@ -208,6 +227,7 @@ class LaptopGateway:
         self._send_down = send_down
         self.config = config or UplinkConfig()
         self._handlers: list[GatewayHandler] = []
+        self._frame_observers: list[FrameObserver] = []
         self.stats = UplinkStats()
         self.commands_sent = 0  # route updates handed to C
         self.heartbeats_sent = 0
@@ -225,6 +245,15 @@ class LaptopGateway:
 
     def subscribe(self, handler: GatewayHandler) -> None:
         self._handlers.append(handler)
+
+    def subscribe_frames(self, observer: FrameObserver) -> None:
+        """Call `observer` for every frame C hands up, and for every one the codec refuses."""
+        self._frame_observers.append(observer)
+
+    def note_rejected_frame(self, up: FrameUp, reason: str) -> None:
+        """A numbered `fr` line whose frame the codec refused (a serial gateway calls this)."""
+        now = self._clock.now_ms()
+        self._observe(FrameObserved(up, now - up.age_ms, None, reason))
 
     def now_ms(self) -> int:
         return self._clock.now_ms()
@@ -313,6 +342,10 @@ class LaptopGateway:
     def _emit(self, event: GatewayEvent) -> None:
         for handler in list(self._handlers):
             handler(event)
+
+    def _observe(self, observed: FrameObserved) -> None:
+        for observer in list(self._frame_observers):
+            observer(observed)
 
     def _note_boot(self, boot: int, now: int) -> None:
         """A marker from a boot of C we have not seen means C restarted."""
@@ -410,6 +443,7 @@ class LaptopGateway:
     def _deliver(self, up: FrameUp, now: int) -> None:
         self.stats.frames += 1
         frame = decode(up.frame)  # already validated when the line was parsed
+        self._observe(FrameObserved(up, now - up.age_ms, frame))
         event = frame_event(frame, up, now - up.age_ms, self.config.data_ttl)
         if event is not None:
             self._emit(event)

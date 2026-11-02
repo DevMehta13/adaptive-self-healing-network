@@ -73,6 +73,7 @@ class HardwareConfig:
 class LiveHardware(DashboardModel):
     mode = "hardware"
     label = HARDWARE_LABEL
+    frames_source = "hardware: the exact bytes node C received on the radio and handed up"
 
     def __init__(self, config: HardwareConfig) -> None:
         super().__init__(config.history, config.recent_readings, config.recent_events_in_snapshot)
@@ -99,6 +100,7 @@ class LiveHardware(DashboardModel):
         self.gateway.port_name = config.port or None
         self.gateway.port_state = "waiting" if config.port else "no_port"
         self.gateway.subscribe(self._on_gateway_event)
+        self.gateway.subscribe_frames(self._on_frame_observed)
         self._worker: SerialPortWorker | None = None
         self._started = False
 

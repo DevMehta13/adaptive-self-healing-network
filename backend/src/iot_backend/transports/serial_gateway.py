@@ -68,6 +68,8 @@ class SerialGateway(LaptopGateway):
                     parsed.text if parsed.kind == "log" else f"(unframed) {parsed.text}",
                 )
             )
+        if parsed.rejected_frame is not None:
+            self.note_rejected_frame(parsed.rejected_frame, parsed.detail)
         if self.on_line is not None:
             self.on_line(parsed)
         if parsed.kind == "message":

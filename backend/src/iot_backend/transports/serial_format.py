@@ -92,11 +92,12 @@ def crc16(data: bytes) -> int:
 
 
 class LineError(ValueError):
-    def __init__(self, reason: str, detail: str = "") -> None:
+    def __init__(self, reason: str, detail: str = "", frame_up: FrameUp | None = None) -> None:
         assert reason in REJECT_REASONS, reason
         super().__init__(f"{reason}: {detail}" if detail else reason)
         self.reason = reason
         self.detail = detail
+        self.frame_up = frame_up  # bad_frame only: the line's own fields, for the packets view
 
 
 @dataclass(frozen=True)
@@ -108,6 +109,9 @@ class ParsedLine:
     reason: str = ""  # for kind "rejected"
     detail: str = ""
     text: str = ""  # the line as text (for logs, noise and diagnostics)
+    # For reason "bad_frame": the fields of the `fr` line (every other check passed, so the
+    # number, the sender and the bytes are known); the frame inside was refused by the codec.
+    rejected_frame: FrameUp | None = None
 
 
 # ---------------------------------------------------------------- field validation
@@ -376,7 +380,7 @@ def _build(obj: dict[str, Any], table: dict[str, tuple[type, Spec]]) -> Any:
         try:
             frame = decode(values["frame"])
         except DecodeError as error:
-            raise LineError("bad_frame", error.reason.value) from None
+            raise LineError("bad_frame", error.reason.value, frame_up=FrameUp(**values)) from None
         if frame.msg_type not in UP_FRAME_TYPES:
             raise LineError("unexpected_frame", frame.msg_type.name)
         is_data = frame.msg_type is MessageType.DATA
@@ -407,7 +411,13 @@ def _parse(line: bytes, table: dict[str, tuple[type, Spec]], limit: int) -> Pars
     try:
         return ParsedLine("message", message=_build(_object(line), table), text=text)
     except LineError as error:
-        return ParsedLine("rejected", reason=error.reason, detail=error.detail, text=text)
+        return ParsedLine(
+            "rejected",
+            reason=error.reason,
+            detail=error.detail,
+            text=text,
+            rejected_frame=error.frame_up,
+        )
 
 
 def decode_up(line: bytes) -> ParsedLine:

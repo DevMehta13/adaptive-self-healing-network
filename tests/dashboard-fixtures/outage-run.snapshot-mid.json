@@ -388,6 +388,1782 @@
       "age_ms": 21010
     }
   },
+  "frames": {
+    "last_id": 42,
+    "capacity": 200,
+    "source": "simulation: frame bytes come from the simulator's codec, not from a radio",
+    "counts": {
+      "total": 42,
+      "by_type": {
+        "DATA": 3,
+        "TOPOLOGY_REPORT": 28,
+        "ROUTE_INSTALL_ACK": 3,
+        "LOCAL_FAILOVER_REPORT": 0,
+        "TELEMETRY": 8
+      },
+      "duplicates": 0,
+      "replayed": 0,
+      "rejected": 0,
+      "rejected_by_reason": {}
+    },
+    "recent": [
+      {
+        "id": 1,
+        "c_boot": 4145609530,
+        "n": 1,
+        "received_ms": 226,
+        "delay_ms": 0,
+        "replayed": false,
+        "via": "B",
+        "dup": null,
+        "hex": "011102034e65fabc0200000008090103013afb18f73200",
+        "size": 23,
+        "header": {
+          "version": 1,
+          "type": 17,
+          "type_name": "TOPOLOGY_REPORT",
+          "src": "B",
+          "dst": "C",
+          "session": 3170526542,
+          "seq": 2,
+          "ttl": 8,
+          "payload_len": 9
+        },
+        "payload": {
+          "neighbors": [
+            {
+              "node": "C",
+              "state": "one_way",
+              "session": 4145609530,
+              "last_heard_ms_ago": 50,
+              "rtt_ms": null,
+              "probes_ok": null,
+              "probes_total": null
+            }
+          ]
+        },
+        "rejected": null,
+        "summary": "1 neighbors: C one_way"
+      },
+      {
+        "id": 2,
+        "c_boot": 4145609530,
+        "n": 2,
+        "received_ms": 261,
+        "delay_ms": 0,
+        "replayed": false,
+        "via": "D",
+        "dup": null,
+        "hex": "0111040365714ede0400000008090103013afb18f73200",
+        "size": 23,
+        "header": {
+          "version": 1,
+          "type": 17,
+          "type_name": "TOPOLOGY_REPORT",
+          "src": "D",
+          "dst": "C",
+          "session": 3729682789,
+          "seq": 4,
+          "ttl": 8,
+          "payload_len": 9
+        },
+        "payload": {
+          "neighbors": [
+            {
+              "node": "C",
+              "state": "one_way",
+              "session": 4145609530,
+              "last_heard_ms_ago": 50,
+              "rtt_ms": null,
+              "probes_ok": null,
+              "probes_total": null
+            }
+          ]
+        },
+        "rejected": null,
+        "summary": "1 neighbors: C one_way"
+      },
+      {
+        "id": 3,
+        "c_boot": 4145609530,
+        "n": 3,
+        "received_ms": 425,
+        "delay_ms": 0,
+        "replayed": false,
+        "via": "C",
+        "dup": null,
+        "hex": "011103033afb18f70600000008090102024e65fabc3200",
+        "size": 23,
+        "header": {
+          "version": 1,
+          "type": 17,
+          "type_name": "TOPOLOGY_REPORT",
+          "src": "C",
+          "dst": "C",
+          "session": 4145609530,
+          "seq": 6,
+          "ttl": 8,
+          "payload_len": 9
+        },
+        "payload": {
+          "neighbors": [
+            {
+              "node": "B",
+              "state": "two_way",
+              "session": 3170526542,
+              "last_heard_ms_ago": 50,
+              "rtt_ms": null,
+              "probes_ok": null,
+              "probes_total": null
+            }
+          ]
+        },
+        "rejected": null,
+        "summary": "1 neighbors: B two_way"
+      },
+      {
+        "id": 4,
+        "c_boot": 4145609530,
+        "n": 4,
+        "received_ms": 450,
+        "delay_ms": 0,
+        "replayed": false,
+        "via": "B",
+        "dup": null,
+        "hex": "01110103457c32630200000007090102014e65fabc3200",
+        "size": 23,
+        "header": {
+          "version": 1,
+          "type": 17,
+          "type_name": "TOPOLOGY_REPORT",
+          "src": "A",
+          "dst": "C",
+          "session": 1664252997,
+          "seq": 2,
+          "ttl": 7,
+          "payload_len": 9
+        },
+        "payload": {
+          "neighbors": [
+            {
+              "node": "B",
+              "state": "one_way",
+              "session": 3170526542,
+              "last_heard_ms_ago": 50,
+              "rtt_ms": null,
+              "probes_ok": null,
+              "probes_total": null
+            }
+          ]
+        },
+        "rejected": null,
+        "summary": "1 neighbors: B one_way"
+      },
+      {
+        "id": 5,
+        "c_boot": 4145609530,
+        "n": 5,
+        "received_ms": 782,
+        "delay_ms": 0,
+        "replayed": false,
+        "via": "C",
+        "dup": null,
+        "hex": "011103033afb18f70800000008110202024e65fabc9701040265714ede3200",
+        "size": 31,
+        "header": {
+          "version": 1,
+          "type": 17,
+          "type_name": "TOPOLOGY_REPORT",
+          "src": "C",
+          "dst": "C",
+          "session": 4145609530,
+          "seq": 8,
+          "ttl": 8,
+          "payload_len": 17
+        },
+        "payload": {
+          "neighbors": [
+            {
+              "node": "B",
+              "state": "two_way",
+              "session": 3170526542,
+              "last_heard_ms_ago": 407,
+              "rtt_ms": null,
+              "probes_ok": null,
+              "probes_total": null
+            },
+            {
+              "node": "D",
+              "state": "two_way",
+              "session": 3729682789,
+              "last_heard_ms_ago": 50,
+              "rtt_ms": null,
+              "probes_ok": null,
+              "probes_total": null
+            }
+          ]
+        },
+        "rejected": null,
+        "summary": "2 neighbors: B two_way, D two_way"
+      },
+      {
+        "id": 6,
+        "c_boot": 4145609530,
+        "n": 6,
+        "received_ms": 807,
+        "delay_ms": 0,
+        "replayed": false,
+        "via": "B",
+        "dup": null,
+        "hex": "01110103457c32630400000007110202014e65fabc9701040165714ede3200",
+        "size": 31,
+        "header": {
+          "version": 1,
+          "type": 17,
+          "type_name": "TOPOLOGY_REPORT",
+          "src": "A",
+          "dst": "C",
+          "session": 1664252997,
+          "seq": 4,
+          "ttl": 7,
+          "payload_len": 17
+        },
+        "payload": {
+          "neighbors": [
+            {
+              "node": "B",
+              "state": "one_way",
+              "session": 3170526542,
+              "last_heard_ms_ago": 407,
+              "rtt_ms": null,
+              "probes_ok": null,
+              "probes_total": null
+            },
+            {
+              "node": "D",
+              "state": "one_way",
+              "session": 3729682789,
+              "last_heard_ms_ago": 50,
+              "rtt_ms": null,
+              "probes_ok": null,
+              "probes_total": null
+            }
+          ]
+        },
+        "rejected": null,
+        "summary": "2 neighbors: B one_way, D one_way"
+      },
+      {
+        "id": 7,
+        "c_boot": 4145609530,
+        "n": 7,
+        "received_ms": 1015,
+        "delay_ms": 0,
+        "replayed": false,
+        "via": "C",
+        "dup": null,
+        "hex": "011103033afb18f70900000008110202024e65fabc8002040265714ede1b01",
+        "size": 31,
+        "header": {
+          "version": 1,
+          "type": 17,
+          "type_name": "TOPOLOGY_REPORT",
+          "src": "C",
+          "dst": "C",
+          "session": 4145609530,
+          "seq": 9,
+          "ttl": 8,
+          "payload_len": 17
+        },
+        "payload": {
+          "neighbors": [
+            {
+              "node": "B",
+              "state": "two_way",
+              "session": 3170526542,
+              "last_heard_ms_ago": 640,
+              "rtt_ms": null,
+              "probes_ok": null,
+              "probes_total": null
+            },
+            {
+              "node": "D",
+              "state": "two_way",
+              "session": 3729682789,
+              "last_heard_ms_ago": 283,
+              "rtt_ms": null,
+              "probes_ok": null,
+              "probes_total": null
+            }
+          ]
+        },
+        "rejected": null,
+        "summary": "2 neighbors: B two_way, D two_way"
+      },
+      {
+        "id": 8,
+        "c_boot": 4145609530,
+        "n": 8,
+        "received_ms": 1020,
+        "delay_ms": 0,
+        "replayed": false,
+        "via": "B",
+        "dup": null,
+        "hex": "011102034e65fabc0800000008090103013afb18f74c03",
+        "size": 23,
+        "header": {
+          "version": 1,
+          "type": 17,
+          "type_name": "TOPOLOGY_REPORT",
+          "src": "B",
+          "dst": "C",
+          "session": 3170526542,
+          "seq": 8,
+          "ttl": 8,
+          "payload_len": 9
+        },
+        "payload": {
+          "neighbors": [
+            {
+              "node": "C",
+              "state": "one_way",
+              "session": 4145609530,
+              "last_heard_ms_ago": 844,
+              "rtt_ms": null,
+              "probes_ok": null,
+              "probes_total": null
+            }
+          ]
+        },
+        "rejected": null,
+        "summary": "1 neighbors: C one_way"
+      },
+      {
+        "id": 9,
+        "c_boot": 4145609530,
+        "n": 9,
+        "received_ms": 1071,
+        "delay_ms": 0,
+        "replayed": false,
+        "via": "B",
+        "dup": null,
+        "hex": "011102034e65fabc090000000811020102457c3263320003013afb18f77f03",
+        "size": 31,
+        "header": {
+          "version": 1,
+          "type": 17,
+          "type_name": "TOPOLOGY_REPORT",
+          "src": "B",
+          "dst": "C",
+          "session": 3170526542,
+          "seq": 9,
+          "ttl": 8,
+          "payload_len": 17
+        },
+        "payload": {
+          "neighbors": [
+            {
+              "node": "A",
+              "state": "two_way",
+              "session": 1664252997,
+              "last_heard_ms_ago": 50,
+              "rtt_ms": null,
+              "probes_ok": null,
+              "probes_total": null
+            },
+            {
+              "node": "C",
+              "state": "one_way",
+              "session": 4145609530,
+              "last_heard_ms_ago": 895,
+              "rtt_ms": null,
+              "probes_ok": null,
+              "probes_total": null
+            }
+          ]
+        },
+        "rejected": null,
+        "summary": "2 neighbors: A two_way, C one_way"
+      },
+      {
+        "id": 10,
+        "c_boot": 4145609530,
+        "n": 10,
+        "received_ms": 1076,
+        "delay_ms": 0,
+        "replayed": false,
+        "via": "B",
+        "dup": null,
+        "hex": "01110103457c32630a00000007110202014e65fabc9c02040165714ede3701",
+        "size": 31,
+        "header": {
+          "version": 1,
+          "type": 17,
+          "type_name": "TOPOLOGY_REPORT",
+          "src": "A",
+          "dst": "C",
+          "session": 1664252997,
+          "seq": 10,
+          "ttl": 7,
+          "payload_len": 17
+        },
+        "payload": {
+          "neighbors": [
+            {
+              "node": "B",
+              "state": "one_way",
+              "session": 3170526542,
+              "last_heard_ms_ago": 668,
+              "rtt_ms": null,
+              "probes_ok": null,
+              "probes_total": null
+            },
+            {
+              "node": "D",
+              "state": "one_way",
+              "session": 3729682789,
+              "last_heard_ms_ago": 311,
+              "rtt_ms": null,
+              "probes_ok": null,
+              "probes_total": null
+            }
+          ]
+        },
+        "rejected": null,
+        "summary": "2 neighbors: B one_way, D one_way"
+      },
+      {
+        "id": 11,
+        "c_boot": 4145609530,
+        "n": 11,
+        "received_ms": 1106,
+        "delay_ms": 0,
+        "replayed": false,
+        "via": "D",
+        "dup": null,
+        "hex": "0111040365714ede0a0000000811020102457c3263320003013afb18f77f03",
+        "size": 31,
+        "header": {
+          "version": 1,
+          "type": 17,
+          "type_name": "TOPOLOGY_REPORT",
+          "src": "D",
+          "dst": "C",
+          "session": 3729682789,
+          "seq": 10,
+          "ttl": 8,
+          "payload_len": 17
+        },
+        "payload": {
+          "neighbors": [
+            {
+              "node": "A",
+              "state": "two_way",
+              "session": 1664252997,
+              "last_heard_ms_ago": 50,
+              "rtt_ms": null,
+              "probes_ok": null,
+              "probes_total": null
+            },
+            {
+              "node": "C",
+              "state": "one_way",
+              "session": 4145609530,
+              "last_heard_ms_ago": 895,
+              "rtt_ms": null,
+              "probes_ok": null,
+              "probes_total": null
+            }
+          ]
+        },
+        "rejected": null,
+        "summary": "2 neighbors: A two_way, C one_way"
+      },
+      {
+        "id": 12,
+        "c_boot": 4145609530,
+        "n": 12,
+        "received_ms": 1121,
+        "delay_ms": 0,
+        "replayed": false,
+        "via": "D",
+        "dup": null,
+        "hex": "0111040365714ede0b0000000811020102457c3263360003013afb18f78303",
+        "size": 31,
+        "header": {
+          "version": 1,
+          "type": 17,
+          "type_name": "TOPOLOGY_REPORT",
+          "src": "D",
+          "dst": "C",
+          "session": 3729682789,
+          "seq": 11,
+          "ttl": 8,
+          "payload_len": 17
+        },
+        "payload": {
+          "neighbors": [
+            {
+              "node": "A",
+              "state": "two_way",
+              "session": 1664252997,
+              "last_heard_ms_ago": 54,
+              "rtt_ms": null,
+              "probes_ok": null,
+              "probes_total": null
+            },
+            {
+              "node": "C",
+              "state": "one_way",
+              "session": 4145609530,
+              "last_heard_ms_ago": 899,
+              "rtt_ms": null,
+              "probes_ok": null,
+              "probes_total": null
+            }
+          ]
+        },
+        "rejected": null,
+        "summary": "2 neighbors: A two_way, C one_way"
+      },
+      {
+        "id": 13,
+        "c_boot": 4145609530,
+        "n": 13,
+        "received_ms": 1179,
+        "delay_ms": 0,
+        "replayed": false,
+        "via": "B",
+        "dup": null,
+        "hex": "011102034e65fabc0b0000000811020102457c32639e0003023afb18f73200",
+        "size": 31,
+        "header": {
+          "version": 1,
+          "type": 17,
+          "type_name": "TOPOLOGY_REPORT",
+          "src": "B",
+          "dst": "C",
+          "session": 3170526542,
+          "seq": 11,
+          "ttl": 8,
+          "payload_len": 17
+        },
+        "payload": {
+          "neighbors": [
+            {
+              "node": "A",
+              "state": "two_way",
+              "session": 1664252997,
+              "last_heard_ms_ago": 158,
+              "rtt_ms": null,
+              "probes_ok": null,
+              "probes_total": null
+            },
+            {
+              "node": "C",
+              "state": "two_way",
+              "session": 4145609530,
+              "last_heard_ms_ago": 50,
+              "rtt_ms": null,
+              "probes_ok": null,
+              "probes_total": null
+            }
+          ]
+        },
+        "rejected": null,
+        "summary": "2 neighbors: A two_way, C two_way"
+      },
+      {
+        "id": 14,
+        "c_boot": 4145609530,
+        "n": 14,
+        "received_ms": 1214,
+        "delay_ms": 0,
+        "replayed": false,
+        "via": "D",
+        "dup": null,
+        "hex": "0111040365714ede0d0000000811020102457c32639e0003023afb18f73200",
+        "size": 31,
+        "header": {
+          "version": 1,
+          "type": 17,
+          "type_name": "TOPOLOGY_REPORT",
+          "src": "D",
+          "dst": "C",
+          "session": 3729682789,
+          "seq": 13,
+          "ttl": 8,
+          "payload_len": 17
+        },
+        "payload": {
+          "neighbors": [
+            {
+              "node": "A",
+              "state": "two_way",
+              "session": 1664252997,
+              "last_heard_ms_ago": 158,
+              "rtt_ms": null,
+              "probes_ok": null,
+              "probes_total": null
+            },
+            {
+              "node": "C",
+              "state": "two_way",
+              "session": 4145609530,
+              "last_heard_ms_ago": 50,
+              "rtt_ms": null,
+              "probes_ok": null,
+              "probes_total": null
+            }
+          ]
+        },
+        "rejected": null,
+        "summary": "2 neighbors: A two_way, C two_way"
+      },
+      {
+        "id": 15,
+        "c_boot": 4145609530,
+        "n": 15,
+        "received_ms": 1516,
+        "delay_ms": 0,
+        "replayed": false,
+        "via": "B",
+        "dup": null,
+        "hex": "01110103457c32630b00000007110202024e65fabc3200040165714edef702",
+        "size": 31,
+        "header": {
+          "version": 1,
+          "type": 17,
+          "type_name": "TOPOLOGY_REPORT",
+          "src": "A",
+          "dst": "C",
+          "session": 1664252997,
+          "seq": 11,
+          "ttl": 7,
+          "payload_len": 17
+        },
+        "payload": {
+          "neighbors": [
+            {
+              "node": "B",
+              "state": "two_way",
+              "session": 3170526542,
+              "last_heard_ms_ago": 50,
+              "rtt_ms": null,
+              "probes_ok": null,
+              "probes_total": null
+            },
+            {
+              "node": "D",
+              "state": "one_way",
+              "session": 3729682789,
+              "last_heard_ms_ago": 759,
+              "rtt_ms": null,
+              "probes_ok": null,
+              "probes_total": null
+            }
+          ]
+        },
+        "rejected": null,
+        "summary": "2 neighbors: B two_way, D one_way"
+      },
+      {
+        "id": 16,
+        "c_boot": 4145609530,
+        "n": 16,
+        "received_ms": 1882,
+        "delay_ms": 0,
+        "replayed": false,
+        "via": "B",
+        "dup": null,
+        "hex": "01110103457c32630d00000007110202024e65fabca001040265714ede3200",
+        "size": 31,
+        "header": {
+          "version": 1,
+          "type": 17,
+          "type_name": "TOPOLOGY_REPORT",
+          "src": "A",
+          "dst": "C",
+          "session": 1664252997,
+          "seq": 13,
+          "ttl": 7,
+          "payload_len": 17
+        },
+        "payload": {
+          "neighbors": [
+            {
+              "node": "B",
+              "state": "two_way",
+              "session": 3170526542,
+              "last_heard_ms_ago": 416,
+              "rtt_ms": null,
+              "probes_ok": null,
+              "probes_total": null
+            },
+            {
+              "node": "D",
+              "state": "two_way",
+              "session": 3729682789,
+              "last_heard_ms_ago": 50,
+              "rtt_ms": null,
+              "probes_ok": null,
+              "probes_total": null
+            }
+          ]
+        },
+        "rejected": null,
+        "summary": "2 neighbors: B two_way, D two_way"
+      },
+      {
+        "id": 17,
+        "c_boot": 4145609530,
+        "n": 17,
+        "received_ms": 2181,
+        "delay_ms": 0,
+        "replayed": false,
+        "via": "D",
+        "dup": null,
+        "hex": "0111040365714ede130000000818020102457c32638a0003023afb18f7540002013c00034100",
+        "size": 38,
+        "header": {
+          "version": 1,
+          "type": 17,
+          "type_name": "TOPOLOGY_REPORT",
+          "src": "D",
+          "dst": "C",
+          "session": 3729682789,
+          "seq": 19,
+          "ttl": 8,
+          "payload_len": 24
+        },
+        "payload": {
+          "neighbors": [
+            {
+              "node": "A",
+              "state": "two_way",
+              "session": 1664252997,
+              "last_heard_ms_ago": 138,
+              "rtt_ms": 60,
+              "probes_ok": null,
+              "probes_total": null
+            },
+            {
+              "node": "C",
+              "state": "two_way",
+              "session": 4145609530,
+              "last_heard_ms_ago": 84,
+              "rtt_ms": 65,
+              "probes_ok": null,
+              "probes_total": null
+            }
+          ]
+        },
+        "rejected": null,
+        "summary": "2 neighbors: A two_way, C two_way"
+      },
+      {
+        "id": 18,
+        "c_boot": 4145609530,
+        "n": 18,
+        "received_ms": 2216,
+        "delay_ms": 0,
+        "replayed": false,
+        "via": "C",
+        "dup": null,
+        "hex": "011103033afb18f71500000008180202024e65fabc0703040265714ede990102021e00044100",
+        "size": 38,
+        "header": {
+          "version": 1,
+          "type": 17,
+          "type_name": "TOPOLOGY_REPORT",
+          "src": "C",
+          "dst": "C",
+          "session": 4145609530,
+          "seq": 21,
+          "ttl": 8,
+          "payload_len": 24
+        },
+        "payload": {
+          "neighbors": [
+            {
+              "node": "B",
+              "state": "two_way",
+              "session": 3170526542,
+              "last_heard_ms_ago": 775,
+              "rtt_ms": 30,
+              "probes_ok": null,
+              "probes_total": null
+            },
+            {
+              "node": "D",
+              "state": "two_way",
+              "session": 3729682789,
+              "last_heard_ms_ago": 409,
+              "rtt_ms": 65,
+              "probes_ok": null,
+              "probes_total": null
+            }
+          ]
+        },
+        "rejected": null,
+        "summary": "2 neighbors: B two_way, D two_way"
+      },
+      {
+        "id": 19,
+        "c_boot": 4145609530,
+        "n": 19,
+        "received_ms": 2706,
+        "delay_ms": 0,
+        "replayed": false,
+        "via": "B",
+        "dup": null,
+        "hex": "011102034e65fabc160000000818020102457c3263ba0203023afb18f7840202011e00032300",
+        "size": 38,
+        "header": {
+          "version": 1,
+          "type": 17,
+          "type_name": "TOPOLOGY_REPORT",
+          "src": "B",
+          "dst": "C",
+          "session": 3170526542,
+          "seq": 22,
+          "ttl": 8,
+          "payload_len": 24
+        },
+        "payload": {
+          "neighbors": [
+            {
+              "node": "A",
+              "state": "two_way",
+              "session": 1664252997,
+              "last_heard_ms_ago": 698,
+              "rtt_ms": 30,
+              "probes_ok": null,
+              "probes_total": null
+            },
+            {
+              "node": "C",
+              "state": "two_way",
+              "session": 4145609530,
+              "last_heard_ms_ago": 644,
+              "rtt_ms": 35,
+              "probes_ok": null,
+              "probes_total": null
+            }
+          ]
+        },
+        "rejected": null,
+        "summary": "2 neighbors: A two_way, C two_way"
+      },
+      {
+        "id": 20,
+        "c_boot": 4145609530,
+        "n": 20,
+        "received_ms": 2947,
+        "delay_ms": 0,
+        "replayed": false,
+        "via": "B",
+        "dup": null,
+        "hex": "01110103457c32631800000007180202024e65fabc3e02040265714edecd0002021e00044100",
+        "size": 38,
+        "header": {
+          "version": 1,
+          "type": 17,
+          "type_name": "TOPOLOGY_REPORT",
+          "src": "A",
+          "dst": "C",
+          "session": 1664252997,
+          "seq": 24,
+          "ttl": 7,
+          "payload_len": 24
+        },
+        "payload": {
+          "neighbors": [
+            {
+              "node": "B",
+              "state": "two_way",
+              "session": 3170526542,
+              "last_heard_ms_ago": 574,
+              "rtt_ms": 30,
+              "probes_ok": null,
+              "probes_total": null
+            },
+            {
+              "node": "D",
+              "state": "two_way",
+              "session": 3729682789,
+              "last_heard_ms_ago": 205,
+              "rtt_ms": 65,
+              "probes_ok": null,
+              "probes_total": null
+            }
+          ]
+        },
+        "rejected": null,
+        "summary": "2 neighbors: B two_way, D two_way"
+      },
+      {
+        "id": 21,
+        "c_boot": 4145609530,
+        "n": 21,
+        "received_ms": 3890,
+        "delay_ms": 0,
+        "replayed": false,
+        "via": "D",
+        "dup": null,
+        "hex": "0117040365714ede1d000000082000000000000000000000000000000000000000000b0000000000000000000000",
+        "size": 46,
+        "header": {
+          "version": 1,
+          "type": 23,
+          "type_name": "TELEMETRY",
+          "src": "D",
+          "dst": "C",
+          "session": 3729682789,
+          "seq": 29,
+          "ttl": 8,
+          "payload_len": 32
+        },
+        "payload": {
+          "counters": {
+            "created": 0,
+            "acknowledged": 0,
+            "lost": 0,
+            "no_route": 0,
+            "delivered": 0,
+            "forwarded": 11,
+            "dropped": 0,
+            "failovers": 0,
+            "send_failures": 0
+          }
+        },
+        "rejected": null,
+        "summary": "forwarded 11"
+      },
+      {
+        "id": 22,
+        "c_boot": 4145609530,
+        "n": 22,
+        "received_ms": 3896,
+        "delay_ms": 0,
+        "replayed": false,
+        "via": "B",
+        "dup": null,
+        "hex": "01170103457c32631b000000072001000000000000000000000001000000000000000a0000000100000000000000",
+        "size": 46,
+        "header": {
+          "version": 1,
+          "type": 23,
+          "type_name": "TELEMETRY",
+          "src": "A",
+          "dst": "C",
+          "session": 1664252997,
+          "seq": 27,
+          "ttl": 7,
+          "payload_len": 32
+        },
+        "payload": {
+          "counters": {
+            "created": 1,
+            "acknowledged": 0,
+            "lost": 0,
+            "no_route": 1,
+            "delivered": 0,
+            "forwarded": 10,
+            "dropped": 1,
+            "failovers": 0,
+            "send_failures": 0
+          }
+        },
+        "rejected": null,
+        "summary": "created 1, no route 1, forwarded 10, dropped 1"
+      },
+      {
+        "id": 23,
+        "c_boot": 4145609530,
+        "n": 23,
+        "received_ms": 4017,
+        "delay_ms": 0,
+        "replayed": false,
+        "via": "D",
+        "dup": null,
+        "hex": "0113040365714ede1f000000080ae8030000010000000301",
+        "size": 24,
+        "header": {
+          "version": 1,
+          "type": 19,
+          "type_name": "ROUTE_INSTALL_ACK",
+          "src": "D",
+          "dst": "C",
+          "session": 3729682789,
+          "seq": 31,
+          "ttl": 8,
+          "payload_len": 10
+        },
+        "payload": {
+          "epoch": 1000,
+          "version": 1,
+          "destination": "C",
+          "status": "installed"
+        },
+        "rejected": null,
+        "summary": "route version 1 for C: installed"
+      },
+      {
+        "id": 24,
+        "c_boot": 4145609530,
+        "n": 24,
+        "received_ms": 4052,
+        "delay_ms": 0,
+        "replayed": false,
+        "via": "B",
+        "dup": null,
+        "hex": "011302034e65fabc1e000000080ae8030000010000000301",
+        "size": 24,
+        "header": {
+          "version": 1,
+          "type": 19,
+          "type_name": "ROUTE_INSTALL_ACK",
+          "src": "B",
+          "dst": "C",
+          "session": 3170526542,
+          "seq": 30,
+          "ttl": 8,
+          "payload_len": 10
+        },
+        "payload": {
+          "epoch": 1000,
+          "version": 1,
+          "destination": "C",
+          "status": "installed"
+        },
+        "rejected": null,
+        "summary": "route version 1 for C: installed"
+      },
+      {
+        "id": 25,
+        "c_boot": 4145609530,
+        "n": 25,
+        "received_ms": 4117,
+        "delay_ms": 0,
+        "replayed": false,
+        "via": "B",
+        "dup": null,
+        "hex": "01130103457c326320000000070ae8030000010000000301",
+        "size": 24,
+        "header": {
+          "version": 1,
+          "type": 19,
+          "type_name": "ROUTE_INSTALL_ACK",
+          "src": "A",
+          "dst": "C",
+          "session": 1664252997,
+          "seq": 32,
+          "ttl": 7,
+          "payload_len": 10
+        },
+        "payload": {
+          "epoch": 1000,
+          "version": 1,
+          "destination": "C",
+          "status": "installed"
+        },
+        "rejected": null,
+        "summary": "route version 1 for C: installed"
+      },
+      {
+        "id": 26,
+        "c_boot": 4145609530,
+        "n": 26,
+        "received_ms": 4309,
+        "delay_ms": 0,
+        "replayed": false,
+        "via": "B",
+        "dup": null,
+        "hex": "011702034e65fabc2000000008200000000000000000000000000000000000000000110000000100000000000000",
+        "size": 46,
+        "header": {
+          "version": 1,
+          "type": 23,
+          "type_name": "TELEMETRY",
+          "src": "B",
+          "dst": "C",
+          "session": 3170526542,
+          "seq": 32,
+          "ttl": 8,
+          "payload_len": 32
+        },
+        "payload": {
+          "counters": {
+            "created": 0,
+            "acknowledged": 0,
+            "lost": 0,
+            "no_route": 0,
+            "delivered": 0,
+            "forwarded": 17,
+            "dropped": 1,
+            "failovers": 0,
+            "send_failures": 0
+          }
+        },
+        "rejected": null,
+        "summary": "forwarded 17, dropped 1"
+      },
+      {
+        "id": 27,
+        "c_boot": 4145609530,
+        "n": 27,
+        "received_ms": 4617,
+        "delay_ms": 0,
+        "replayed": false,
+        "via": "C",
+        "dup": null,
+        "hex": "011703033afb18f72600000008200000000000000000000000000000000000000000000000001600000000000000",
+        "size": 46,
+        "header": {
+          "version": 1,
+          "type": 23,
+          "type_name": "TELEMETRY",
+          "src": "C",
+          "dst": "C",
+          "session": 4145609530,
+          "seq": 38,
+          "ttl": 8,
+          "payload_len": 32
+        },
+        "payload": {
+          "counters": {
+            "created": 0,
+            "acknowledged": 0,
+            "lost": 0,
+            "no_route": 0,
+            "delivered": 0,
+            "forwarded": 0,
+            "dropped": 22,
+            "failovers": 0,
+            "send_failures": 0
+          }
+        },
+        "rejected": null,
+        "summary": "dropped 22"
+      },
+      {
+        "id": 28,
+        "c_boot": 4145609530,
+        "n": 28,
+        "received_ms": 6015,
+        "delay_ms": 0,
+        "replayed": false,
+        "via": "C",
+        "dup": null,
+        "hex": "011103033afb18f72f00000008180202024e65fabc8a02040265714ede4c0102021e00044100",
+        "size": 38,
+        "header": {
+          "version": 1,
+          "type": 17,
+          "type_name": "TOPOLOGY_REPORT",
+          "src": "C",
+          "dst": "C",
+          "session": 4145609530,
+          "seq": 47,
+          "ttl": 8,
+          "payload_len": 24
+        },
+        "payload": {
+          "neighbors": [
+            {
+              "node": "B",
+              "state": "two_way",
+              "session": 3170526542,
+              "last_heard_ms_ago": 650,
+              "rtt_ms": 30,
+              "probes_ok": null,
+              "probes_total": null
+            },
+            {
+              "node": "D",
+              "state": "two_way",
+              "session": 3729682789,
+              "last_heard_ms_ago": 332,
+              "rtt_ms": 65,
+              "probes_ok": null,
+              "probes_total": null
+            }
+          ]
+        },
+        "rejected": null,
+        "summary": "2 neighbors: B two_way, D two_way"
+      },
+      {
+        "id": 29,
+        "c_boot": 4145609530,
+        "n": 29,
+        "received_ms": 6020,
+        "delay_ms": 0,
+        "replayed": false,
+        "via": "B",
+        "dup": null,
+        "hex": "011102034e65fabc2d0000000818020102457c3263860003023afb18f7720302011e00032300",
+        "size": 38,
+        "header": {
+          "version": 1,
+          "type": 17,
+          "type_name": "TOPOLOGY_REPORT",
+          "src": "B",
+          "dst": "C",
+          "session": 3170526542,
+          "seq": 45,
+          "ttl": 8,
+          "payload_len": 24
+        },
+        "payload": {
+          "neighbors": [
+            {
+              "node": "A",
+              "state": "two_way",
+              "session": 1664252997,
+              "last_heard_ms_ago": 134,
+              "rtt_ms": 30,
+              "probes_ok": null,
+              "probes_total": null
+            },
+            {
+              "node": "C",
+              "state": "two_way",
+              "session": 4145609530,
+              "last_heard_ms_ago": 882,
+              "rtt_ms": 35,
+              "probes_ok": null,
+              "probes_total": null
+            }
+          ]
+        },
+        "rejected": null,
+        "summary": "2 neighbors: A two_way, C two_way"
+      },
+      {
+        "id": 30,
+        "c_boot": 4145609530,
+        "n": 30,
+        "received_ms": 6030,
+        "delay_ms": 0,
+        "replayed": false,
+        "via": "B",
+        "dup": false,
+        "hex": "01010103457c32632d0000000704dd070000",
+        "size": 18,
+        "header": {
+          "version": 1,
+          "type": 1,
+          "type_name": "DATA",
+          "src": "A",
+          "dst": "C",
+          "session": 1664252997,
+          "seq": 45,
+          "ttl": 7,
+          "payload_len": 4
+        },
+        "payload": {
+          "value_hundredths": 2013,
+          "value": 20.13
+        },
+        "rejected": null,
+        "summary": "reading 20.13 (2013 hundredths)"
+      },
+      {
+        "id": 31,
+        "c_boot": 4145609530,
+        "n": 31,
+        "received_ms": 6068,
+        "delay_ms": 0,
+        "replayed": false,
+        "via": "B",
+        "dup": null,
+        "hex": "01110103457c32632e00000007180202024e65fabca602040265714ede680102021e00044100",
+        "size": 38,
+        "header": {
+          "version": 1,
+          "type": 17,
+          "type_name": "TOPOLOGY_REPORT",
+          "src": "A",
+          "dst": "C",
+          "session": 1664252997,
+          "seq": 46,
+          "ttl": 7,
+          "payload_len": 24
+        },
+        "payload": {
+          "neighbors": [
+            {
+              "node": "B",
+              "state": "two_way",
+              "session": 3170526542,
+              "last_heard_ms_ago": 678,
+              "rtt_ms": 30,
+              "probes_ok": null,
+              "probes_total": null
+            },
+            {
+              "node": "D",
+              "state": "two_way",
+              "session": 3729682789,
+              "last_heard_ms_ago": 360,
+              "rtt_ms": 65,
+              "probes_ok": null,
+              "probes_total": null
+            }
+          ]
+        },
+        "rejected": null,
+        "summary": "2 neighbors: B two_way, D two_way"
+      },
+      {
+        "id": 32,
+        "c_boot": 4145609530,
+        "n": 32,
+        "received_ms": 6113,
+        "delay_ms": 0,
+        "replayed": false,
+        "via": "D",
+        "dup": null,
+        "hex": "0111040365714ede2d0000000818020102457c3263bd0003023afb18f7a90302013c00034100",
+        "size": 38,
+        "header": {
+          "version": 1,
+          "type": 17,
+          "type_name": "TOPOLOGY_REPORT",
+          "src": "D",
+          "dst": "C",
+          "session": 3729682789,
+          "seq": 45,
+          "ttl": 8,
+          "payload_len": 24
+        },
+        "payload": {
+          "neighbors": [
+            {
+              "node": "A",
+              "state": "two_way",
+              "session": 1664252997,
+              "last_heard_ms_ago": 189,
+              "rtt_ms": 60,
+              "probes_ok": null,
+              "probes_total": null
+            },
+            {
+              "node": "C",
+              "state": "two_way",
+              "session": 4145609530,
+              "last_heard_ms_ago": 937,
+              "rtt_ms": 65,
+              "probes_ok": null,
+              "probes_total": null
+            }
+          ]
+        },
+        "rejected": null,
+        "summary": "2 neighbors: A two_way, C two_way"
+      },
+      {
+        "id": 33,
+        "c_boot": 4145609530,
+        "n": 33,
+        "received_ms": 8037,
+        "delay_ms": 0,
+        "replayed": false,
+        "via": "B",
+        "dup": false,
+        "hex": "01010103457c32633b0000000704e3070000",
+        "size": 18,
+        "header": {
+          "version": 1,
+          "type": 1,
+          "type_name": "DATA",
+          "src": "A",
+          "dst": "C",
+          "session": 1664252997,
+          "seq": 59,
+          "ttl": 7,
+          "payload_len": 4
+        },
+        "payload": {
+          "value_hundredths": 2019,
+          "value": 20.19
+        },
+        "rejected": null,
+        "summary": "reading 20.19 (2019 hundredths)"
+      },
+      {
+        "id": 34,
+        "c_boot": 4145609530,
+        "n": 34,
+        "received_ms": 8990,
+        "delay_ms": 0,
+        "replayed": false,
+        "via": "B",
+        "dup": null,
+        "hex": "01170103457c32634200000007200400000002000000000000000200000000000000120000000500000000000000",
+        "size": 46,
+        "header": {
+          "version": 1,
+          "type": 23,
+          "type_name": "TELEMETRY",
+          "src": "A",
+          "dst": "C",
+          "session": 1664252997,
+          "seq": 66,
+          "ttl": 7,
+          "payload_len": 32
+        },
+        "payload": {
+          "counters": {
+            "created": 4,
+            "acknowledged": 2,
+            "lost": 0,
+            "no_route": 2,
+            "delivered": 0,
+            "forwarded": 18,
+            "dropped": 5,
+            "failovers": 0,
+            "send_failures": 0
+          }
+        },
+        "rejected": null,
+        "summary": "created 4, acknowledged 2, no route 2, forwarded 18, dropped 5"
+      },
+      {
+        "id": 35,
+        "c_boot": 4145609530,
+        "n": 35,
+        "received_ms": 9160,
+        "delay_ms": 0,
+        "replayed": false,
+        "via": "D",
+        "dup": null,
+        "hex": "0117040365714ede4200000008200000000000000000000000000000000000000000160000000100000000000000",
+        "size": 46,
+        "header": {
+          "version": 1,
+          "type": 23,
+          "type_name": "TELEMETRY",
+          "src": "D",
+          "dst": "C",
+          "session": 3729682789,
+          "seq": 66,
+          "ttl": 8,
+          "payload_len": 32
+        },
+        "payload": {
+          "counters": {
+            "created": 0,
+            "acknowledged": 0,
+            "lost": 0,
+            "no_route": 0,
+            "delivered": 0,
+            "forwarded": 22,
+            "dropped": 1,
+            "failovers": 0,
+            "send_failures": 0
+          }
+        },
+        "rejected": null,
+        "summary": "forwarded 22, dropped 1"
+      },
+      {
+        "id": 36,
+        "c_boot": 4145609530,
+        "n": 36,
+        "received_ms": 9722,
+        "delay_ms": 0,
+        "replayed": false,
+        "via": "B",
+        "dup": null,
+        "hex": "011702034e65fabc4200000008200000000000000000000000000000000000000000190000000100000000000000",
+        "size": 46,
+        "header": {
+          "version": 1,
+          "type": 23,
+          "type_name": "TELEMETRY",
+          "src": "B",
+          "dst": "C",
+          "session": 3170526542,
+          "seq": 66,
+          "ttl": 8,
+          "payload_len": 32
+        },
+        "payload": {
+          "counters": {
+            "created": 0,
+            "acknowledged": 0,
+            "lost": 0,
+            "no_route": 0,
+            "delivered": 0,
+            "forwarded": 25,
+            "dropped": 1,
+            "failovers": 0,
+            "send_failures": 0
+          }
+        },
+        "rejected": null,
+        "summary": "forwarded 25, dropped 1"
+      },
+      {
+        "id": 37,
+        "c_boot": 4145609530,
+        "n": 37,
+        "received_ms": 9976,
+        "delay_ms": 0,
+        "replayed": false,
+        "via": "C",
+        "dup": null,
+        "hex": "011703033afb18f74a00000008200000000000000000000000000000000002000000000000001c00000000000000",
+        "size": 46,
+        "header": {
+          "version": 1,
+          "type": 23,
+          "type_name": "TELEMETRY",
+          "src": "C",
+          "dst": "C",
+          "session": 4145609530,
+          "seq": 74,
+          "ttl": 8,
+          "payload_len": 32
+        },
+        "payload": {
+          "counters": {
+            "created": 0,
+            "acknowledged": 0,
+            "lost": 0,
+            "no_route": 0,
+            "delivered": 2,
+            "forwarded": 0,
+            "dropped": 28,
+            "failovers": 0,
+            "send_failures": 0
+          }
+        },
+        "rejected": null,
+        "summary": "delivered 2, dropped 28"
+      },
+      {
+        "id": 38,
+        "c_boot": 4145609530,
+        "n": 38,
+        "received_ms": 10030,
+        "delay_ms": 0,
+        "replayed": false,
+        "via": "B",
+        "dup": false,
+        "hex": "01010103457c3263490000000704fa070000",
+        "size": 18,
+        "header": {
+          "version": 1,
+          "type": 1,
+          "type_name": "DATA",
+          "src": "A",
+          "dst": "C",
+          "session": 1664252997,
+          "seq": 73,
+          "ttl": 7,
+          "payload_len": 4
+        },
+        "payload": {
+          "value_hundredths": 2042,
+          "value": 20.42
+        },
+        "rejected": null,
+        "summary": "reading 20.42 (2042 hundredths)"
+      },
+      {
+        "id": 39,
+        "c_boot": 4145609530,
+        "n": 39,
+        "received_ms": 11015,
+        "delay_ms": 0,
+        "replayed": false,
+        "via": "C",
+        "dup": null,
+        "hex": "011103033afb18f75200000008180202024e65fabc9002040265714edec30102021e00044100",
+        "size": 38,
+        "header": {
+          "version": 1,
+          "type": 17,
+          "type_name": "TOPOLOGY_REPORT",
+          "src": "C",
+          "dst": "C",
+          "session": 4145609530,
+          "seq": 82,
+          "ttl": 8,
+          "payload_len": 24
+        },
+        "payload": {
+          "neighbors": [
+            {
+              "node": "B",
+              "state": "two_way",
+              "session": 3170526542,
+              "last_heard_ms_ago": 656,
+              "rtt_ms": 30,
+              "probes_ok": null,
+              "probes_total": null
+            },
+            {
+              "node": "D",
+              "state": "two_way",
+              "session": 3729682789,
+              "last_heard_ms_ago": 451,
+              "rtt_ms": 65,
+              "probes_ok": null,
+              "probes_total": null
+            }
+          ]
+        },
+        "rejected": null,
+        "summary": "2 neighbors: B two_way, D two_way"
+      },
+      {
+        "id": 40,
+        "c_boot": 4145609530,
+        "n": 40,
+        "received_ms": 11020,
+        "delay_ms": 0,
+        "replayed": false,
+        "via": "B",
+        "dup": null,
+        "hex": "011102034e65fabc4d0000000818020102457c32630c0003023afb18f7520302011e00032300",
+        "size": 38,
+        "header": {
+          "version": 1,
+          "type": 17,
+          "type_name": "TOPOLOGY_REPORT",
+          "src": "B",
+          "dst": "C",
+          "session": 3170526542,
+          "seq": 77,
+          "ttl": 8,
+          "payload_len": 24
+        },
+        "payload": {
+          "neighbors": [
+            {
+              "node": "A",
+              "state": "two_way",
+              "session": 1664252997,
+              "last_heard_ms_ago": 12,
+              "rtt_ms": 30,
+              "probes_ok": null,
+              "probes_total": null
+            },
+            {
+              "node": "C",
+              "state": "two_way",
+              "session": 4145609530,
+              "last_heard_ms_ago": 850,
+              "rtt_ms": 35,
+              "probes_ok": null,
+              "probes_total": null
+            }
+          ]
+        },
+        "rejected": null,
+        "summary": "2 neighbors: A two_way, C two_way"
+      },
+      {
+        "id": 41,
+        "c_boot": 4145609530,
+        "n": 41,
+        "received_ms": 11068,
+        "delay_ms": 0,
+        "replayed": false,
+        "via": "B",
+        "dup": null,
+        "hex": "01110103457c32635000000007180202024e65fabcac02040265714ededf0102021e00044100",
+        "size": 38,
+        "header": {
+          "version": 1,
+          "type": 17,
+          "type_name": "TOPOLOGY_REPORT",
+          "src": "A",
+          "dst": "C",
+          "session": 1664252997,
+          "seq": 80,
+          "ttl": 7,
+          "payload_len": 24
+        },
+        "payload": {
+          "neighbors": [
+            {
+              "node": "B",
+              "state": "two_way",
+              "session": 3170526542,
+              "last_heard_ms_ago": 684,
+              "rtt_ms": 30,
+              "probes_ok": null,
+              "probes_total": null
+            },
+            {
+              "node": "D",
+              "state": "two_way",
+              "session": 3729682789,
+              "last_heard_ms_ago": 479,
+              "rtt_ms": 65,
+              "probes_ok": null,
+              "probes_total": null
+            }
+          ]
+        },
+        "rejected": null,
+        "summary": "2 neighbors: B two_way, D two_way"
+      },
+      {
+        "id": 42,
+        "c_boot": 4145609530,
+        "n": 42,
+        "received_ms": 11113,
+        "delay_ms": 0,
+        "replayed": false,
+        "via": "D",
+        "dup": null,
+        "hex": "0111040365714ede4f0000000818020102457c3263430003023afb18f7890302013c00034100",
+        "size": 38,
+        "header": {
+          "version": 1,
+          "type": 17,
+          "type_name": "TOPOLOGY_REPORT",
+          "src": "D",
+          "dst": "C",
+          "session": 3729682789,
+          "seq": 79,
+          "ttl": 8,
+          "payload_len": 24
+        },
+        "payload": {
+          "neighbors": [
+            {
+              "node": "A",
+              "state": "two_way",
+              "session": 1664252997,
+              "last_heard_ms_ago": 67,
+              "rtt_ms": 60,
+              "probes_ok": null,
+              "probes_total": null
+            },
+            {
+              "node": "C",
+              "state": "two_way",
+              "session": 4145609530,
+              "last_heard_ms_ago": 905,
+              "rtt_ms": 65,
+              "probes_ok": null,
+              "probes_total": null
+            }
+          ]
+        },
+        "rejected": null,
+        "summary": "2 neighbors: A two_way, C two_way"
+      }
+    ]
+  },
   "presenter": {
     "channel": "environment",
     "note": "What the presenter did to the simulated environment. This is not something the controller knows.",

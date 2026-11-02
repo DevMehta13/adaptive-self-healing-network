@@ -82,6 +82,7 @@ The complete current state; the source of truth. WebSocket events only describe 
   "readings": { "delivered_unique": 49, "duplicates": 0, "replayed": 0, "recent": [ ... ] },
   "counts": { ... },
   "gateway": { ... },
+  "frames": { ... },
   "presenter": { ... },
   "recent_events": [ { "event_id": 150, "type": "reading_received", "data": { ... } } ]
 }
@@ -95,6 +96,7 @@ The complete current state; the source of truth. WebSocket events only describe 
 | `clock.sim_ms` | Simulated milliseconds since the run started. Every event's `data.sim_ms` is on this clock. |
 | `clock.speed` / `paused` | Pacing against the wall clock (speed 1.0 = real time). |
 | `recent_events` | The last 100 state-changing events, oldest first, for a timeline. Bounded. |
+| `frames` | (additive, P1) The radio frames node C handed up, as records, with counts. Not events. See *Frame records (additive, P1)*. |
 
 #### `nodes[]`
 
@@ -394,6 +396,7 @@ The browser opens one WebSocket. The server sends JSON text messages; anything t
 | --- | --- |
 | `status` | Once, immediately after connecting (`seq` 1): `backend`, `mode`, `version`, `heartbeat_interval_s`, `snapshot_required` (always `true`), `run_id`. |
 | `heartbeat` | Every `heartbeat_interval_s` (default 2): `interval_s`, `sim_ms`, `speed`, `paused`. Use it for the connection indicator and the simulated clock. |
+| `frames` | (additive, P1) A batch of frame records: `run_id`, `last_id`, `records`, `dropped`. No `event_id`. See *Frame records (additive, P1)*. |
 
 ### State-changing events
 
@@ -468,6 +471,145 @@ Messages C sent while the laptop was not listening, in an outage too short for C
 | `runtime` | `change` (`paused`, `resumed`, `speed`), `paused`, `speed`. |
 | `reset` | `run_id`, `scenario`. Replace all state: fetch the snapshot. |
 
+## Frame records (additive, P1)
+
+**Additive.** Added for the Packets page. Nothing above changed: every existing field, event and ordering rule is as before, and the state-changing event history does not contain frame records. A client that ignores the new `frames` snapshot section and the new `frames` message type keeps working (clients already ignore unknown types and fields).
+
+A *frame record* describes one radio frame that node C handed up to the laptop: C's own facts about it, the exact bytes, the decoded 14-byte header and a short summary of the payload. Records are not state-changing: they have no `event_id` and never enter `recent_events` or `GET /api/events`.
+
+### What is and is not shown (state this on the page)
+
+- **Only frames handed up by C.** That is every DATA frame C accepts (new or repeated, flagged `dup`) and every TOPOLOGY_REPORT, ROUTE_INSTALL_ACK, LOCAL_FAILOVER_REPORT and TELEMETRY addressed to C ([SERIAL_PROTOCOL.md](SERIAL_PROTOCOL.md), section 3). HELLO, PROBE, PROBE_REPLY, DELIVERY_ACK, frames the controller originates (ROUTE_UPDATE) and every hop between other boards never reach the laptop, so they are never records.
+- **Decoded, not measured.** `version`, `type` and `payload_len` are what the protocol codec decoded from the bytes ([PROTOCOL.md](PROTOCOL.md) *Decoding rules*); the codec refuses a frame whose `payload_len` does not equal the bytes after the header, and any version other than 1. The backend has one decoder (the codec); the records only name its result.
+- **Simulation vs hardware.** The shape is the same. In hardware the bytes are what node C received on the radio, copied into its serial line. In simulation they come from the simulator's codec, not from a radio, and `frames.source` says so; do not present them as radio captures.
+- **A record is one hand-over.** A numbered line that C sends again after the laptop asked for a resend ([SERIAL_PROTOCOL.md](SERIAL_PROTOCOL.md), section 4) is dropped as an uplink duplicate (`gateway.uplink.duplicates_dropped`) and is *not* a second record. `dup` is something else: C's own duplicate filter had already seen that DATA frame on the radio (a retry from A).
+- **Rejected frames.** A numbered `fr` line whose frame the codec refuses (`bad_frame`) is kept as a record with `rejected` set to the codec's reason, the bytes in `hex`, and `header` and `payload` null (nothing is decoded from bytes the codec refused). The laptop never gives such a frame to the controller. Only `bad_frame` makes a record: lines rejected for other reasons (bad checksum, malformed JSON, ...) and a valid frame of a type C never hands up (`unexpected_frame`) are only counted, under `gateway.serial.lines.rejected`. If C resends a refused frame, each copy is a record.
+
+### The record
+
+```json
+{
+  "id": 30,
+  "c_boot": 4145609530,
+  "n": 30,
+  "received_ms": 6030,
+  "delay_ms": 0,
+  "replayed": false,
+  "via": "B",
+  "dup": false,
+  "hex": "01010103457c32632d0000000704dd070000",
+  "size": 18,
+  "header": {
+    "version": 1, "type": 1, "type_name": "DATA", "src": "A", "dst": "C",
+    "session": 1664252997, "seq": 45, "ttl": 7, "payload_len": 4
+  },
+  "payload": { "value_hundredths": 2013, "value": 20.13 },
+  "summary": "reading 20.13 (2013 hundredths)",
+  "rejected": null
+}
+```
+
+A TELEMETRY record from the same run (the nine counters are D's own, cumulative since D's boot: D relayed 11 frames and created none):
+
+```json
+{
+  "id": 21,
+  "c_boot": 4145609530,
+  "n": 21,
+  "received_ms": 3890,
+  "delay_ms": 0,
+  "replayed": false,
+  "via": "D",
+  "dup": null,
+  "hex": "0117040365714ede1d000000082000000000000000000000000000000000000000000b0000000000000000000000",
+  "size": 46,
+  "header": {
+    "version": 1, "type": 23, "type_name": "TELEMETRY", "src": "D", "dst": "C",
+    "session": 3729682789, "seq": 29, "ttl": 8, "payload_len": 32
+  },
+  "payload": {
+    "counters": { "created": 0, "acknowledged": 0, "lost": 0, "no_route": 0, "delivered": 0,
+                  "forwarded": 11, "dropped": 0, "failovers": 0, "send_failures": 0 }
+  },
+  "summary": "forwarded 11",
+  "rejected": null
+}
+```
+
+Both are real records, copied from `GET /api/snapshot` of a backend run on 2026-11-02 in simulation mode (`live-demo`); the same two frames came out byte for byte in hardware mode against the fake C. The TTL on the DATA frame is 7 because it was relayed once (data TTL 8, `hops` 2); the TELEMETRY frame is D's own and still at TTL 8, because D is a neighbor of C.
+
+| Field | Meaning |
+| --- | --- |
+| `id` | Record number for this backend process. Increases by 1 per record, does not restart on a simulation `reset`, restarts at 1 when the backend restarts (like `event_id`). Used to drop records a snapshot already contains. |
+| `c_boot`, `n` | C's boot id and C's uplink number ([SERIAL_PROTOCOL.md](SERIAL_PROTOCOL.md), section 4): `n` restarts at 1 when `c_boot` changes. `(c_boot, n)` names the hand-over. |
+| `received_ms` | When the frame reached C, on the controller's clock (the clock of `sim_ms`). For a late frame it is the estimate "now minus `delay_ms`", exactly as for `reading_received` (see *Ages* above). In hardware mode it can be **negative**: after a backend restart, C may have held a frame for longer than the backend has been running. |
+| `delay_ms` | How long C held the frame before handing it up, on C's own clock; 0 for a live frame. |
+| `replayed` | C did not hand it up the moment it arrived (it was held while the controller was unreachable, or this is a resend after a gap). Label it **delayed** and show `delay_ms`. |
+| `via` | The neighbor whose radio handed C the frame (the ESP-NOW sender), as a node name. |
+| `dup` | DATA only: `true` if C's duplicate filter had already seen the frame. `null` for every other type and for rejected frames. |
+| `hex` | The frame exactly as C received it, header included, lower-case hex. |
+| `size` | Its length in bytes (`hex` is twice as long). |
+| `header` | The decoded 14-byte header (below), or `null` when `rejected` is set. |
+| `payload` | The decoded payload (below), or `null` when `rejected` is set. |
+| `summary` | One line for a log: `reading 20.13 (2013 hundredths)`, `forwarded 11`, `failover B -> D (send_failures)`, `rejected: bad_version`. Display it; do not parse it. |
+| `rejected` | `null`, or `{"reason": "<codec reason>"}` (`bad_version`, `length_mismatch`, `bad_payload_length`, ...: [PROTOCOL.md](PROTOCOL.md)). |
+
+`header`: `version`, `type` (the byte), `type_name` (`DATA`, `TOPOLOGY_REPORT`, `ROUTE_INSTALL_ACK`, `LOCAL_FAILOVER_REPORT`, `TELEMETRY`), `src` and `dst` (node names; `src` is the node that created the frame, not the previous hop), `session` and `seq` (with `src` the identity that duplicate detection uses), `ttl` (what was left when C received it) and `payload_len`.
+
+`payload` by type (node ids are names; `null` where a field means "none"):
+
+| `type_name` | `payload` |
+| --- | --- |
+| `DATA` | `value_hundredths` (as on the wire) and `value` (hundredths / 100; the protocol fixes no unit) |
+| `TOPOLOGY_REPORT` | `neighbors`: a list of `node`, `state` (`one_way`, `two_way`, `lost`), `session`, `last_heard_ms_ago`, `rtt_ms`, `probes_ok`, `probes_total` (the last three `null` when the reporter measured nothing) |
+| `ROUTE_INSTALL_ACK` | `epoch`, `version`, `destination`, `status` (`installed`, `stale`, `rejected`) |
+| `LOCAL_FAILOVER_REPORT` | `epoch`, `version`, `destination`, `from`, `to` (`null`: no usable backup), `reason` (`neighbor_lost`, `send_failures`) |
+| `TELEMETRY` | `counters`: the nine counters of `nodes[].telemetry.counters` |
+
+A rejected record, as the tests make it from the reference vector [invalid-up-bad-frame](../tests/serial-examples/invalid-up-bad-frame.json) (not taken from a live run: the fake C never sends a bad frame):
+
+```json
+{ "id": 7, "c_boot": 2766734100, "n": 12, "received_ms": 10000, "delay_ms": 0, "replayed": false,
+  "via": "B", "dup": null, "hex": "02010103457c32632d0000000704dd070000", "size": 18,
+  "header": null, "payload": null, "summary": "rejected: bad_version",
+  "rejected": { "reason": "bad_version" } }
+```
+
+### In the snapshot: `frames`
+
+```json
+{
+  "last_id": 70,
+  "capacity": 200,
+  "source": "simulation: frame bytes come from the simulator's codec, not from a radio",
+  "counts": {
+    "total": 70,
+    "by_type": { "DATA": 12, "TOPOLOGY_REPORT": 38, "ROUTE_INSTALL_ACK": 3,
+                 "LOCAL_FAILOVER_REPORT": 0, "TELEMETRY": 17 },
+    "duplicates": 0, "replayed": 14,
+    "rejected": 0, "rejected_by_reason": {}
+  },
+  "recent": [ { "...": "records, oldest first" } ]
+}
+```
+
+`recent` holds the last 200 records (`capacity`), in the order the controller learned of them, so a replayed frame can follow a newer live one and `received_ms` need not increase. `counts` are cumulative since the run began (a simulation `reset` clears them; `last_id` keeps counting) and cover every record, not only the 200. `by_type` always has the five handed-up types (zeros included) and counts decoded frames; `duplicates` counts DATA records with `dup` true; `replayed` counts records with `replayed` true, refused ones included; `rejected` and `rejected_by_reason` count refused frames; `total` is the sum of `by_type` and `rejected`. `last_id` is the `id` of the newest record, 0 before any.
+
+### On the WebSocket: `frames`
+
+```json
+{ "v": 1, "seq": 17, "ts": "2026-11-02T06:01:12.440Z", "type": "frames",
+  "data": { "run_id": 1, "last_id": 32, "dropped": 0, "records": [ { "...": "up to 50 records, oldest first" } ] } }
+```
+
+No `event_id`, like `heartbeat`; it still takes a `seq`. **Batching:** records are collected for up to 0.25 s and sent together, at most 50 to a message (a replay of 50 held frames is one message, not fifty; a larger burst is several messages in a row). If a slow client lets more than 500 records wait, the oldest are dropped and their number is reported in `dropped` of the next message; `id` then jumps. `last_id` is the `id` of the last record in the message.
+
+**Ordering rule for frames.** Records have no `event_id`, so the event rule does not apply to them. After fetching the snapshot, discard any streamed record with `id <= frames.last_id`. Otherwise ids are consecutive: an `id` that jumps, or `dropped` above 0, means records were missed, so re-fetch the snapshot. A `last_id` that goes backwards (the backend restarted) or a different `run_id` means replace everything. A `reset` event means fetch the snapshot, whose `frames` section is empty again. The event rule is unchanged: `seq` still counts every message on the connection and `event_id` still counts only state changes.
+
+### Bounds
+
+Memory: 200 records in the log and at most 500 waiting per connection. A record is typically 0.3 to 0.8 KB of JSON and at most about 2 KB (a TOPOLOGY_REPORT with eight neighbors measured 1.6 KB). The snapshot grows by the 200 records: measured about 115 KB for a full `frames` section in a simulation run, on top of about 40 KB for the rest of the snapshot. The snapshot is fetched on (re)connect, not polled. Rate: at most one batch per 0.25 s per connection, whatever the radio rate.
+
 ## Recorded fixtures
 
 [tests/dashboard-fixtures/](../tests/dashboard-fixtures/):
@@ -476,6 +618,8 @@ Messages C sent while the laptop was not listening, in an outage too short for C
 - `demo-run.events.json` — every WebSocket message of a recorded demo, in order with `seq`, `event_id` and deterministic timestamps: normal operation, Stop B, local failover to D, the controller confirming, Start B, link hold-down, back to B.
 - `demo-run.snapshot-mid.json` — a snapshot taken at 20 s, to test the discard rule.
 - `outage-run.snapshot-initial.json`, `outage-run.events.json`, `outage-run.snapshot-mid.json` — a controller outage: the gateway detached at 12 s, B stopped at 20 s (A fails over to D on its own, unseen), reattached at 40 s; then `gateway_link_restored`, `replay_started`, replayed readings and the replayed failover report, `replay_finished`, and the controller confirming A > D > C. The mid snapshot (30 s) is taken during the outage: `gateway.state` `lost`, and C's buffer figures as of 12 s.
+
+The four snapshot fixtures carry the `frames` section (P1, additive). The event fixtures are unchanged and hold no `frames` messages: the recorder keeps only the state-changing stream and its synthetic heartbeats.
 
 Regenerate after a deliberate shape change with `uv run python -m iot_backend.live.record` (from `backend/`). Watch a live backend in a terminal with `uv run python -m iot_backend.watch`.
 

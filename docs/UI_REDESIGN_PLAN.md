@@ -116,3 +116,31 @@ Type `stop B` / `start B`, `link A->B down`, `unplug` / `replug` in the fake C w
 ## Report expected at the end of each phase
 
 Commit hash (not pushed); files changed; output of `npm run check`, `npm test`, `npm run build`; where the screenshots are; what was checked against the fake C and the simulator; anything left undone or any decision made that this plan did not cover.
+
+## Addition (2026-11-02): Packets page
+
+Approved by Harshal on 2026-11-02. Two phases, backend first. The hardware check with the real boards happens once, after everything is done.
+
+**Goal.** A sixth page, **Packets** (`#/packets`, nav order: Overview · Network · Readings · Packets · Delivery · Saved runs), that shows the 14-byte radio header we designed, using the real frames node C hands up to the laptop, data and non-data alike.
+
+**Honest scope (shown on the page).** Only frames **handed up by C** are shown: DATA that C accepts (new or repeated), and the TOPOLOGY_REPORT, ROUTE_INSTALL_ACK, LOCAL_FAILOVER_REPORT and TELEMETRY addressed to C. HELLO, PROBE, PROBE_REPLY, DELIVERY_ACK, controller-originated frames and any hop between other boards are never seen by the laptop. Version, type and payload length are *decoded from the bytes*, not measured. Simulation and hardware show the same shape; in simulation the bytes come from the simulator's codec and are labelled so.
+
+### P1 — Backend: frame records in the API (Harshal's area)
+
+- For every frame handed up by C (both modes, also during replay), build a frame record: C's uplink number `n`; time on the controller clock (for replayed frames the estimated time C got it, as for readings) plus `delay_ms` / `replayed`; `via`; `dup` (DATA only); `hex` (the exact bytes); `size`; the decoded header (`version`, `type`, `type_name`, `src`, `dst` as node names, `session`, `seq`, `ttl`, `payload_len`); and a short decoded payload summary (DATA value in hundredths and units, telemetry counters, topology neighbours, route version, failover from/to/reason). Lines rejected as `bad_frame` are kept as records with the reason and the hex, if available.
+- Expose them **without disturbing the state-changing event history** (the 100-event `recent_events` window is already crowded): a non-state-changing WebSocket message type (like `heartbeat`, no `event_id`) and a bounded `frames` section in the snapshot (recent ~200 records, counts by type, duplicates, rejected). Additive only: existing fields, events and dashboard fixtures stay valid.
+- Document it in `docs/DASHBOARD_API.md` (new section, marked additive) and `docs/STATUS.md`; tests for building records from the reference vectors in `tests/protocol-examples/` and `tests/serial-examples/`, for bounds, for replay and duplicates, and for both modes.
+
+### P2 — Frontend: the Packets page
+
+- **Anatomy strip:** the 14 header bytes as labelled, coloured cells (version · type · src · dst · session ×4 · seq ×4 · ttl · payload_len) followed by the payload; selecting a frame fills the cells with its values and shows the raw hex below, field bytes highlighted on hover (little-endian noted for session and seq).
+- **Frame log:** newest first, columns time · type · src → dst · session · seq · TTL · size · via · flags (dup, replayed, rejected); filter by type; pause/follow live; app-level buffer like the readings (cap ~1,000, same clearing rules per mode).
+- **Facts panel derived from real frames:** TTL on arrival and hops (data TTL 8; one relay → TTL 7 at C, two transmissions), a session change marks a reboot, duplicates caught by the identity `(src, session, seq)`, replayed frames with their delay.
+- **Summary strip:** counts by type, duplicates, rejected, TTL distribution.
+- **Delivery acknowledgements (not observed):** DELIVERY_ACK frames are created by C and sent back to A, so the laptop never sees them. Show (a) the DELIVERY_ACK layout from `docs/PROTOCOL.md` (14-byte header + 9-byte payload naming the reading it confirms), labelled "format, not observed by the laptop", and (b) the indirect evidence: A's acknowledgement counter from its TELEMETRY frames, linking to the frames that carry it.
+- Page header states the honest scope above. Both themes, 375 px, keyboard access, empty/stale/disconnected states like the other pages.
+
+### Progress (Packets)
+
+- [x] P1 — Backend frame records
+- [ ] P2 — Packets page

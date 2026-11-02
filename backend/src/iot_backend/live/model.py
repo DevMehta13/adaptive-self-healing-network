@@ -21,9 +21,10 @@ from iot_backend.controller import (
 )
 from iot_backend.controller.routing import RouteEvent
 from iot_backend.controller.topology import TopologyEvent
+from iot_backend.live.frames import FRAME_LOG_SIZE, FrameLog, frame_record
 from iot_backend.protocol import NODE_NAMES
 from iot_backend.transports import GatewayEvent, TelemetryEvent, UplinkLossEvent
-from iot_backend.transports.laptop_gateway import LaptopGateway
+from iot_backend.transports.laptop_gateway import FrameObserved, LaptopGateway
 from iot_backend.transports.serial_gateway import SerialGateway
 
 NODE_LETTERS = ("A", "B", "C", "D")
@@ -43,9 +44,13 @@ def _name(node: int) -> str:
 class DashboardModel:
     mode = "simulation"
     label = ""
+    # Where the frame bytes in the snapshot's `frames` section come from (the runtime sets it).
+    frames_source = ""
 
     def __init__(self, history: int, recent_readings: int, recent_events: int) -> None:
         self._subscribers: list[Callable[[LiveEvent], None]] = []
+        self._frame_subscribers: list[Callable[[dict[str, Any]], None]] = []
+        self._frame_seq = 0  # frame record ids: never restart, not even on reset
         self._next_event_id = 1
         self._history: deque[LiveEvent] = deque(maxlen=history)
         self._recent_readings = recent_readings
@@ -69,6 +74,7 @@ class DashboardModel:
         self._delivered_unique = 0
         self._replayed = 0
         self._last_reading_ms: int | None = None
+        self._frames = FrameLog(FRAME_LOG_SIZE)
 
     # ---- supplied by the runtime ----
 
@@ -135,6 +141,25 @@ class DashboardModel:
         complete = oldest is None or after_id + 1 >= oldest
         selected = [e for e in self._history if e.event_id > after_id][:limit]
         return selected, complete
+
+    # ---- frame records (not state-changing: no event_id, not in the history) ----
+
+    def subscribe_frames(self, callback: Callable[[dict[str, Any]], None]) -> Callable[[], None]:
+        """Call `callback` with every frame record as it is made. Returns the unsubscribe."""
+        self._frame_subscribers.append(callback)
+
+        def unsubscribe() -> None:
+            if callback in self._frame_subscribers:
+                self._frame_subscribers.remove(callback)
+
+        return unsubscribe
+
+    def _on_frame_observed(self, observed: FrameObserved) -> None:
+        self._frame_seq += 1
+        record = frame_record(observed, self._frame_seq)
+        self._frames.add(record)
+        for callback in list(self._frame_subscribers):
+            callback(record)
 
     def _on_topology_event(self, event: TopologyEvent) -> None:
         self._emit(event.type, dict(event.data))
@@ -410,6 +435,7 @@ class DashboardModel:
                 "recent": list(self._readings),
             },
             "counts": self._counts(),
+            "frames": self._frames.describe(self._frame_seq, self.frames_source),
             "presenter": self._presenter(),
             "recent_events": [
                 {"event_id": e.event_id, "type": e.type, "data": e.data} for e in recent

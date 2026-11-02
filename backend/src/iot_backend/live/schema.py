@@ -199,8 +199,57 @@ SNAPSHOT_FIELDS: dict[str, Any] = {
     "gateway": Dict,
     "readings": Dict,
     "counts": Dict,
+    "frames": Dict,
     "presenter": Dict,
     "recent_events": List,
+}
+
+# The `frames` section of the snapshot and the records in it (additive, P1). Not events: the
+# records have no event_id and are announced in non-state-changing `frames` messages.
+FRAMES_FIELDS: dict[str, Any] = {
+    "last_id": Int,
+    "capacity": Int,
+    "source": Str,
+    "counts": Dict,
+    "recent": List,
+}
+
+FRAME_COUNT_FIELDS: dict[str, Any] = {
+    "total": Int,
+    "by_type": Dict,
+    "duplicates": Int,
+    "replayed": Int,
+    "rejected": Int,
+    "rejected_by_reason": Dict,
+}
+
+FRAME_RECORD_FIELDS: dict[str, Any] = {
+    "id": Int,
+    "c_boot": Int,
+    "n": Int,
+    "received_ms": Int,
+    "delay_ms": Int,
+    "replayed": Bool,
+    "via": Str,
+    "dup": (Bool, NoneType),
+    "hex": Str,
+    "size": Int,
+    "header": (Dict, NoneType),
+    "payload": (Dict, NoneType),
+    "summary": Str,
+    "rejected": (Dict, NoneType),
+}
+
+FRAME_HEADER_FIELDS: dict[str, Any] = {
+    "version": Int,
+    "type": Int,
+    "type_name": Str,
+    "src": Str,
+    "dst": Str,
+    "session": Int,
+    "seq": Int,
+    "ttl": Int,
+    "payload_len": Int,
 }
 
 NODE_FIELDS: dict[str, Any] = {
@@ -274,8 +323,34 @@ def validate_envelope(envelope: dict[str, Any]) -> list[str]:
     return problems
 
 
+def validate_frame_record(record: dict[str, Any], where: str = "frame") -> list[str]:
+    """Problems with one frame record (a snapshot entry or a `frames` message entry)."""
+    problems = _check(where, record, FRAME_RECORD_FIELDS)
+    header, rejected = record.get("header"), record.get("rejected")
+    if (header is None) == (rejected is None):
+        problems.append(f"{where}: exactly one of header and rejected is set")
+    if isinstance(header, dict):
+        problems += _check(f"{where}.header", header, FRAME_HEADER_FIELDS)
+        if record.get("payload") is None:
+            problems.append(f"{where}: a decoded frame needs a payload")
+    if isinstance(record.get("hex"), str) and record.get("size") != len(record["hex"]) // 2:
+        problems.append(f"{where}: size does not match the hex")
+    return problems
+
+
+def validate_frames(frames: dict[str, Any]) -> list[str]:
+    problems = _check("frames", frames, FRAMES_FIELDS)
+    if isinstance(frames.get("counts"), dict):
+        problems += _check("frames.counts", frames["counts"], FRAME_COUNT_FIELDS)
+    for record in frames.get("recent", []):
+        problems += validate_frame_record(record, f"frames.recent[{record.get('id')}]")
+    return problems
+
+
 def validate_snapshot(snapshot: dict[str, Any]) -> list[str]:
     problems = _check("snapshot", snapshot, SNAPSHOT_FIELDS)
+    if isinstance(snapshot.get("frames"), dict):
+        problems += validate_frames(snapshot["frames"])
     for node in snapshot.get("nodes", []):
         problems += _check(f"nodes[{node.get('id')}]", node, NODE_FIELDS)
     for link in snapshot.get("links", []):

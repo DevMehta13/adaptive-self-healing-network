@@ -3,9 +3,16 @@
 On connect: a `status` event. Then every state-changing event as it happens (each carries an
 `event_id`), plus a `heartbeat` every interval (no `event_id`). `seq` counts every message on
 this connection.
+
+Frame records (docs/DASHBOARD_API.md, "Frame records") are not state-changing: they are announced
+in `frames` messages without an `event_id`. They are batched so a replay of fifty frames is one
+message, not fifty: records collect for up to FRAME_BATCH_S and go out together, at most
+FRAME_BATCH_MAX to a message. The wait for a slow client is bounded: past FRAME_PENDING_MAX
+waiting records the oldest are dropped and counted in the next message's `dropped`.
 """
 
 import asyncio
+from collections import deque
 from typing import Any
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, status
@@ -18,6 +25,9 @@ router = APIRouter()
 
 # A client that falls this far behind is dropped; it reconnects and re-reads the snapshot.
 MAX_BACKLOG = 2000
+FRAME_BATCH_S = 0.25  # records are sent together at most this often
+FRAME_BATCH_MAX = 50  # records in one `frames` message
+FRAME_PENDING_MAX = 500  # records waiting to be sent; beyond this the oldest are dropped
 
 
 @router.websocket("/ws")
@@ -44,7 +54,18 @@ async def events(websocket: WebSocket) -> None:
         else:
             queue.put_nowait(event)
 
+    frames: deque[dict[str, Any]] = deque()
+    frames_dropped = 0
+
+    def on_frame(record: dict[str, Any]) -> None:
+        nonlocal frames_dropped
+        if len(frames) >= FRAME_PENDING_MAX:
+            frames.popleft()
+            frames_dropped += 1
+        frames.append(record)
+
     unsubscribe = live.subscribe(on_event) if live is not None else (lambda: None)
+    unsubscribe_frames = live.subscribe_frames(on_frame) if live is not None else (lambda: None)
     seq = 0
 
     async def send(event_type: str, data: dict[str, Any], event_id: int | None = None) -> None:
@@ -52,13 +73,32 @@ async def events(websocket: WebSocket) -> None:
         seq += 1  # numbering is per connection, so a new connection starts again at 1
         await websocket.send_json(make_envelope(seq, event_type, data, event_id))
 
+    async def send_frames() -> None:
+        nonlocal frames_dropped
+        while frames:
+            batch = [frames.popleft() for _ in range(min(FRAME_BATCH_MAX, len(frames)))]
+            dropped, frames_dropped = frames_dropped, 0
+            await send(
+                "frames",
+                {
+                    "run_id": live.run_id if live is not None else 0,
+                    "last_id": batch[-1]["id"],
+                    "records": batch,
+                    "dropped": dropped,
+                },
+            )
+
     async def pump() -> None:
         loop = asyncio.get_running_loop()
         next_beat = loop.time() + interval
+        next_frames = loop.time()
         while True:
             if overflowed:
                 await websocket.close(code=status.WS_1013_TRY_AGAIN_LATER)
                 return
+            if frames and loop.time() >= next_frames:
+                await send_frames()
+                next_frames = loop.time() + FRAME_BATCH_S
             remaining = next_beat - loop.time()
             if remaining <= 0:
                 beat: dict[str, Any] = {"interval_s": interval}
@@ -106,3 +146,4 @@ async def events(websocket: WebSocket) -> None:
         pass
     finally:
         unsubscribe()
+        unsubscribe_frames()

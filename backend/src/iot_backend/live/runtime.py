@@ -75,6 +75,7 @@ class LiveConfig:
 class LiveSimulation(DashboardModel):
     mode = "simulation"
     label = SIMULATION_LABEL
+    frames_source = "simulation: frame bytes come from the simulator's codec, not from a radio"
 
     def __init__(self, config: LiveConfig) -> None:
         super().__init__(config.history, config.recent_readings, config.recent_events_in_snapshot)
@@ -123,6 +124,7 @@ class LiveSimulation(DashboardModel):
             "gateway_attached": True,
         }
         self._sim.gateway.subscribe(self._on_gateway_event)
+        self._sim.gateway.subscribe_frames(self._on_frame_observed)
         self._host: ControllerHost | None = None
         if spec.config.routing == "controller":
             routing = replace(spec.controller, policy=self._config.policy or spec.controller.policy)
