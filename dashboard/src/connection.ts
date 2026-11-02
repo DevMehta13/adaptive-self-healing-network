@@ -10,6 +10,8 @@ export interface Snapshot {
   server_time: string;
   backend: { status: string; version: string };
   clock: { sim_ms: number; speed: number; paused: boolean };
+  /** Present in the connect-time snapshot (not in the `?frames=0` poll): `last_id` is the newest frame record it contains. */
+  frames?: { last_id: number };
 }
 
 export interface ConnectionState {
@@ -41,6 +43,11 @@ interface Options {
   onSnapshot?: (snapshot: Snapshot) => void;
   /** Every state-changing event once, in order, after the documented ordering and dedup rules (and `reset` when it arrives). */
   onEvent?: (event: LiveEvent) => void;
+  /**
+   * The records of every `frames` message (non-state-changing: no event_id), once and in order, after the frame rule:
+   * records with `id <= frames.last_id` of the snapshot are dropped, and an id that jumps means a re-sync.
+   */
+  onFrames?: (records: unknown[]) => void;
 }
 
 const object = (value: unknown): value is Record<string, unknown> =>
@@ -83,6 +90,9 @@ export class DashboardConnection {
   private sequence = 0;
   private heartbeatMs = 2000;
   private pending: Envelope[] = [];
+  private pendingFrames: Envelope[] = [];
+  /** The newest frame record id seen; null until a snapshot says where the frames stand. */
+  private frameCursor: number | null = null;
   private retryMs = 1000;
   private retryTimer?: ReturnType<typeof setTimeout>;
   private openTimer?: ReturnType<typeof setTimeout>;
@@ -129,6 +139,8 @@ export class DashboardConnection {
       this.socket = null;
     }
     this.pending = [];
+    this.pendingFrames = [];
+    this.frameCursor = null;
     this.syncing = false;
   }
 
@@ -185,7 +197,32 @@ export class DashboardConnection {
     }
   }
 
+  /** `replay`: the message waited for a snapshot; a gap left after that snapshot is shown, not chased with another one (no loop). */
+  private handleFrames(event: Envelope, replay = false) {
+    if (this.syncing) {
+      if (this.pendingFrames.length >= 500) this.fail('Too many frame updates arrived during synchronization. Reconnecting.');
+      else this.pendingFrames.push(event);
+      return;
+    }
+    const lastId = event.data.last_id;
+    if (!integer(lastId) || !Array.isArray(event.data.records)) return;
+    const cursor = this.frameCursor;
+    const records = cursor === null ? event.data.records
+      : event.data.records.filter(r => object(r) && integer(r.id) && r.id > cursor);
+    if (!records.length) return;
+    const first = records[0];
+    if (!replay && cursor !== null && object(first) && integer(first.id) && first.id > cursor + 1) {
+      // Records were missed (the batch said `dropped`, or a message was lost): fetch the snapshot again.
+      void this.synchronize();
+      this.pendingFrames.push(event);
+      return;
+    }
+    this.frameCursor = lastId;
+    this.options.onFrames?.(records);
+  }
+
   private handle(event: Envelope) {
+    if (event.type === 'frames' && event.event_id === undefined) { this.handleFrames(event); return; }
     if (event.event_id === undefined) return;
     if (this.syncing) {
       if (this.pending.length >= 2000) {
@@ -220,6 +257,7 @@ export class DashboardConnection {
       const snapshot = parseSnapshot(await response.json());
       if (!this.active || generation !== this.generation) return;
       this.cursor = snapshot.last_event_id;
+      this.frameCursor = snapshot.frames && integer(snapshot.frames.last_id) ? snapshot.frames.last_id : null;
       this.options.onSnapshot?.(snapshot);
       this.syncing = false;
       this.retryMs = 1000;
@@ -228,8 +266,11 @@ export class DashboardConnection {
         && this.now() - this.state.lastMessageAt <= 3 * this.heartbeatMs;
       this.update({ snapshot, snapshotAt: this.now(), status: recent ? 'connected' : 'stale', error: null });
       const buffered = this.pending;
+      const bufferedFrames = this.pendingFrames;
       this.pending = [];
+      this.pendingFrames = [];
       for (const event of buffered) this.handle(event);
+      for (const event of bufferedFrames) this.handleFrames(event, true);
     } catch (error) {
       if (this.active && generation === this.generation) {
         this.fail(error instanceof Error && error.name !== 'AbortError'

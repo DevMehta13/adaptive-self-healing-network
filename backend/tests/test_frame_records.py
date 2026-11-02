@@ -464,3 +464,57 @@ def test_hardware_mode_has_the_same_frame_shape_as_simulation():
         a = next(r for r in sim["recent"] if r["header"]["type_name"] == kind)
         b = next(r for r in hardware["recent"] if r["header"]["type_name"] == kind)
         assert shape(a) == shape(b), kind
+
+
+# ---- GET /api/snapshot?frames=0 (the dashboard's 1 s poll) ----
+
+
+def test_the_snapshot_can_leave_out_the_frames_section():
+    with make_client() as client:
+        client.post("/api/control/step", json={"ms": 20_000})
+        full = client.get("/api/snapshot").json()
+        light = client.get("/api/snapshot?frames=0").json()
+        explicit = client.get("/api/snapshot?frames=1").json()
+        bad = client.get("/api/snapshot?frames=2")
+    assert full["frames"]["recent"] and "frames" not in light  # the default is unchanged
+    assert set(full) - set(light) == {"frames"}  # nothing else is left out
+    assert light["last_event_id"] == full["last_event_id"] and light["nodes"] == full["nodes"]
+    assert explicit["frames"] == full["frames"]
+    assert bad.status_code == 422
+    assert len(json.dumps(light)) < len(json.dumps(full)) / 2
+
+
+# ---- the recorded frames stream in tests/dashboard-fixtures/ ----
+
+FIXTURES = ROOT / "tests" / "dashboard-fixtures"
+
+
+def test_the_recorded_frames_run_has_every_kind_of_record_and_a_valid_stream():
+    document = load(FIXTURES / "frames-run.events.json")
+    events = document["events"]
+    assert [e["seq"] for e in events] == list(range(1, len(events) + 1))
+    messages = [e for e in events if e["type"] == "frames"]
+    assert messages and all("event_id" not in m for m in messages)
+    for envelope in events:
+        assert schema.validate_envelope(envelope) == [], envelope
+    records = [r for m in messages for r in m["data"]["records"]]
+    assert [r["id"] for r in records] == list(range(1, len(records) + 1))
+    assert all(
+        len(m["data"]["records"]) <= FRAME_BATCH_MAX and m["data"]["dropped"] == 0 for m in messages
+    )
+    for record in records:
+        assert schema.validate_frame_record(record) == []
+    kinds = {r["header"]["type_name"] for r in records}
+    assert kinds == HANDED_UP
+    assert any(r["dup"] for r in records)  # a repeated reading
+    late = [r for r in records if r["replayed"]]
+    assert len(late) >= 3 and all(r["delay_ms"] > 0 for r in late)
+    assert any(
+        r["replayed"] and r["header"]["type_name"] == "LOCAL_FAILOVER_REPORT" for r in records
+    )
+    # the mid snapshot holds records the stream also carries, so the discard rule is exercised
+    mid = load(FIXTURES / "frames-run.snapshot-mid.json")["frames"]
+    assert schema.validate_frames(mid) == []
+    assert 0 < mid["last_id"] < records[-1]["id"]
+    assert mid["recent"] == [r for r in records if r["id"] <= mid["last_id"]][-mid["capacity"] :]
+    assert load(FIXTURES / "frames-run.snapshot-initial.json")["frames"]["last_id"] == 0

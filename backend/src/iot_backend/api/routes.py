@@ -23,7 +23,10 @@ def health(request: Request) -> dict[str, Any]:
 
 
 @router.get("/api/snapshot")
-def snapshot(request: Request) -> dict[str, Any]:
+def snapshot(
+    request: Request, frames: int = Query(1, ge=0, le=1, description="0 leaves out `frames`")
+) -> dict[str, Any]:
+    """The current state. `?frames=0` omits the (large) `frames` section, for the 1 s poll."""
     live = _live(request)
     base = {
         "v": PROTOCOL_VERSION,
@@ -33,7 +36,7 @@ def snapshot(request: Request) -> dict[str, Any]:
     }
     if live is None:
         return {**base, "run_id": 0, "scenario": None, "last_event_id": 0, "nodes": [], "links": []}
-    return {**base, **live.snapshot()}
+    return {**base, **live.snapshot(include_frames=bool(frames))}
 
 
 @router.get("/api/events", response_model=None)

@@ -52,7 +52,7 @@ function stateOf(live: Live) {
  * The page body only exists once a complete snapshot has arrived. After that, any state other than live says so in a banner
  * and dims the numbers, so a stale figure is never mistaken for a live one.
  */
-function LiveGate({ live, children }: { live: Live; children: (current: NonNullable<Live['current']>, isLiveNow: boolean) => ReactNode }) {
+export function LiveGate({ live, children }: { live: Live; children: (current: NonNullable<Live['current']>, isLiveNow: boolean) => ReactNode }) {
   const { state, message } = stateOf(live);
   const banner = message && <div className={`state-banner ${state}`} role={message.role}><strong>{message.title}.</strong> {message.text}</div>;
   if (!live.current) return <>{banner}</>;
@@ -62,7 +62,7 @@ function LiveGate({ live, children }: { live: Live; children: (current: NonNulla
   </>;
 }
 
-function LiveTag({ live }: { live: Live }) {
+export function LiveTag({ live }: { live: Live }) {
   const { state } = stateOf(live);
   return <span className={`recorded-tag ${isLive(state) ? 'live-tag' : `not-live-tag ${state}`}`}>{stateTag[state]}</span>;
 }

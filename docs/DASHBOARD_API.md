@@ -64,6 +64,8 @@ Presenter actions ("Stop B", "Take down A→B", "Detach the gateway") are publis
 
 The complete current state; the source of truth. WebSocket events only describe changes after it.
 
+**`?frames=0` (additive, P1).** `GET /api/snapshot?frames=0` is the same snapshot without the `frames` section (see *Frame records (additive, P1)*), which is about three quarters of its size. The default is unchanged (`?frames=1`, or no query, includes it); any other value is a `422`. The dashboard takes frames from the connect-time snapshot and the `frames` messages and uses `?frames=0` for its 1 s refresh.
+
 ```json
 {
   "v": 1,
@@ -602,9 +604,13 @@ A rejected record, as the tests make it from the reference vector [invalid-up-ba
   "data": { "run_id": 1, "last_id": 32, "dropped": 0, "records": [ { "...": "up to 50 records, oldest first" } ] } }
 ```
 
-No `event_id`, like `heartbeat`; it still takes a `seq`. **Batching:** records are collected for up to 0.25 s and sent together, at most 50 to a message (a replay of 50 held frames is one message, not fifty; a larger burst is several messages in a row). If a slow client lets more than 500 records wait, the oldest are dropped and their number is reported in `dropped` of the next message; `id` then jumps. `last_id` is the `id` of the last record in the message.
+No `event_id`, like `heartbeat`; it still takes a `seq`. **Batching:** records are collected for up to 0.25 s and sent together, at most 50 to a message (a replay of 50 held frames is one message, not fifty; a larger burst is several messages in a row). If a slow client lets more than 500 records wait, the oldest are dropped and their number is reported in `dropped` of the next message; `id` then jumps. `last_id` is the `id` of the last record in the message. When a simulation `reset` happens, records of the replaced run that are still waiting are discarded, so none follows the `reset` event.
 
 **Ordering rule for frames.** Records have no `event_id`, so the event rule does not apply to them. After fetching the snapshot, discard any streamed record with `id <= frames.last_id`. Otherwise ids are consecutive: an `id` that jumps, or `dropped` above 0, means records were missed, so re-fetch the snapshot. A `last_id` that goes backwards (the backend restarted) or a different `run_id` means replace everything. A `reset` event means fetch the snapshot, whose `frames` section is empty again. The event rule is unchanged: `seq` still counts every message on the connection and `event_id` still counts only state changes.
+
+### Without the frames: `GET /api/snapshot?frames=0`
+
+The snapshot is polled (the dashboard refreshes it every second), so the 200 records would be sent every second. `?frames=0` leaves the `frames` section out and changes nothing else (same `last_event_id`, nodes, links, readings and counts). A client that wants frames fetches the full snapshot once on (re)connect and then follows the `frames` messages with the ordering rule above.
 
 ### Bounds
 
@@ -619,7 +625,9 @@ Memory: 200 records in the log and at most 500 waiting per connection. A record 
 - `demo-run.snapshot-mid.json` — a snapshot taken at 20 s, to test the discard rule.
 - `outage-run.snapshot-initial.json`, `outage-run.events.json`, `outage-run.snapshot-mid.json` — a controller outage: the gateway detached at 12 s, B stopped at 20 s (A fails over to D on its own, unseen), reattached at 40 s; then `gateway_link_restored`, `replay_started`, replayed readings and the replayed failover report, `replay_finished`, and the controller confirming A > D > C. The mid snapshot (30 s) is taken during the outage: `gateway.state` `lost`, and C's buffer figures as of 12 s.
 
-The four snapshot fixtures carry the `frames` section (P1, additive). The event fixtures are unchanged and hold no `frames` messages: the recorder keeps only the state-changing stream and its synthetic heartbeats.
+The four snapshot fixtures of the two runs above carry the `frames` section (P1, additive); their event fixtures are unchanged and hold no `frames` messages.
+
+- `frames-run.snapshot-initial.json`, `frames-run.events.json`, `frames-run.snapshot-mid.json` — a third run for the Packets page, whose event file **does** include the `frames` messages as streamed (batched once per 2 s step, between the state-changing events and the heartbeat). Presenter script: ACKs are made lossy on the way back to A at 8 s (a repeated reading, `dup`), restored at 22 s; the gateway is detached at 26 s, B stopped at 30 s, the gateway reattached at 42 s. It holds records of all five handed-up types, a duplicate, replayed frames and a replayed LOCAL_FAILOVER_REPORT. The mid snapshot (34 s) has `frames.last_id` inside the stream, to test the `id <= frames.last_id` rule.
 
 Regenerate after a deliberate shape change with `uv run python -m iot_backend.live.record` (from `backend/`). Watch a live backend in a terminal with `uv run python -m iot_backend.watch`.
 

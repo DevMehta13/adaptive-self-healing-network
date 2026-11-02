@@ -3,7 +3,7 @@
     uv run python -m iot_backend.live.record            # rewrite tests/dashboard-fixtures/
     uv run python -m iot_backend.live.record --check    # exit 1 if the files are out of date
 
-Two runs are recorded, both from the `live-demo` scenario:
+Three runs are recorded, all from the `live-demo` scenario:
 
 * **demo-run**: normal operation, B is stopped, A fails over to D by itself, the controller
   confirms the route through D, B is started again, its links are held down, and the controller
@@ -11,6 +11,11 @@ Two runs are recorded, both from the `live-demo` scenario:
 * **outage-run**: the controller is detached, B is stopped while it is away, A fails over to D
   on its own, the controller is reattached, C replays what it held, and the controller catches
   up (it learns of the failover from the replay and confirms the route through D).
+* **frames-run**: the same network with the radio frames C hands up recorded as they were
+  streamed (the non-state-changing `frames` messages, batched once per heartbeat step): ACKs
+  are lost on the way back to A so a reading is repeated (a duplicate), the controller is
+  detached and B is stopped while it is away (a LOCAL_FAILOVER_REPORT that is replayed),
+  and the controller is reattached.
 
 Everything is simulated time with a fixed seed, so the files are reproducible byte for byte and a
 test keeps them valid against the current shapes.
@@ -23,6 +28,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from iot_backend.api.ws import FRAME_BATCH_MAX
 from iot_backend.envelope import make_envelope
 from iot_backend.live import LiveConfig, LiveEvent, LiveSimulation
 
@@ -39,6 +45,7 @@ class Run:
     duration_ms: int
     mid_ms: int  # when to take the mid-run snapshot
     description: str
+    frames: bool = False  # also record the `frames` messages (P1); the older runs do not
 
 
 RUNS = (
@@ -65,6 +72,26 @@ RUNS = (
         "A recorded simulated controller outage: detach, Stop B, A fails over to D alone, "
         "reattach, C replays what it held, the controller catches up and confirms the route.",
     ),
+    Run(
+        "frames-run",
+        (
+            (
+                8_000,
+                "presenter makes the way back to A lossy (B->A and D->A lose half)",
+                "loss 0.5",
+            ),
+            (22_000, "presenter restores B->A and D->A", "loss 0"),
+            (26_000, "presenter detaches the gateway (the controller is away)", "detach"),
+            (30_000, "presenter stops node B", "stop B"),
+            (42_000, "presenter reattaches the gateway", "attach"),
+        ),
+        60_000,
+        34_000,
+        "A recorded simulated run for the Packets page: a repeated reading (lost ACKs), "
+        "a controller outage with Stop B, a replayed LOCAL_FAILOVER_REPORT. It includes the "
+        "`frames` messages as streamed.",
+        frames=True,
+    ),
 )
 
 
@@ -85,7 +112,10 @@ def _snapshot(live: LiveSimulation) -> dict[str, Any]:
 
 
 def _do(live: LiveSimulation, command: str) -> None:
-    if command == "detach":
+    if command.startswith("loss "):  # the way back to A: both relays' links into A
+        for link in ("B->A", "D->A"):
+            live.link_config(link, loss=float(command.split()[1]))
+    elif command == "detach":
         live.set_gateway(False)
     elif command == "attach":
         live.set_gateway(True)
@@ -125,12 +155,19 @@ def build_run(run: Run) -> dict[str, dict[str, Any]]:
     )
     initial = _snapshot(live)
     live.subscribe(on_event)
+    batch: list[dict[str, Any]] = []
+    if run.frames:
+        live.subscribe_frames(batch.append)
     mid: dict[str, Any] | None = None
     pending = sorted(run.script)
     step_ms = int(HEARTBEAT_S * 1000)
     annotations = []
     for t in range(step_ms, run.duration_ms + 1, step_ms):
         live.advance(step_ms)
+        while batch:  # what the WebSocket sends: at most 50 records to a message
+            records, batch[:] = batch[:FRAME_BATCH_MAX], batch[FRAME_BATCH_MAX:]
+            data = {"run_id": live.run_id, "last_id": records[-1]["id"], "records": records}
+            add("frames", {**data, "dropped": 0}, None, live.sim_ms)
         add(
             "heartbeat",
             {

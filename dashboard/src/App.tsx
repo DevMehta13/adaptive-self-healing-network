@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { DashboardConnection } from './connection';
 import type { ConnectionState } from './connection';
+import { PacketsPage } from './PacketsPage';
 import { ConnectionFacts, DeliveryPage, NetworkPage, OverviewPage, ReadingsPage, RunsPage, statusLabels } from './pages';
 import { documentTitle, hrefFor, pages, parseRoute } from './route';
 import { applyTheme, initialTheme, rememberTheme, storedTheme, systemTheme } from './theme';
@@ -61,6 +62,7 @@ export function App() {
       socketUrl: url.href, snapshotUrl: '/api/snapshot',
       onSnapshot: snapshot => store.ingestSnapshot(snapshot as unknown as SnapshotLike),
       onEvent: event => store.ingestEvent(event),
+      onFrames: records => store.ingestFrames(records),
     }, setConnection);
     client.start();
     return () => client.stop();
@@ -116,6 +118,7 @@ export function App() {
         {route === 'overview' && <OverviewPage connection={connection} live={live} data={data} />}
         {route === 'network' && <NetworkPage connection={connection} live={live} data={data} />}
         {route === 'readings' && <ReadingsPage live={live} data={data} theme={theme} />}
+        {route === 'packets' && <PacketsPage live={live} data={data} />}
         {route === 'delivery' && <DeliveryPage live={live} />}
         {route === 'runs' && <RunsPage />}
       </main>

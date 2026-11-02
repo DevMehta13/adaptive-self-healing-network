@@ -143,4 +143,4 @@ Approved by Harshal on 2026-11-02. Two phases, backend first. The hardware check
 ### Progress (Packets)
 
 - [x] P1 — Backend frame records
-- [ ] P2 — Packets page
+- [x] P2 — Packets page

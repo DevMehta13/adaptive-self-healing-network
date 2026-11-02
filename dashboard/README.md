@@ -1,6 +1,6 @@
 # Dashboard
 
-Dev's React + TypeScript + Vite dashboard: five pages behind a top bar (Overview, Network, Readings, Delivery, Saved runs), live from the backend and, for Saved runs, from recordings that work offline. Run history browsing is not part of it.
+Dev's React + TypeScript + Vite dashboard: six pages behind a top bar (Overview, Network, Readings, Packets, Delivery, Saved runs), live from the backend and, for Saved runs, from recordings that work offline. Run history browsing is not part of it.
 The backend is still simulation-only or tested against fake C; no real board is verified.
 
 ## Start on macOS or Windows
@@ -60,6 +60,7 @@ switching pages never reconnects (one connection and one set of buffers serve th
 | Overview | `#/` | Latest temperature (marked replayed if late), planned route beside the last observed path, one status line per board, created / delivered / lost in total, the major network changes, and the backend facts. |
 | Network | `#/network` | The diamond with link states, the planned route and node trouble marked; node cards; planned route vs observed path; the controls (routing policy in both modes; in simulation also Stop/Start B and D, one link direction, Detach/Attach C, Pause/Resume, Reset run); and the timeline of network changes ("Major changes only" is on by default; presenter actions are marked "What we did"). |
 | Readings | `#/readings` | An interactive uPlot chart (1/5/15 min and All, Live/Paused, drag to zoom, hover details; colour by relay, hollow points for replayed readings, markers for failover, route change, node and link events) and a table of recent readings. |
+| Packets | `#/packets` | The radio frames node C handed up, with the 14-byte header laid out field by field. A summary strip (counts by type, repeated, replayed, rejected, TTL on arrival); an **anatomy strip** of the selected frame (labelled, coloured cells for version, type, src, dst, session, seq, TTL, length and the payload, with the raw hex beneath; hovering or focusing a field highlights its bytes; session and seq are little-endian); a **frame log** (newest first, filter by type, Live/Paused, flags for repeat, replayed and rejected); a **facts** panel read from the real frames (TTL on arrival and hops, reboots from a changed session, repeats by `(src, session, seq)`, replayed frames and their delay); and **delivery acknowledgements**: the DELIVERY_ACK layout labelled "format, not observed by the laptop" plus A's acknowledgement counter from its TELEMETRY frames. Only frames handed up by C appear; in simulation the bytes come from the simulator's codec. |
 | Delivery | `#/delivery` | Created at A, delivered at C and acknowledged at A as a flow, then the loss and late counters, each with its source and age. |
 | Saved runs | `#/runs` | The two recordings (relay failure, controller outage), stepped through moment by moment with Previous/Next, the dots or a list. Works with the backend off. |
 
@@ -69,6 +70,8 @@ remembered in `localStorage`.
 
 When the backend is down, stale or reconnecting, every live page says so in a banner, dims its numbers and
 names the time of the last snapshot; controls are disabled until the live connection is healthy.
+
+Packets frames come from the connect-time snapshot (the only one with the `frames` section) and the `frames` WebSocket messages, with the documented rule (drop records with `id <= frames.last_id`; an id that jumps fetches the snapshot again). The 1 s refresh asks for `/api/snapshot?frames=0` so the frames are not sent every second. They are kept in the same app-level store as the readings (at most 1,000, one copy per id): cleared when a simulation run resets, kept across a backend restart in hardware mode, on the same clock as the chart (so a frame whose `received_ms` is negative after a restart still shows its wall-clock time).
 
 Times: in hardware mode the Readings chart and the timeline use the laptop's clock (HH:MM:SS), which stays
 continuous across backend restarts, and the buffers are kept across a restart (so the controller-loss demo shows

@@ -401,7 +401,8 @@ class DashboardModel:
                 described["serial"] = gateway.describe_serial()
         return described
 
-    def snapshot(self) -> dict[str, Any]:
+    def snapshot(self, include_frames: bool = True) -> dict[str, Any]:
+        """The complete state. `include_frames=False` leaves out the (large) `frames` section."""
         view = self._view.snapshot() if self._view is not None else {"links": []}
         route = (
             self._controller.route_state()
@@ -409,7 +410,7 @@ class DashboardModel:
             else {"state": "no_controller", "kind": None, "version": None}
         )
         recent = list(self._history)[-self._recent_events :]
-        return {
+        snapshot: dict[str, Any] = {
             "run_id": self.run_id,
             "scenario": self.scenario,
             "label": self.label,
@@ -435,12 +436,17 @@ class DashboardModel:
                 "recent": list(self._readings),
             },
             "counts": self._counts(),
-            "frames": self._frames.describe(self._frame_seq, self.frames_source),
+            **(
+                {"frames": self._frames.describe(self._frame_seq, self.frames_source)}
+                if include_frames
+                else {}
+            ),
             "presenter": self._presenter(),
             "recent_events": [
                 {"event_id": e.event_id, "type": e.type, "data": e.data} for e in recent
             ],
         }
+        return snapshot
 
     @property
     def controller(self) -> RouteController | None:

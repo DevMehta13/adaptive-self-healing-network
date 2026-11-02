@@ -23,6 +23,11 @@ describe('page metadata', () => {
     expect(new Set(pages.map(p => p.id)).size).toBe(pages.length);
     expect(new Set(pages.map(p => p.path)).size).toBe(pages.length);
   });
+  it('lists the pages in the agreed order, Packets between Readings and Delivery', () => {
+    expect(pages.map(p => p.label)).toEqual(['Overview', 'Network', 'Readings', 'Packets', 'Delivery', 'Saved runs']);
+    expect(parseRoute('#/packets')).toBe('packets');
+    expect(documentTitle('packets')).toBe('Packets · Relay');
+  });
   it('builds a distinct document title per page', () => {
     expect(new Set(pages.map(p => documentTitle(p.id))).size).toBe(pages.length);
     expect(documentTitle('runs')).toBe('Saved runs · Relay');

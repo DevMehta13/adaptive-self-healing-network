@@ -1,9 +1,10 @@
-export type PageId = 'overview' | 'network' | 'readings' | 'delivery' | 'runs';
+export type PageId = 'overview' | 'network' | 'readings' | 'packets' | 'delivery' | 'runs';
 
 export const pages: { id: PageId; path: string; label: string; title: string }[] = [
   { id: 'overview', path: '/', label: 'Overview', title: 'Overview' },
   { id: 'network', path: '/network', label: 'Network', title: 'Network' },
   { id: 'readings', path: '/readings', label: 'Readings', title: 'Readings' },
+  { id: 'packets', path: '/packets', label: 'Packets', title: 'Packets' },
   { id: 'delivery', path: '/delivery', label: 'Delivery', title: 'Delivery' },
   { id: 'runs', path: '/runs', label: 'Saved runs', title: 'Saved runs' },
 ];

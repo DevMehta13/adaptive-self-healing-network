@@ -33,7 +33,7 @@ export function useLive(connection: ConnectionState, store: LiveStore) {
       controller = new AbortController();
       const timeout = setTimeout(() => controller?.abort(), 5000);
       try {
-        const response = await fetch('/api/snapshot', { signal: controller.signal, cache: 'no-store' });
+        const response = await fetch('/api/snapshot?frames=0', { signal: controller.signal, cache: 'no-store' });
         if (!response.ok) throw new Error(`Live refresh failed (${response.status}).`);
         const snapshot = parseLiveSnapshot(await response.json());
         if (active) {

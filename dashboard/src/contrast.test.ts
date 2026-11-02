@@ -22,6 +22,8 @@ const text: [string, string][] = [
   ['on-accent', 'accent'], ['on-accent', 'accent-ink'],
   ['ok-ink', 'ok-bg'], ['warn-ink', 'warn-bg'], ['warn-ink', 'warn-soft'], ['warn-ink', 'surface'], ['bad-ink', 'bad-bg'], ['bad-ink', 'surface'], ['bad-ink', 'bg'],
   ['series-b', 'surface-3'], ['series-b', 'surface'], ['muted', 'warn-soft'], ['ink', 'warn-soft'],
+  // the packet anatomy: header field colours carry ink text and muted captions
+  ...['version', 'type', 'src', 'dst', 'session', 'seq', 'ttl', 'length', 'payload'].flatMap((f): [string, string][] => [['ink', `f-${f}`], ['ink-2', `f-${f}`], ['muted', `f-${f}`]]),
 ];
 const graphics: [string, string][] = [
   ['series-b', 'surface'], ['series-d', 'surface'], ['series-other', 'surface'], ['link-up', 'surface'], ['node-stroke', 'surface'],

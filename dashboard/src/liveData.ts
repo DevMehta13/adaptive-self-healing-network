@@ -1,4 +1,6 @@
 import type { Reading } from './fixtures';
+import { isFrameRecord, mergeFrames, toFrameRow } from './frames';
+import type { FrameRow } from './frames';
 
 export type Mode = 'simulation' | 'hardware';
 
@@ -84,6 +86,8 @@ export interface SnapshotLike {
   mode: Mode; run_id: number; server_time: string; clock: { sim_ms: number };
   readings?: { recent?: Reading[] };
   recent_events?: { type: string; event_id?: number; data: Record<string, unknown> }[];
+  /** Only the connect-time snapshot carries frames; the 1 s poll asks for `?frames=0`. */
+  frames?: { recent?: unknown[] };
 }
 
 export interface LiveState {
@@ -94,9 +98,11 @@ export interface LiveState {
   instance: number;
   readings: ChartReading[];
   changes: ChangeEvent[];
+  /** Radio frames C handed up, newest last, deduplicated by (instance, id). Cleared and kept on the same rules as the readings. */
+  frames: FrameRow[];
 }
 
-const empty: LiveState = { mode: null, runId: null, timeMap: null, nowAt: null, instance: 0, readings: [], changes: [] };
+const empty: LiveState = { mode: null, runId: null, timeMap: null, nowAt: null, instance: 0, readings: [], changes: [], frames: [] };
 
 /** App-level buffers shared by every page. Plain class so the connection can feed it outside React. */
 export class LiveStore {
@@ -127,7 +133,21 @@ export class LiveStore {
     this.set({
       ...s, runId: snapshot.run_id, nowAt: mapTime(map, snapshot.clock.sim_ms),
       readings: mergeReadings(s.readings, readings), changes: mergeChanges(s.changes, changes),
+      frames: this.mergeFrameRecords(s, snapshot.frames?.recent ?? []),
     });
+  }
+
+  private mergeFrameRecords(s: LiveState, records: readonly unknown[]): FrameRow[] {
+    if (!s.timeMap || !records.length) return s.frames;
+    const map = s.timeMap;
+    return mergeFrames(s.frames, records.filter(isFrameRecord).map(record => toFrameRow(record, map, s.instance)));
+  }
+
+  /** Called with the records of each `frames` message, after the connection applied the ordering rule. */
+  ingestFrames(records: readonly unknown[]) {
+    const s = this.state;
+    const frames = this.mergeFrameRecords(s, records);
+    if (frames !== s.frames) this.set({ ...s, frames });
   }
 
   /** Called for each in-order state-changing event from the WebSocket. */

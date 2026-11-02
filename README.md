@@ -48,7 +48,7 @@ The lines between boards represent wireless links. Each board also needs electri
 - Local failover: the controller pre-installs a backup next hop, so a node can move away from a failed relay without waiting for the laptop.
 - Fail-static forwarding while the laptop is unreachable, with bounded buffering of readings at C and replay on reconnection.
 - Packet identifiers, bounded retries, delivery acknowledgements, duplicate detection, and TTL to limit forwarding.
-- A local dashboard (Overview, Network, Readings, Delivery and Saved runs pages, light and dark) showing node state, links, intended and observed routes, a chart of readings, delivery counters, and failure/recovery events. Screenshots are in [docs/ui-screenshots/](docs/ui-screenshots/).
+- A local dashboard (Overview, Network, Readings, Packets, Delivery and Saved runs pages, light and dark) showing node state, links, intended and observed routes, a chart of readings, delivery counters, and failure/recovery events. Screenshots are in [docs/ui-screenshots/](docs/ui-screenshots/).
 - Delivery counts, packet loss, RTT, and recovery measurements; RSSI where reliable ESP32 measurement is validated.
 - Performance history and clearly labeled simulated failure testing.
 - Adaptive routing with a measured comparison of lowest-delay and highest-reliability policies after the hardware core works.

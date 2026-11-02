@@ -49,6 +49,8 @@ async def events(websocket: WebSocket) -> None:
 
     def on_event(event: LiveEvent) -> None:
         nonlocal overflowed
+        if event.type == "reset":
+            frames.clear()  # records of the run that was replaced must not follow the reset
         if queue.qsize() >= MAX_BACKLOG:
             overflowed = True
         else:
